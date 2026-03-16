@@ -444,7 +444,20 @@ async function pageHome(){
       }
     }catch(e){}
   }
-  const adminBtn=isManager()?`<button class="btn btn-outline" style="margin-top:20px" id="nav-admin-home">⚙️ Admin-Bereich</button>`:'';
+  const adminBtn=isManager()?`<button class="btn btn-outline" style="margin-top:12px" id="nav-admin-home">⚙️ Admin-Bereich</button>`:'';
+  // Zeiterfassung-Status für Startseite
+  let zeitStatusHome='';
+  try{
+    const ze=await apiGet('/api/zeit/heute');
+    const {status:zs}=zeitStatus(ze);
+    const kE=ze.find(e=>e.typ==='kommen');
+    if(zs==='urlaub')zeitStatusHome='🏖️ Urlaub heute';
+    else if(zs==='gehen'){const gE=[...ze].reverse().find(e=>e.typ==='gehen');zeitStatusHome=`🔴 Feierabend seit ${fUhr(gE?.zeitpunkt)}`;}
+    else if(zs==='pause_start'){const pE=ze.filter(e=>e.typ==='pause_start').pop();zeitStatusHome=`⏸ Pause seit ${fUhr(pE?.zeitpunkt)}`;}
+    else if(kE)zeitStatusHome=`✅ Eingestempelt seit ${fUhr(kE?.zeitpunkt)}`;
+    else zeitStatusHome='Noch nicht eingestempelt';
+  }catch(e){}
+  const zeitBtn=`<button class="nav-btn" id="card-zeit" style="margin-top:12px;justify-content:space-between"><span>⏱️ Zeiterfassung</span><span style="font-size:12px;opacity:.7;font-weight:400">${zeitStatusHome}</span></button>`;
   const showW=user?.zeige_winterdienst!==false;
   const showG=user?.zeige_gebaeudereinigung!==false;
   const showGr=user?.zeige_gruenpflege!==false;
@@ -455,7 +468,7 @@ async function pageHome(){
   ].join('');
   const _gr=['Schön, dass du da bist.','Was steht heute an?','Schon Kaffee gehabt?','Willkommen zurück.','Wie läuft\'s heute?','Bereit für den Tag?','Gut, dich zu sehen.','Was liegt heute an?','Alles klar bei dir?','Auf geht\'s?','Schön, dass du wieder da bist.','Was ist heute geplant?','Alles fit?','Bereit?','Wie startet dein Tag?','Was gibt\'s heute?','Na, alles gut?','Wie schaut\'s aus?','Los geht\'s.','Was machen wir heute?','Willkommen.','Da bist du ja.','Was geht heute?','Alles im Griff?','Gut drauf heute?','Was kommt als Nächstes?','Wie ist die Lage?','Kann losgehen?','Was hast du vor?','Bereit für heute?','Was ist der Plan?','Schön, dich zu sehen.','Wie läuft der Tag?','Alles bereit?','Was wartet heute?','Hallo, schön dass du da bist.','Was nehmen wir heute in Angriff?','Na, bereit?','Alles entspannt?','Wie sieht\'s heute aus?','Was ist heute wichtig?','Wieder am Start?','Wie geht\'s dir heute?','Schön, dass du reinschaust.','Kaffee schon drin?','Was hast du heute auf dem Zettel?','Kann\'s losgehen?','Alles gut heute?','Hallo zurück.','Was darf\'s heute sein?','Gut, dass du da bist.','Wie läuft dein Morgen?','Was steht als Erstes an?','Alles auf Kurs?','Bereit zum Loslegen?','Was läuft heute?','Was ist heute los?','Willkommen, legen wir los.','Wie startet\'s?','Was packen wir an?','Schön, dass du vorbeischaust.','Wie sieht dein Tag aus?','Alles startklar?','Was steht bei dir an?','Schon wach?','Bereit für Runde zwei?','Wie läuft dein Vormittag?','Alles gut soweit?','Was geht ab?','Startklar?','Na, wie ist\'s?','Was darf heute passieren?','Alles unter Kontrolle?','Gut geschlafen?','Schon im Flow?','Was geht zuerst?','Was kommt heute auf dich zu?','Willkommen zurück im Alltag.','Wie fühlt sich der Tag an?','Heute viel vor?','Was gibt der Tag her?','Wie schaut dein Plan aus?','Alles locker?','Bist du bereit?','Was läuft als Nächstes?','Wieder da?','Schön, dich wiederzusehen.','Wie geht der Tag los?','Schon gestartet?','Was wollen wir heute schaffen?','Wie ist die Stimmung?','Was ist heute dran?','Schon unterwegs?','Gut in den Tag gekommen?','Was liegt zuerst an?','Alles bereit für heute?','Na dann, los.','Schön, dass du reinsiehst.','Heute motiviert?','Was steht vorne an?','Alles gut bei dir?','Was darf heute nicht vergessen werden?','Was ist heute dein Fokus?','Los?','Wieder bereit?','Na, schon angekommen?','Wie läuft dein Start?','Was soll heute klappen?','Schön, dass du wieder hier bist.','Wie sieht\'s aus bei dir?','Kaffee oder Chaos?','Was ist heute dein Thema?','Na, wie startet\'s?','Alles ruhig?','Bereit für das Nächste?','Wie war dein Morgen?'];
   const _grText=_gr[Math.floor(Math.random()*_gr.length)];
-  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${adminBtn}</div>`;
+  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${adminBtn}</div>`;
 }
 
 async function pageNachrichten(){
@@ -1188,14 +1201,25 @@ async function pageZeit(){
   const kannGehen=status==='kommen'||status==='pause_ende';
   const kannPause=status==='kommen'||status==='pause_ende';
   const kannPauseEnde=status==='pause_start';
-  const kannUrlaub=status==='frei';
+  const kannUrlaub=true; // Urlaub immer buchbar – Datum wird im Dialog gewählt
 
   // Status-Anzeige
   const kommenEintrag=heute.find(e=>e.typ==='kommen');
   const gehenEintrag=[...heute].reverse().find(e=>e.typ==='gehen');
+  // Netto-Stunden berechnen (für Gehen-Status)
+  let nettoMinutenHeute=0;
+  if(kommenEintrag&&gehenEintrag){
+    let pauseMin=0,lastPS=null;
+    for(const x of heute){
+      if(x.typ==='pause_start')lastPS=new Date(x.zeitpunkt);
+      if(x.typ==='pause_ende'&&lastPS){pauseMin+=(new Date(x.zeitpunkt)-lastPS)/60000;lastPS=null;}
+    }
+    nettoMinutenHeute=Math.max(0,(new Date(gehenEintrag.zeitpunkt)-new Date(kommenEintrag.zeitpunkt))/60000-pauseMin);
+  }
+
   let statusText='Noch nicht eingestempelt';
   if(status==='urlaub')statusText='🏖️ Urlaub';
-  else if(status==='gehen')statusText=`Feierabend seit ${fUhr(gehenEintrag?.zeitpunkt)}`;
+  else if(status==='gehen')statusText=`Feierabend seit ${fUhr(gehenEintrag?.zeitpunkt)} · ${fMin(Math.round(nettoMinutenHeute))} gearbeitet`;
   else if(status==='pause_start'){const p=heute.filter(e=>e.typ==='pause_start').pop();statusText=`⏸ Pause seit ${fUhr(p?.zeitpunkt)}`;}
   else if(kommenEintrag)statusText=`✅ Eingestempelt seit ${fUhr(kommenEintrag?.zeitpunkt)}`;
 
@@ -1290,9 +1314,9 @@ async function renderTabZeit(){
         </select>
       </div>
       <div style="display:grid;grid-template-columns:${auswertung.length>0?'1fr 1fr 1fr':'1fr'};gap:8px">
-        <button class="btn btn-primary" id="btn-zeit-laden">🔍 Laden</button>
-        ${auswertung.length>0?`<button class="btn" id="btn-zeit-pdf" style="background:#6b7280;color:white">🖨️ PDF</button>
-        <button class="btn" id="btn-zeit-csv" style="background:#16a34a;color:white">📥 Excel</button>`:''}
+        <button class="btn btn-primary" id="btn-zeit-laden" style="height:42px;white-space:nowrap">🔍 Laden</button>
+        ${auswertung.length>0?`<button class="btn" id="btn-zeit-pdf" style="background:#6b7280;color:white;height:42px;white-space:nowrap">🖨️ PDF</button>
+        <button class="btn" id="btn-zeit-csv" style="background:#16a34a;color:white;height:42px;white-space:nowrap">📥 Excel</button>`:''}
       </div>
     </div></div>
     ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
@@ -1568,7 +1592,30 @@ function bindEvents(){
   stempelBtn('btn-z-gehen','gehen');
   stempelBtn('btn-z-pause','pause_start');
   stempelBtn('btn-z-pauseende','pause_ende');
-  stempelBtn('btn-z-urlaub','urlaub');
+  // Urlaub – Datum-Bereich wählen
+  o('btn-z-urlaub','click',()=>{
+    const today=new Date().toISOString().split('T')[0];
+    showModal(`
+      <button class="modal-close" id="modal-close">×</button>
+      <div class="modal-title">🏖️ Urlaub eintragen</div>
+      <div class="form-group"><label class="form-label">Von</label><input type="date" class="form-input" id="urlaub-von" value="${today}"></div>
+      <div class="form-group"><label class="form-label">Bis</label><input type="date" class="form-input" id="urlaub-bis" value="${today}"></div>
+      <button class="btn btn-primary" id="btn-urlaub-save">Eintragen</button>`);
+    setTimeout(()=>o('btn-urlaub-save','click',async()=>{
+      const von=document.getElementById('urlaub-von')?.value;
+      const bis=document.getElementById('urlaub-bis')?.value;
+      if(!von||!bis){toast('Von und Bis angeben','err');return}
+      if(von>bis){toast('Von muss vor Bis liegen','err');return}
+      try{
+        const d=new Date(von+'T12:00:00');const end=new Date(bis+'T12:00:00');let count=0;
+        while(d<=end){
+          await apiPost('/api/zeit/stempeln',{typ:'urlaub',zeitpunkt:d.toISOString().split('T')[0]+'T08:00:00'});
+          count++;d.setDate(d.getDate()+1);
+        }
+        closeModal();toast(`✅ ${count} Urlaubstag${count===1?'':'e'} eingetragen`,'ok');go('zeit');
+      }catch(e){toast(e.message,'err')}
+    }),0);
+  });
 
   // Pause nachtragen
   o('btn-z-nachtrag','click',()=>{
@@ -1578,17 +1625,17 @@ function bindEvents(){
       <div class="form-group"><label class="form-label">Pause von</label><input type="time" class="form-input" id="nachtrag-von" value="12:00"></div>
       <div class="form-group"><label class="form-label">Pause bis</label><input type="time" class="form-input" id="nachtrag-bis" value="13:00"></div>
       <button class="btn btn-primary" id="btn-nachtrag-save">Eintragen</button>`);
-  });
-  o('btn-nachtrag-save','click',async()=>{
-    const von=document.getElementById('nachtrag-von')?.value;
-    const bis=document.getElementById('nachtrag-bis')?.value;
-    if(!von||!bis){toast('Von und Bis angeben','err');return}
-    const heute=new Date().toISOString().split('T')[0];
-    try{
-      await apiPost('/api/zeit/stempeln',{typ:'pause_start',zeitpunkt:`${heute}T${von}:00`});
-      await apiPost('/api/zeit/stempeln',{typ:'pause_ende',zeitpunkt:`${heute}T${bis}:00`});
-      closeModal();toast('✅ Pause eingetragen','ok');go('zeit');
-    }catch(e){toast(e.message,'err')}
+    setTimeout(()=>o('btn-nachtrag-save','click',async()=>{
+      const von=document.getElementById('nachtrag-von')?.value;
+      const bis=document.getElementById('nachtrag-bis')?.value;
+      if(!von||!bis){toast('Von und Bis angeben','err');return}
+      const heute=new Date().toISOString().split('T')[0];
+      try{
+        await apiPost('/api/zeit/stempeln',{typ:'pause_start',zeitpunkt:`${heute}T${von}:00`});
+        await apiPost('/api/zeit/stempeln',{typ:'pause_ende',zeitpunkt:`${heute}T${bis}:00`});
+        closeModal();toast('✅ Pause eingetragen','ok');go('zeit');
+      }catch(e){toast(e.message,'err')}
+    }),0);
   });
 
   // Admin: zur Zeitauswertung springen
@@ -1673,6 +1720,7 @@ function bindEvents(){
   // Home
   o('btn-logout','click',doLogout);
   o('btn-resume','click',()=>go('einsatz'));
+  o('card-zeit','click',()=>go('zeit'));
   o('card-winter','click',()=>go('anlagen',{sparte:'winterdienst'}));
   o('card-gebaeude','click',()=>go('anlagen',{sparte:'gebaeudereinigung'}));
   o('card-gruenpflege','click',()=>go('anlagen',{sparte:'gruenpflege'}));
