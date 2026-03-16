@@ -788,9 +788,6 @@ async function renderTabTodos(){
 function showModal(html){
   const c=document.getElementById('modal-container');
   c.innerHTML=`<div class="modal-bg" id="modal-bg"><div class="modal" id="modal-inner">${html}</div></div>`;
-  c.querySelector('#modal-bg').addEventListener('click',closeModal);
-  c.querySelector('#modal-inner').addEventListener('click',e=>e.stopPropagation());
-  c.querySelector('#modal-inner').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
   bindModalEvents();
 }
 function closeModal(){document.getElementById('modal-container').innerHTML=''}
