@@ -312,6 +312,7 @@ function getTitle(){
   if(page==='einsatz')return pageData.anlage?.name||einsatzAkt?.anlage_name||'Einsatz';
   if(page==='admin')return'⚙️ Admin';
   if(page==='nachrichten')return'📬 Nachrichten';
+  if(page==='alarm')return'🚨 ALARM';
   return'SolanoServices';
 }
 
@@ -362,6 +363,7 @@ async function getPageContent(){
     case'einsatz':return pageEinsatz();
     case'admin':return pageAdmin();
     case'nachrichten':return pageNachrichten();
+    case'alarm':return pageAlarm();
     default:return`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Seite nicht gefunden</div></div>`;
   }
 }
@@ -591,6 +593,7 @@ async function pageAdmin(){
     <button class="tab-btn ${tab==='karte'?'active':''}" data-tab="karte">🗺️ Karte</button>
     <button class="tab-btn ${tab==='todos'?'active':''}" data-tab="todos">📋 TODOs</button>
     <button class="tab-btn ${tab==='nachrichten'?'active':''}" data-tab="nachrichten">💬 Nachrichten</button>
+    <button class="tab-btn ${tab==='alarm'?'active':''}" data-tab="alarm">🚨 Alarm</button>
     ${pushTab}
   </div>
   <div id="admin-tab-content">${await renderTab(tab)}</div>`;
@@ -604,6 +607,7 @@ async function renderTab(tab){
   if(tab==='todos')return renderTabTodos();
   if(tab==='push')return renderTabPush();
   if(tab==='nachrichten')return renderTabNachrichten();
+  if(tab==='alarm')return renderTabAlarm();
   return'';
 }
 
@@ -618,7 +622,8 @@ async function renderTabMitarbeiter(){
   const rows=list.map(m=>{
     const sparteIcons=[m.zeige_winterdienst!==false?'❄️':'',m.zeige_gebaeudereinigung!==false?'🧹':'',m.zeige_gruenpflege!==false?'🌿':''].filter(Boolean).join(' ')||'–';
     const roleBadge=m.ist_admin?'<span class="badge badge-red">👑 Admin</span>':m.ist_chef?'<span class="badge badge-blue">⭐ Chef</span>':'<span class="badge badge-gray">Mitarbeiter</span>';
-    return`<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef||false}" data-zw="${m.zeige_winterdienst!==false}" data-zg="${m.zeige_gebaeudereinigung!==false}" data-zgr="${m.zeige_gruenpflege!==false}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
+    const alarmBadge=m.winterdienst_alarm?'<span class="badge badge-red">🚨 Alarm</span>':'';
+    return`<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge} ${alarmBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef||false}" data-zw="${m.zeige_winterdienst!==false}" data-zg="${m.zeige_gebaeudereinigung!==false}" data-zgr="${m.zeige_gruenpflege!==false}" data-alarm="${m.winterdienst_alarm||false}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
   }).join('');
   return`<div class="admin-wrap"><button class="btn btn-primary btn-sm" id="btn-new-ma" style="margin-bottom:12px">+ Neuer Mitarbeiter</button><div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Name</th><th>PIN</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
@@ -935,6 +940,12 @@ function modalMitarbeiter(m=null){
         <label class="sparte-check-label"><input type="checkbox" id="m-ma-zgr" ${zGr?'checked':''}> 🌿 Grünpflege</label>
       </div>
     </div>
+    <div class="form-group">
+      <label class="form-label">Alarmierung</label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+        <input type="checkbox" id="m-ma-alarm" ${m?.winterdienst_alarm?'checked':''} style="width:18px;height:18px"> 🚨 Winterdienst-Alarmierung
+      </label>
+    </div>
     <button class="btn btn-primary" id="btn-save-ma" data-id="${m?.id||''}">${m?'Speichern':'Anlegen'}</button>`);
 }
 
@@ -1108,6 +1119,65 @@ async function renderTabNachrichten(){
   </div>`;
 }
 
+// ── ALARM ──
+async function renderTabAlarm(){
+  let log=[];
+  try{log=await apiGet('/api/alarm/log')}catch(e){}
+  const logRows=log.length===0
+    ?`<div class="empty" style="padding:24px"><div class="empty-icon">📋</div><div class="empty-text">Noch kein Alarm ausgelöst</div></div>`
+    :log.map(a=>{
+      const best=a.bestaetigungen||[];
+      return`<div class="card" style="margin-bottom:10px"><div class="card-body">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">${new Date(a.gesendet_am).toLocaleString('de-AT')} · Von: <b>${esc(a.gesendet_von)}</b> · ${a.empfaenger_count} Empfänger</div>
+        <div style="font-size:13px;margin-top:6px"><b>Bestätigungen (${best.length}/${a.empfaenger_count}):</b> ${best.length===0?'<span style="color:var(--text-muted)">Noch keine</span>':best.map(b=>`<span class="badge badge-green">✅ ${esc(b.mitarbeiter_name)} ${new Date(b.bestaetigt_am).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})}</span>`).join(' ')}</div>
+      </div></div>`;
+    }).join('');
+  return`<div class="admin-wrap">
+    <div class="card" style="margin-bottom:20px;border:2px solid #ef4444;background:#fff5f5"><div class="card-body" style="text-align:center;padding:24px">
+      <div style="font-size:48px;margin-bottom:8px">🚨</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:4px">Winterdienst-Alarmierung</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Sendet Push-Alarm an alle Mitarbeiter mit aktiver Alarmierung</div>
+      <button class="btn btn-danger" id="btn-alarm-ausloesen" style="font-size:16px;padding:16px">🚨 ALARM AUSLÖSEN</button>
+    </div></div>
+    <div style="font-weight:700;margin-bottom:10px">Alarm-Protokoll</div>
+    ${logRows}
+  </div>`;
+}
+
+async function pageAlarm(){
+  const params=new URLSearchParams(location.search);
+  const alarmId=params.get('id')||pageData.alarmId;
+  // Alarm-Sound starten
+  window._alarmPlaying=true;
+  playAlarmSound();
+  return`<div style="position:fixed;inset:0;background:#dc2626;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:white;text-align:center;padding:24px">
+    <div style="font-size:80px;animation:pulse 0.8s infinite alternate">🚨</div>
+    <div style="font-size:28px;font-weight:800;margin:16px 0 8px;text-shadow:0 2px 4px rgba(0,0,0,.3)">WINTERDIENST ALARM</div>
+    <div style="font-size:16px;opacity:.9;margin-bottom:32px">Sofortige Alarmierung ausgelöst!</div>
+    <button id="btn-alarm-best" data-id="${alarmId||''}" style="background:white;color:#dc2626;border:none;border-radius:16px;padding:18px 40px;font-size:18px;font-weight:800;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.3)">✅ BESTÄTIGEN & STOPP</button>
+    <style>@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}</style>
+  </div>`;
+}
+
+function playAlarmSound(){
+  if(!window._alarmPlaying)return;
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const beep=(freq,start,dur)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.frequency.value=freq;o.type='square';
+      g.gain.setValueAtTime(0.4,ctx.currentTime+start);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
+      o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur);
+    };
+    // Alarm-Muster: hoch-tief-hoch-tief
+    [880,660,880,660,880].forEach((f,i)=>beep(f,i*0.3,0.25));
+    // Wiederholen solange _alarmPlaying
+    setTimeout(()=>{if(window._alarmPlaying)playAlarmSound()},2000);
+  }catch(e){}
+}
+
 // ── DRAG & DROP SORT ──
 function bindDragSort(){
   const container=document.getElementById('anlagen-list');
@@ -1210,6 +1280,15 @@ function bindEvents(){
   o('nav-einsatz','click',()=>go('einsatz'));
   o('nav-admin','click',()=>go('admin',{adminTab:'anlagen'}));
   o('nav-nachrichten','click',()=>go('nachrichten'));
+
+  // Alarm bestätigen (Mitarbeiter)
+  o('btn-alarm-best','click',async()=>{
+    window._alarmPlaying=false;
+    const id=document.getElementById('btn-alarm-best')?.dataset.id;
+    try{if(id)await apiPost(`/api/alarm/${id}/bestaetigen`,{})}catch(e){}
+    toast('✅ Bestätigt!','ok');
+    go('home');
+  });
   o('btn-mailbox','click',()=>go('nachrichten'));
   o('nav-logout','click',doLogout);
 
@@ -1442,6 +1521,17 @@ function bindAdminEvents(){
     });
   });
 
+  // Alarm auslösen
+  const aa=document.getElementById('btn-alarm-ausloesen');
+  if(aa&&!aa._bound){aa._bound=true;aa.addEventListener('click',async()=>{
+    if(!confirm('🚨 Winterdienst-Alarm wirklich auslösen? Alle Mitarbeiter mit Alarmierung werden benachrichtigt!'))return;
+    try{
+      const r=await apiPost('/api/alarm/ausloesen',{});
+      toast(`🚨 Alarm gesendet an ${r.erfolg} Mitarbeiter!`,'ok');
+      reloadTab();
+    }catch(e){toast(e.message,'err')}
+  })}
+
   // Nachrichten löschen (Admin-Tab)
   document.querySelectorAll('.nach-del').forEach(btn=>{
     if(btn._b)return;btn._b=true;
@@ -1506,7 +1596,7 @@ function bindAdminEvents(){
         if(!confirm('Mitarbeiter löschen?'))return;
         try{await apiDel(`/api/mitarbeiter/${id}`);toast('Gelöscht','ok');reloadTab()}catch(e){toast(e.message,'err')}
       }else if(action==='edit-ma'){
-        modalMitarbeiter({id,name,pin,ist_admin:btn.dataset.admin==='true',ist_chef:btn.dataset.chef==='true',zeige_winterdienst:btn.dataset.zw!=='false',zeige_gebaeudereinigung:btn.dataset.zg!=='false',zeige_gruenpflege:btn.dataset.zgr!=='false'});
+        modalMitarbeiter({id,name,pin,ist_admin:btn.dataset.admin==='true',ist_chef:btn.dataset.chef==='true',zeige_winterdienst:btn.dataset.zw!=='false',zeige_gebaeudereinigung:btn.dataset.zg!=='false',zeige_gruenpflege:btn.dataset.zgr!=='false',winterdienst_alarm:btn.dataset.alarm==='true'});
       }else if(action==='toggle-todo'){
         try{
           await apiPut(`/api/todos/${id}`,{});
@@ -1600,6 +1690,7 @@ function bindModalEvents(){
       zeige_winterdienst:document.getElementById('m-ma-zw')?.checked!==false,
       zeige_gebaeudereinigung:document.getElementById('m-ma-zg')?.checked!==false,
       zeige_gruenpflege:document.getElementById('m-ma-zgr')?.checked!==false,
+      winterdienst_alarm:document.getElementById('m-ma-alarm')?.checked||false,
     };
     if(!body.name||!body.pin){toast('Name und PIN erforderlich','err');return}
     try{if(id){await apiPut(`/api/mitarbeiter/${id}`,body)}else{await apiPost('/api/mitarbeiter',body)};closeModal();toast(id?'Gespeichert':'Angelegt','ok');reloadTab()}
@@ -1667,8 +1758,9 @@ function init(){
     if(b){const badge=window._nachBadge>0?`<span style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:999px;font-size:10px;font-weight:700;min-width:17px;height:17px;display:flex;align-items:center;justify-content:center;padding:0 3px">${window._nachBadge}</span>`:'';b.innerHTML=`📬${badge}`}
   },30000);
   // URL-Parameter auswerten (z.B. von Push-Klick: /?page=nachrichten)
-  const urlPage=new URLSearchParams(location.search).get('page');
-  if(urlPage){history.replaceState({},'','/');go(urlPage);return}
+  const urlParams=new URLSearchParams(location.search);
+  const urlPage=urlParams.get('page');
+  if(urlPage){const alarmId=urlParams.get('id');history.replaceState({},'','/');go(urlPage,alarmId?{alarmId}:{});return}
   if(einsatzAkt){go('einsatz');return}
   go('home');
 }

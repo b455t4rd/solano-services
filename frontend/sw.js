@@ -6,7 +6,8 @@ self.addEventListener('push', event => {
       body: data.body,
       icon: '/Logo.png',
       badge: '/Logo.png',
-      vibrate: [200, 100, 200],
+      vibrate: data.data?.alarm ? [500,100,500,100,500,100,500] : [200, 100, 200],
+      requireInteraction: data.data?.alarm || false,
       data: data.data || {}
     })
   );

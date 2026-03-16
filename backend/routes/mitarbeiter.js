@@ -38,7 +38,7 @@ router.post('/login', async (req, res) => {
 router.get('/', managerMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, name, pin, ist_admin, ist_chef, aktiv, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege FROM mitarbeiter WHERE aktiv=true ORDER BY name'
+      'SELECT id, name, pin, ist_admin, ist_chef, aktiv, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege, winterdienst_alarm FROM mitarbeiter WHERE aktiv=true ORDER BY name'
     );
     res.json(result.rows);
   } catch (err) {
@@ -48,7 +48,7 @@ router.get('/', managerMiddleware, async (req, res) => {
 
 // Mitarbeiter erstellen (Manager+)
 router.post('/', managerMiddleware, async (req, res) => {
-  const { name, pin, ist_admin, ist_chef, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege } = req.body;
+  const { name, pin, ist_admin, ist_chef, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege, winterdienst_alarm } = req.body;
   if (!name || !pin) return res.status(400).json({ error: 'Name und PIN erforderlich' });
   // Nur Admin darf neue Admins anlegen
   if (ist_admin && !req.user.ist_admin) {
@@ -56,10 +56,11 @@ router.post('/', managerMiddleware, async (req, res) => {
   }
   try {
     const result = await pool.query(
-      `INSERT INTO mitarbeiter (name, pin, ist_admin, ist_chef, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, ist_admin, ist_chef`,
+      `INSERT INTO mitarbeiter (name, pin, ist_admin, ist_chef, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege, winterdienst_alarm)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, ist_admin, ist_chef`,
       [name, pin, ist_admin || false, ist_chef || false,
-       zeige_winterdienst !== false, zeige_gebaeudereinigung !== false, zeige_gruenpflege !== false]
+       zeige_winterdienst !== false, zeige_gebaeudereinigung !== false, zeige_gruenpflege !== false,
+       winterdienst_alarm || false]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -69,17 +70,18 @@ router.post('/', managerMiddleware, async (req, res) => {
 
 // Mitarbeiter aktualisieren (Manager+)
 router.put('/:id', managerMiddleware, async (req, res) => {
-  const { name, pin, ist_admin, ist_chef, aktiv, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege } = req.body;
+  const { name, pin, ist_admin, ist_chef, aktiv, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege, winterdienst_alarm } = req.body;
   if (ist_admin && !req.user.ist_admin) {
     return res.status(403).json({ error: 'Nur Admins können Admin-Rechte vergeben' });
   }
   try {
     const result = await pool.query(
       `UPDATE mitarbeiter SET name=$1, pin=$2, ist_admin=$3, ist_chef=$4, aktiv=$5,
-        zeige_winterdienst=$6, zeige_gebaeudereinigung=$7, zeige_gruenpflege=$8
-       WHERE id=$9 RETURNING id, name, pin, ist_admin, ist_chef, aktiv, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege`,
+        zeige_winterdienst=$6, zeige_gebaeudereinigung=$7, zeige_gruenpflege=$8, winterdienst_alarm=$9
+       WHERE id=$10 RETURNING id, name, pin, ist_admin, ist_chef, aktiv, zeige_winterdienst, zeige_gebaeudereinigung, zeige_gruenpflege, winterdienst_alarm`,
       [name, pin, ist_admin || false, ist_chef || false, aktiv !== false,
        zeige_winterdienst !== false, zeige_gebaeudereinigung !== false, zeige_gruenpflege !== false,
+       winterdienst_alarm || false,
        req.params.id]
     );
     res.json(result.rows[0]);

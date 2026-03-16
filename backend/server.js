@@ -26,6 +26,7 @@ app.use('/api/fotos', require('./routes/fotos'));
 app.use('/api/todos', require('./routes/todos'));
 app.use('/api/push',  require('./routes/push'));
 app.use('/api/nachrichten', require('./routes/nachrichten'));
+app.use('/api/alarm',      require('./routes/alarm'));
 
 // Health Check
 app.get('/api/health', (req, res) => {
