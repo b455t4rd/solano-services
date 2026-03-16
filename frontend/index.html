@@ -1270,7 +1270,7 @@ async function renderTabZeit(){
     <td>${r.urlaub?'–':r.gehen?fUhr(r.gehen):'<span style="color:var(--success)">läuft</span>'}</td>
     <td>${r.pause_minuten>0?r.pause_minuten+' min':'–'}</td>
     <td style="font-weight:700">${r.urlaub?'8:00':fMin(r.netto_minuten)}</td>
-    ${isManager()?`<td><button class="tbl-btn danger" data-action="del-zeit" data-id="${r.eintraege?.[0]?.id||''}">⚠️</button></td>`:''}
+    ${isManager()?`<td><button class="tbl-btn danger" data-action="del-zeit-tag" data-mid="${r.mitarbeiter_id}" data-datum="${r.datum}" title="Alle Einträge dieses Tages löschen">🗑️ Löschen</button></td>`:''}
   </tr>`).join('');
 
   const sumHTML=Object.values(summen).map(s=>`<span class="badge badge-blue">${esc(s.name)}: ${fMin(s.min)}${s.urlaub>0?' + '+s.urlaub+'× Urlaub':''}</span> `).join('');
@@ -1852,6 +1852,19 @@ function bindAdminEvents(){
     const von=pageData.zeitVon||'',bis=pageData.zeitBis||'',maId=pageData.zeitMa||'';
     try{const d=await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`);exportZeitPDF(d,von,bis)}catch(e){toast('Fehler','err')}
   })}
+  document.querySelectorAll('[data-action="del-zeit-tag"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      const mid=b.dataset.mid,datum=b.dataset.datum;
+      if(!confirm(`Alle Zeiteinträge vom ${fDate(datum)} löschen?`))return;
+      try{
+        await apiDelete(`/api/zeit/tag?mitarbeiter_id=${mid}&datum=${datum}`);
+        toast('Einträge gelöscht','ok');
+        const c=document.getElementById('admin-tab-content');
+        if(c){c.innerHTML=await renderTabZeit();bindAdminEvents()}
+      }catch(e){toast(e.message,'err')}
+    });
+  });
   const zcsv=document.getElementById('btn-zeit-csv');
   if(zcsv&&!zcsv._bound){zcsv._bound=true;zcsv.addEventListener('click',async()=>{
     const von=pageData.zeitVon||'',bis=pageData.zeitBis||'',maId=pageData.zeitMa||'';

@@ -112,7 +112,19 @@ router.get('/auswertung', managerMiddleware, async (req, res) => {
   }
 });
 
-// Eintrag löschen (Manager+ für Korrekturen)
+// Alle Einträge eines Tages löschen (Manager+)
+router.delete('/tag', managerMiddleware, async (req, res) => {
+  const { mitarbeiter_id, datum } = req.query;
+  if (!mitarbeiter_id || !datum) return res.status(400).json({ error: 'mitarbeiter_id und datum erforderlich' });
+  try {
+    await pool.query('DELETE FROM zeiterfassung WHERE mitarbeiter_id=$1 AND datum=$2', [mitarbeiter_id, datum]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Einzelnen Eintrag löschen (Manager+)
 router.delete('/:id', managerMiddleware, async (req, res) => {
   try {
     await pool.query('DELETE FROM zeiterfassung WHERE id=$1', [req.params.id]);
