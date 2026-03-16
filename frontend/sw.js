@@ -7,11 +7,22 @@ self.addEventListener('push', event => {
       icon: '/Logo.png',
       badge: '/Logo.png',
       vibrate: [200, 100, 200],
+      data: data.data || {}
     })
   );
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  event.waitUntil(clients.openWindow('/'));
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{
+      for(const c of list){
+        if(c.url.startsWith(self.location.origin)&&'focus' in c){
+          c.navigate(url);return c.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
 });
