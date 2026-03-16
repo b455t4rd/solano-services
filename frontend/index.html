@@ -310,12 +310,20 @@ function getTitle(){
   if(page==='anlage-detail')return pageData.anlage?.name||'Anlage';
   if(page==='einsatz')return pageData.anlage?.name||einsatzAkt?.anlage_name||'Einsatz';
   if(page==='admin')return'⚙️ Admin';
+  if(page==='nachrichten')return'📬 Nachrichten';
   return'SolanoServices';
 }
+
+async function updateNachBadge(){
+  if(!user)return;
+  try{const r=await apiGet('/api/nachrichten/ungelesen');window._nachBadge=r.anzahl||0}catch(e){window._nachBadge=0}
+}
 function getHeaderRight(){
-  if(page==='home')return`<button class="header-btn" id="btn-logout">Abmelden</button>`;
-  if(page==='einsatz')return`<button class="header-btn" id="btn-end-einsatz" style="background:rgba(220,38,38,.8)">Beenden</button>`;
-  return`<span style="font-size:13px;opacity:.7">${esc(user?.name||'')}</span>`;
+  const badge=window._nachBadge>0?`<span style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:999px;font-size:10px;font-weight:700;min-width:17px;height:17px;display:flex;align-items:center;justify-content:center;padding:0 3px">${window._nachBadge}</span>`:'';
+  const mailBtn=`<button class="header-btn" id="btn-mailbox" style="position:relative;background:rgba(255,255,255,.15);padding:6px 10px;font-size:17px">📬${badge}</button>`;
+  if(page==='home')return`${mailBtn}<button class="header-btn" id="btn-logout">Abmelden</button>`;
+  if(page==='einsatz')return`${mailBtn}<button class="header-btn" id="btn-end-einsatz" style="background:rgba(220,38,38,.8)">Beenden</button>`;
+  return`${mailBtn}<span style="font-size:13px;opacity:.7">${esc(user?.name||'')}</span>`;
 }
 
 function sidebarHTML(){
@@ -325,6 +333,7 @@ function sidebarHTML(){
   const showGr=user?.zeige_gruenpflege!==false;
   return`
     ${si('nav-home','🏠','Übersicht',page==='home')}
+    ${si('nav-nachrichten','📬','Nachrichten'+(window._nachBadge>0?` (${window._nachBadge})`:''),page==='nachrichten')}
     ${showW?`<div class="sidebar-label">WINTERDIENST</div>${si('nav-winter','❄️','Anlagen',page==='anlagen'&&pageData.sparte==='winterdienst')}`:''}
     ${showG?`<div class="sidebar-label">GEBÄUDEREINIGUNG</div>${si('nav-gebaeude','🧹','Anlagen',page==='anlagen'&&pageData.sparte==='gebaeudereinigung')}`:''}
     ${showGr?`<div class="sidebar-label">GRÜNPFLEGE</div>${si('nav-gruenpflege','🌿','Anlagen',page==='anlagen'&&pageData.sparte==='gruenpflege')}`:''}
@@ -342,6 +351,7 @@ async function getPageContent(){
     case'anlage-detail':return pageAnlageDetail();
     case'einsatz':return pageEinsatz();
     case'admin':return pageAdmin();
+    case'nachrichten':return pageNachrichten();
     default:return`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Seite nicht gefunden</div></div>`;
   }
 }
@@ -370,36 +380,13 @@ async function pageHome(){
     try{const td=await apiGet('/api/todos?erledigt=false');if(td.length>0)todoHint=`<div class="card" style="background:#fffbeb;border:1.5px solid #fcd34d;margin-bottom:16px;cursor:pointer" id="btn-open-todos"><div class="card-body" style="display:flex;align-items:center;gap:12px"><div style="font-size:28px">📋</div><div style="flex:1"><div style="font-weight:700">${td.length} offene${td.length===1?' Meldung':' Meldungen'}</div><div style="font-size:13px;color:#92400e">Bitte prüfen &amp; abhaken</div></div><span style="font-size:18px;color:var(--text-muted)">›</span></div></div>`}catch(e){}
   } else {
     try{
-      const [meine, meineNach] = await Promise.all([
-        apiGet('/api/todos/meine'),
-        apiGet('/api/nachrichten')
-      ]);
-      if(meineNach.length>0){
-        const offene=meineNach.filter(n=>!n.antwort);
-        const alle=meineNach;
-        const nachRows=alle.map(n=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)" data-nach-id="${n.id}">
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Von ${esc(n.von_name)} · ${new Date(n.gesendet_am).toLocaleString('de-AT')}</div>
-            <div style="font-size:14px;font-weight:600;margin-bottom:8px">${esc(n.text)}</div>
-            ${n.antwort
-              ?(n.antwort==='ja'
-                ?'<span class="badge badge-green">✅ Du hast Ja geantwortet</span>'
-                :'<span class="badge badge-red">❌ Du hast Nein geantwortet</span>')
-              :`<div style="display:flex;gap:8px">
-                  <button class="btn-icon nach-ja" data-id="${n.id}" style="background:var(--success)">✅ Ja, erledige ich</button>
-                  <button class="btn-icon nach-nein" data-id="${n.id}" style="background:var(--danger)">❌ Nicht möglich</button>
-                </div>`}
-          </div>`).join('');
-        todoHint=`<div class="card" style="margin-bottom:16px;${offene.length>0?'border:1.5px solid #3b82f6;background:#eff6ff':''}"><div class="card-body" style="padding-bottom:8px">
-          <div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px"><span>💬</span> Nachrichten (${offene.length} offen)</div>
-          ${nachRows}
-        </div></div>`;
-      }
+      const meine=await apiGet('/api/todos/meine');
       if(meine.length>0){
         const rows=meine.map(t=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;display:flex;align-items:flex-start;gap:10px">
             <input type="checkbox" class="mein-todo-check" data-id="${t.id}" style="width:18px;height:18px;margin-top:2px;cursor:pointer;flex-shrink:0;accent-color:var(--success)">
             <div><div style="font-weight:600">${esc(t.beschreibung)}</div>${t.anlage_name?`<div style="font-size:12px;color:var(--text-muted)">📍 ${esc(t.anlage_name)}</div>`:''}</div>
           </div>`).join('');
-        todoHint+=`<div class="card" style="margin-bottom:16px"><div class="card-body" style="padding-bottom:8px"><div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px"><span>📋</span> Meine offenen Aufgaben (${meine.length})</div>${rows}</div></div>`;
+        todoHint=`<div class="card" style="margin-bottom:16px"><div class="card-body" style="padding-bottom:8px"><div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px"><span>📋</span> Meine offenen Aufgaben (${meine.length})</div>${rows}</div></div>`;
       }
     }catch(e){}
   }
@@ -413,6 +400,60 @@ async function pageHome(){
     showGr?`<div class="sparte-card" id="card-gruenpflege"><span class="sparte-icon">🌿</span><div class="sparte-title">Grünpflege</div><div class="sparte-sub">Garten &amp; Außenanlagen</div></div>`:'',
   ].join('');
   return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">Was steht heute an?</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${adminBtn}</div>`;
+}
+
+async function pageNachrichten(){
+  let nachrichten=[];
+  try{nachrichten=await apiGet('/api/nachrichten')}catch(e){}
+  // Badge aktualisieren
+  window._nachBadge=nachrichten.filter(n=>!n.antwort&&n.an_id===user?.id).length;
+
+  const canDelete=isManager();
+  const statusBadge=n=>{
+    if(n.antwort==='ja')return'<span class="badge badge-green">✅ Ja, erledige ich</span>';
+    if(n.antwort==='nein')return'<span class="badge badge-red">❌ Nicht möglich</span>';
+    return'<span class="badge badge-gray">⏳ Noch keine Antwort</span>';
+  };
+  const rows=nachrichten.length===0
+    ?`<div class="empty" style="padding:40px"><div class="empty-icon">📭</div><div class="empty-text">Keine Nachrichten</div></div>`
+    :nachrichten.map(n=>{
+      const isMine=n.an_id===user?.id;
+      return`<div class="card" style="margin-bottom:10px">
+        <div class="card-body">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+            <div style="font-size:12px;color:var(--text-muted)">${new Date(n.gesendet_am).toLocaleString('de-AT')}${isManager()?` · <b>${esc(n.von_name)}</b> → <b>${esc(n.an_name)}</b>`:` · Von: <b>${esc(n.von_name)}</b>`}</div>
+            <button class="nach-del" data-id="${n.id}" title="Löschen" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-muted);padding:0 2px;flex-shrink:0">🗑️</button>
+          </div>
+          <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px">${esc(n.text)}</div>
+          ${isMine&&!n.antwort
+            ?`<div style="display:flex;gap:8px">
+                <button class="btn-icon nach-ja" data-id="${n.id}" style="background:var(--success)">✅ Ja, erledige ich</button>
+                <button class="btn-icon nach-nein" data-id="${n.id}" style="background:var(--danger)">❌ Nicht möglich</button>
+              </div>`
+            :statusBadge(n)}
+          ${n.antwort_am?`<div style="font-size:12px;color:var(--text-muted);margin-top:6px">Geantwortet: ${new Date(n.antwort_am).toLocaleString('de-AT')}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+
+  const sendForm=isManager()?await (async()=>{
+    let maList=[];try{maList=await apiGet('/api/mitarbeiter')}catch(e){}
+    return`<div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="font-weight:700;margin-bottom:12px;font-size:15px">💬 Neue Nachricht</div>
+      <div class="form-group"><label class="form-label">Empfänger *</label>
+        <select class="form-input" id="nach-an-id">
+          <option value="">-- Mitarbeiter wählen --</option>
+          ${maList.filter(m=>m.id!==user?.id).map(m=>`<option value="${m.id}" data-name="${esc(m.name)}">${esc(m.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Nachricht *</label>
+        <textarea class="form-input" id="nach-text" rows="3" placeholder="z.B. Fahre beim Schmidts vorbei und hol 4x50er Schrauben…"></textarea>
+      </div>
+      <button class="btn btn-primary" id="btn-nach-senden">💬 Senden + Push</button>
+    </div></div>`;
+  })():'';
+
+  return`<div class="content">${sendForm}<div style="font-weight:700;margin-bottom:10px">${isManager()?'Alle Nachrichten':'Meine Nachrichten'} (${nachrichten.length})</div>${rows}</div>`;
 }
 
 function fZuletzt(ts){
@@ -1158,7 +1199,33 @@ function bindEvents(){
   o('nav-gebaeude','click',()=>go('anlagen',{sparte:'gebaeudereinigung'}));
   o('nav-einsatz','click',()=>go('einsatz'));
   o('nav-admin','click',()=>go('admin',{adminTab:'anlagen'}));
+  o('nav-nachrichten','click',()=>go('nachrichten'));
+  o('btn-mailbox','click',()=>go('nachrichten'));
   o('nav-logout','click',doLogout);
+
+  // Nachrichten ✅/❌ und Löschen
+  document.querySelectorAll('.nach-ja,.nach-nein').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const antwort=btn.classList.contains('nach-ja')?'ja':'nein';
+      try{
+        await apiPut(`/api/nachrichten/${btn.dataset.id}/antwort`,{antwort});
+        toast(antwort==='ja'?'✅ Bestätigt!':'❌ Abgelehnt','ok');
+        await updateNachBadge();
+        setTimeout(()=>go('nachrichten'),600);
+      }catch(e){toast(e.message,'err')}
+    });
+  });
+  document.querySelectorAll('.nach-del').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      if(!confirm('Nachricht löschen?'))return;
+      try{
+        await apiDel(`/api/nachrichten/${btn.dataset.id}`);
+        toast('Gelöscht','ok');
+        await updateNachBadge();
+        go('nachrichten');
+      }catch(e){toast(e.message,'err')}
+    });
+  });
 
   // Login
   o('btn-login','click',async()=>{
@@ -1168,6 +1235,7 @@ function bindEvents(){
       user=await apiPost('/api/mitarbeiter/login',{pin});
       localStorage.setItem('solano_user',JSON.stringify(user));
       registerPushSubscription();
+      await updateNachBadge();
       go('home');
     }catch(e){toast(e.message,'err')}
   });

@@ -99,6 +99,22 @@ router.put('/:id/antwort', authMiddleware, async (req, res) => {
   }
 });
 
+// Nachricht löschen (Admin: alle; Mitarbeiter: eigene empfangene)
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    let result;
+    if (req.user.ist_admin || req.user.ist_chef) {
+      result = await pool.query('DELETE FROM nachrichten WHERE id=$1 RETURNING id', [req.params.id]);
+    } else {
+      result = await pool.query('DELETE FROM nachrichten WHERE id=$1 AND an_id=$2 RETURNING id', [req.params.id, req.user.id]);
+    }
+    if (!result.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Als gelesen markieren
 router.put('/:id/gelesen', authMiddleware, async (req, res) => {
   try {
