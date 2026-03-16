@@ -49,6 +49,19 @@
     .sidebar-spacer{flex:1}
     .sidebar-divider{border-top:1px solid var(--border);margin:8px}
 
+    /* KALENDER */
+    .kal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-top:4px}
+    .kal-head{text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);padding:4px 0;text-transform:uppercase}
+    .kal-day{min-height:54px;background:white;border-radius:6px;padding:4px;cursor:pointer;transition:background .1s;border:1.5px solid transparent}
+    .kal-day:hover{background:#eff6ff;border-color:#bfdbfe}
+    .kal-day.today{border-color:var(--primary);background:#eff6ff}
+    .kal-day.other-month{background:var(--bg);opacity:.45;cursor:default;pointer-events:none}
+    .kal-day-num{font-size:12px;font-weight:600;margin-bottom:2px}
+    .kal-pill{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#dbeafe;color:var(--primary);border-radius:4px;padding:1px 4px;margin-top:1px;max-width:100%}
+    .kal-day.selected{border-color:var(--primary)!important;background:#dbeafe!important}
+    .btn-ghost{background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;font-size:15px;font-weight:600;color:var(--text)}
+    .btn-ghost:active{background:#e5e7eb}
+
     /* HEADER */
     .header{background:var(--primary);color:white;padding:0 16px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-md);flex-shrink:0}
     .header-title{font-size:17px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -315,6 +328,7 @@ function getTitle(){
   if(page==='nachrichten')return'📬 Nachrichten';
   if(page==='alarm')return'🚨 ALARM';
   if(page==='zeit')return'⏱️ Zeiterfassung';
+  if(page==='kalender')return'📅 Kalender';
   return'SolanoServices';
 }
 
@@ -386,6 +400,7 @@ function sidebarHTML(){
     ${si('nav-home','🏠','Übersicht',page==='home')}
     ${si('nav-nachrichten','📬','Nachrichten'+(window._nachBadge>0?` (${window._nachBadge})`:''),page==='nachrichten')}
     ${si('nav-zeit','⏱️','Zeiterfassung',page==='zeit')}
+    ${si('nav-kalender','📅','Kalender',page==='kalender')}
     ${showW?`<div class="sidebar-label">WINTERDIENST</div>${si('nav-winter','❄️','Anlagen',page==='anlagen'&&pageData.sparte==='winterdienst')}`:''}
     ${showG?`<div class="sidebar-label">GEBÄUDEREINIGUNG</div>${si('nav-gebaeude','🧹','Anlagen',page==='anlagen'&&pageData.sparte==='gebaeudereinigung')}`:''}
     ${showGr?`<div class="sidebar-label">GRÜNPFLEGE</div>${si('nav-gruenpflege','🌿','Anlagen',page==='anlagen'&&pageData.sparte==='gruenpflege')}`:''}
@@ -406,6 +421,7 @@ async function getPageContent(){
     case'nachrichten':return pageNachrichten();
     case'alarm':return pageAlarm();
     case'zeit':return pageZeit();
+    case'kalender':return pageKalender();
     default:return`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Seite nicht gefunden</div></div>`;
   }
 }
@@ -458,6 +474,7 @@ async function pageHome(){
     else zeitStatusHome='Noch nicht eingestempelt';
   }catch(e){}
   const zeitBtn=`<button class="nav-btn" id="card-zeit" style="margin-top:12px;justify-content:space-between"><span>⏱️ Zeiterfassung</span><span style="font-size:12px;opacity:.7;font-weight:400">${zeitStatusHome}</span></button>`;
+  const kalBtn=`<button class="nav-btn" id="card-kalender" style="margin-top:8px">📅 Kalender</button>`;
   const showW=user?.zeige_winterdienst!==false;
   const showG=user?.zeige_gebaeudereinigung!==false;
   const showGr=user?.zeige_gruenpflege!==false;
@@ -468,7 +485,7 @@ async function pageHome(){
   ].join('');
   const _gr=['Schön, dass du da bist.','Was steht heute an?','Schon Kaffee gehabt?','Willkommen zurück.','Wie läuft\'s heute?','Bereit für den Tag?','Gut, dich zu sehen.','Was liegt heute an?','Alles klar bei dir?','Auf geht\'s?','Schön, dass du wieder da bist.','Was ist heute geplant?','Alles fit?','Bereit?','Wie startet dein Tag?','Was gibt\'s heute?','Na, alles gut?','Wie schaut\'s aus?','Los geht\'s.','Was machen wir heute?','Willkommen.','Da bist du ja.','Was geht heute?','Alles im Griff?','Gut drauf heute?','Was kommt als Nächstes?','Wie ist die Lage?','Kann losgehen?','Was hast du vor?','Bereit für heute?','Was ist der Plan?','Schön, dich zu sehen.','Wie läuft der Tag?','Alles bereit?','Was wartet heute?','Hallo, schön dass du da bist.','Was nehmen wir heute in Angriff?','Na, bereit?','Alles entspannt?','Wie sieht\'s heute aus?','Was ist heute wichtig?','Wieder am Start?','Wie geht\'s dir heute?','Schön, dass du reinschaust.','Kaffee schon drin?','Was hast du heute auf dem Zettel?','Kann\'s losgehen?','Alles gut heute?','Hallo zurück.','Was darf\'s heute sein?','Gut, dass du da bist.','Wie läuft dein Morgen?','Was steht als Erstes an?','Alles auf Kurs?','Bereit zum Loslegen?','Was läuft heute?','Was ist heute los?','Willkommen, legen wir los.','Wie startet\'s?','Was packen wir an?','Schön, dass du vorbeischaust.','Wie sieht dein Tag aus?','Alles startklar?','Was steht bei dir an?','Schon wach?','Bereit für Runde zwei?','Wie läuft dein Vormittag?','Alles gut soweit?','Was geht ab?','Startklar?','Na, wie ist\'s?','Was darf heute passieren?','Alles unter Kontrolle?','Gut geschlafen?','Schon im Flow?','Was geht zuerst?','Was kommt heute auf dich zu?','Willkommen zurück im Alltag.','Wie fühlt sich der Tag an?','Heute viel vor?','Was gibt der Tag her?','Wie schaut dein Plan aus?','Alles locker?','Bist du bereit?','Was läuft als Nächstes?','Wieder da?','Schön, dich wiederzusehen.','Wie geht der Tag los?','Schon gestartet?','Was wollen wir heute schaffen?','Wie ist die Stimmung?','Was ist heute dran?','Schon unterwegs?','Gut in den Tag gekommen?','Was liegt zuerst an?','Alles bereit für heute?','Na dann, los.','Schön, dass du reinsiehst.','Heute motiviert?','Was steht vorne an?','Alles gut bei dir?','Was darf heute nicht vergessen werden?','Was ist heute dein Fokus?','Los?','Wieder bereit?','Na, schon angekommen?','Wie läuft dein Start?','Was soll heute klappen?','Schön, dass du wieder hier bist.','Wie sieht\'s aus bei dir?','Kaffee oder Chaos?','Was ist heute dein Thema?','Na, wie startet\'s?','Alles ruhig?','Bereit für das Nächste?','Wie war dein Morgen?'];
   const _grText=_gr[Math.floor(Math.random()*_gr.length)];
-  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${adminBtn}</div>`;
+  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${kalBtn}${adminBtn}</div>`;
 }
 
 async function pageNachrichten(){
@@ -652,6 +669,7 @@ async function pageAdmin(){
     <button class="tab-btn ${tab==='nachrichten'?'active':''}" data-tab="nachrichten">💬 Nachrichten</button>
     <button class="tab-btn ${tab==='alarm'?'active':''}" data-tab="alarm">🚨 Alarm</button>
     <button class="tab-btn ${tab==='zeitauswertung'?'active':''}" data-tab="zeitauswertung">⏱️ Zeiterfassung</button>
+    ${isManager()?`<button class="tab-btn ${tab==='kalender'?'active':''}" data-tab="kalender">📅 Kalender</button>`:''}
     ${user?.ist_admin?`<button class="tab-btn ${tab==='reset'?'active':''}" data-tab="reset">🗑️ Reset</button>`:''}
     ${pushTab}
   </div>
@@ -668,6 +686,7 @@ async function renderTab(tab){
   if(tab==='nachrichten')return renderTabNachrichten();
   if(tab==='alarm')return renderTabAlarm();
   if(tab==='zeitauswertung')return renderTabZeit();
+  if(tab==='kalender'&&isManager())return renderTabKalender();
   if(tab==='reset'&&user?.ist_admin)return renderTabReset();
   return'';
 }
@@ -1314,9 +1333,9 @@ async function renderTabZeit(){
         </select>
       </div>
       <div style="display:grid;grid-template-columns:${auswertung.length>0?'1fr 1fr 1fr':'1fr'};gap:8px">
-        <button class="btn btn-primary" id="btn-zeit-laden" style="height:42px;white-space:nowrap">🔍 Laden</button>
-        ${auswertung.length>0?`<button class="btn" id="btn-zeit-pdf" style="background:#6b7280;color:white;height:42px;white-space:nowrap">🖨️ PDF</button>
-        <button class="btn" id="btn-zeit-csv" style="background:#16a34a;color:white;height:42px;white-space:nowrap">📥 Excel</button>`:''}
+        <button class="btn" id="btn-zeit-laden" style="background:#1e40af;color:white;height:42px;white-space:nowrap;font-weight:600">🔍 Laden</button>
+        ${auswertung.length>0?`<button class="btn" id="btn-zeit-pdf" style="background:#6b7280;color:white;height:42px;white-space:nowrap;font-weight:600">🖨️ PDF</button>
+        <button class="btn" id="btn-zeit-csv" style="background:#16a34a;color:white;height:42px;white-space:nowrap;font-weight:600">📥 Excel</button>`:''}
       </div>
     </div></div>
     ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
@@ -1324,6 +1343,102 @@ async function renderTabZeit(){
       <table class="tbl"><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Kommen</th><th>Gehen</th><th>Pause</th><th>Stunden</th>${isManager()?'<th></th>':''}</tr></thead>
       <tbody>${rows||`<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Keine Einträge im Zeitraum</td></tr>`}</tbody></table>
     </div>
+  </div>`;
+}
+
+// ── KALENDER ─────────────────────────────────────────────────────────────────
+let _kalMonth=null; // {year,month} – null = aktueller Monat
+
+async function pageKalender(){
+  const now=new Date();
+  const year=_kalMonth?.year??now.getFullYear();
+  const month=_kalMonth?.month??now.getMonth();
+
+  const von=new Date(year,month,1).toISOString().split('T')[0];
+  const bis=new Date(year,month+1,0,23,59,59).toISOString().split('T')[0];
+
+  let events=[];
+  try{events=await apiGet(`/api/kalender/events?von=${von}&bis=${bis}`);}catch(e){}
+
+  // Tages-Index
+  const byDay={};
+  for(const ev of events){
+    const d=new Date(ev.start_zeit).toLocaleDateString('sv-SE');
+    if(!byDay[d])byDay[d]=[];
+    byDay[d].push(ev);
+  }
+
+  const dayNames=['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const monthNames=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+  const firstDay=new Date(year,month,1);
+  const lastDay=new Date(year,month+1,0);
+  const startOffset=(firstDay.getDay()+6)%7;
+  const todayStr=now.toLocaleDateString('sv-SE');
+
+  let gridHTML=dayNames.map(d=>`<div class="kal-head">${d}</div>`).join('');
+
+  // Füllzellen Anfang
+  for(let i=0;i<startOffset;i++){
+    const pd=new Date(year,month,1-(startOffset-i));
+    gridHTML+=`<div class="kal-day other-month"><div class="kal-day-num">${pd.getDate()}</div></div>`;
+  }
+
+  // Monatstage
+  for(let day=1;day<=lastDay.getDate();day++){
+    const dateStr=new Date(year,month,day).toLocaleDateString('sv-SE');
+    const dayEvs=byDay[dateStr]||[];
+    const isToday=dateStr===todayStr;
+    const pills=dayEvs.slice(0,2).map(ev=>`<div class="kal-pill" title="${esc(ev.titel)}">${esc(ev.titel)}</div>`).join('');
+    const more=dayEvs.length>2?`<div style="font-size:9px;color:var(--text-muted)">+${dayEvs.length-2}</div>`:'';
+    gridHTML+=`<div class="kal-day${isToday?' today':''}${dayEvs.length?' has-events':''}" data-kal-date="${dateStr}">
+      <div class="kal-day-num">${day}</div>${pills}${more}
+    </div>`;
+  }
+
+  // Füllzellen Ende
+  const totalCells=startOffset+lastDay.getDate();
+  const rest=totalCells%7===0?0:7-(totalCells%7);
+  for(let i=1;i<=rest;i++)gridHTML+=`<div class="kal-day other-month"><div class="kal-day-num">${i}</div></div>`;
+
+  const syncBtn=isManager()?`<button class="btn-ghost" id="btn-kal-sync" style="font-size:13px;padding:6px 10px">↺ Sync</button>`:'';
+
+  return`<div class="content">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <button class="btn-ghost" id="btn-kal-prev" style="font-size:20px;padding:4px 12px">‹</button>
+      <div style="flex:1;text-align:center;font-size:16px;font-weight:700">${monthNames[month]} ${year}</div>
+      <button class="btn-ghost" id="btn-kal-next" style="font-size:20px;padding:4px 12px">›</button>
+      ${syncBtn}
+    </div>
+    <div class="card" style="padding:8px"><div class="kal-grid">${gridHTML}</div></div>
+    <div id="kal-detail" style="margin-top:12px"></div>
+  </div>`;
+}
+
+async function renderTabKalender(){
+  let settings={exchange_url:'',exchange_user:'',sync_intervall_min:15,letzter_sync:null};
+  try{settings=await apiGet('/api/kalender/settings');}catch(e){}
+  const letzterSync=settings.letzter_sync?new Date(settings.letzter_sync).toLocaleString('de-AT'):'Noch nie';
+
+  return`<div class="admin-wrap">
+    <div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="font-weight:700;font-size:15px;margin-bottom:14px">📅 Exchange Kalender – Einstellungen</div>
+      <div class="form-group"><label class="form-label">Exchange EWS URL</label>
+        <input class="form-input" id="kal-url" value="${esc(settings.exchange_url||'')}" placeholder="https://mail.firma.at/EWS/Exchange.asmx"></div>
+      <div class="form-group"><label class="form-label">Benutzername</label>
+        <input class="form-input" id="kal-user" value="${esc(settings.exchange_user||'')}" placeholder="DOMAIN\\benutzer oder user@firma.at"></div>
+      <div class="form-group"><label class="form-label">Passwort ${settings.exchange_user?'(leer = unverändert)':''}</label>
+        <input class="form-input" id="kal-pass" type="password" placeholder="${settings.exchange_user?'••••••••':'Passwort eingeben'}"></div>
+      <div class="form-group"><label class="form-label">Auto-Sync Intervall (Minuten)</label>
+        <input class="form-input" id="kal-intervall" type="number" min="5" value="${settings.sync_intervall_min||15}"></div>
+      <button class="btn btn-primary" id="btn-kal-settings-save">💾 Einstellungen speichern</button>
+    </div></div>
+    <div class="card"><div class="card-body">
+      <div style="font-weight:700;font-size:15px;margin-bottom:8px">🔄 Manueller Sync</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Letzter Sync: <b>${letzterSync}</b></div>
+      <button class="btn btn-outline" id="btn-kal-sync-now">↺ Jetzt synchronisieren</button>
+      <div id="kal-sync-result" style="margin-top:10px;font-size:13px"></div>
+    </div></div>
   </div>`;
 }
 
@@ -1576,6 +1691,7 @@ function bindEvents(){
   o('nav-admin','click',()=>go('admin',{adminTab:'anlagen'}));
   o('nav-nachrichten','click',()=>go('nachrichten'));
   o('nav-zeit','click',()=>go('zeit'));
+  o('nav-kalender','click',()=>{_kalMonth=null;go('kalender');});
 
   // Zeiterfassung Stempel-Buttons
   const stempelBtn=(id,typ)=>{
@@ -1640,6 +1756,45 @@ function bindEvents(){
 
   // Admin: zur Zeitauswertung springen
   o('btn-zeit-admin','click',()=>go('admin',{adminTab:'zeitauswertung'}));
+
+  // Kalender Navigation
+  o('btn-kal-prev','click',()=>{
+    const now=new Date();const y=_kalMonth?.year??now.getFullYear();const m=_kalMonth?.month??now.getMonth();
+    _kalMonth={year:m===0?y-1:y,month:m===0?11:m-1};go('kalender');
+  });
+  o('btn-kal-next','click',()=>{
+    const now=new Date();const y=_kalMonth?.year??now.getFullYear();const m=_kalMonth?.month??now.getMonth();
+    _kalMonth={year:m===11?y+1:y,month:m===11?0:m+1};go('kalender');
+  });
+  o('btn-kal-sync','click',async()=>{
+    try{const r=await apiPost('/api/kalender/sync',{});toast(`✅ Sync: ${r.count} Events`,'ok');go('kalender');}
+    catch(e){toast(e.message,'err')}
+  });
+
+  // Kalender Tag-Klick
+  document.querySelectorAll('[data-kal-date]').forEach(cell=>{
+    if(cell._bound)return;cell._bound=true;
+    cell.addEventListener('click',()=>{
+      document.querySelectorAll('[data-kal-date].selected').forEach(c=>c.classList.remove('selected'));
+      cell.classList.add('selected');
+      const dateStr=cell.dataset.kalDate;
+      const detail=document.getElementById('kal-detail');
+      if(!detail)return;
+      detail.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-muted)"><div class="spinner" style="width:20px;height:20px;margin:0 auto 8px"></div>Lädt…</div>';
+      const von=dateStr+'T00:00:00';const bis=dateStr+'T23:59:59';
+      apiGet(`/api/kalender/events?von=${encodeURIComponent(von)}&bis=${encodeURIComponent(bis)}`).then(evs=>{
+        const label=new Date(dateStr).toLocaleDateString('de-AT',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+        if(!evs.length){detail.innerHTML=`<div class="card"><div class="card-body" style="color:var(--text-muted);text-align:center;padding:20px">📅 Keine Termine am ${label}</div></div>`;return;}
+        detail.innerHTML=`<div style="font-weight:700;margin-bottom:8px">${label} · ${evs.length} Termin${evs.length===1?'':'e'}</div>`+
+          evs.map(ev=>`<div class="card" style="margin-bottom:8px"><div class="card-body" style="padding:12px">
+            <div style="font-weight:700;font-size:15px">${esc(ev.titel)}</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-top:4px">🕐 ${fTime(ev.start_zeit)}${ev.end_zeit?' – '+fTime(ev.end_zeit):''}${ev.ort?` · 📍 ${esc(ev.ort)}`:''}</div>
+            ${ev.organisator?`<div style="font-size:12px;color:var(--text-muted);margin-top:2px">👤 ${esc(ev.organisator)}</div>`:''}
+            ${ev.beschreibung?`<div style="font-size:13px;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">${esc(ev.beschreibung.substring(0,300))}${ev.beschreibung.length>300?'…':''}</div>`:''}
+          </div></div>`).join('');
+      }).catch(e=>{detail.innerHTML=`<div class="card"><div class="card-body" style="color:var(--danger)">Fehler: ${esc(e.message)}</div></div>`;});
+    });
+  });
 
   // Alarm bestätigen (Mitarbeiter)
   o('btn-alarm-best','click',async()=>{
@@ -1721,6 +1876,7 @@ function bindEvents(){
   o('btn-logout','click',doLogout);
   o('btn-resume','click',()=>go('einsatz'));
   o('card-zeit','click',()=>go('zeit'));
+  o('card-kalender','click',()=>{_kalMonth=null;go('kalender');});
   o('card-winter','click',()=>go('anlagen',{sparte:'winterdienst'}));
   o('card-gebaeude','click',()=>go('anlagen',{sparte:'gebaeudereinigung'}));
   o('card-gruenpflege','click',()=>go('anlagen',{sparte:'gruenpflege'}));
@@ -1843,7 +1999,32 @@ function bindEvents(){
   initAnlagenKarteIfNeeded();
 }
 
+function reloadTab(){const c=document.getElementById('admin-tab-content');if(c){const tab=pageData.adminTab||'anlagen';renderTab(tab).then(h=>{c.innerHTML=h;bindAdminEvents();});}}
+
 function bindAdminEvents(){
+  // Kalender-Einstellungen speichern
+  const kss=document.getElementById('btn-kal-settings-save');
+  if(kss&&!kss._bound){kss._bound=true;kss.addEventListener('click',async()=>{
+    const url=document.getElementById('kal-url')?.value?.trim();
+    const user2=document.getElementById('kal-user')?.value?.trim();
+    const pass=document.getElementById('kal-pass')?.value||'';
+    const intervall=parseInt(document.getElementById('kal-intervall')?.value)||15;
+    if(!url||!user2){toast('URL und Benutzername erforderlich','err');return}
+    try{await apiPut('/api/kalender/settings',{exchange_url:url,exchange_user:user2,exchange_pass:pass,sync_intervall_min:intervall});
+      toast('✅ Einstellungen gespeichert','ok');reloadTab();
+    }catch(e){toast(e.message,'err')}
+  })}
+  // Kalender manueller Sync (Admin-Tab)
+  const ksn=document.getElementById('btn-kal-sync-now');
+  if(ksn&&!ksn._bound){ksn._bound=true;ksn.addEventListener('click',async()=>{
+    const r=document.getElementById('kal-sync-result');
+    if(r)r.innerHTML='<span style="color:var(--text-muted)">Synchronisierung läuft…</span>';
+    try{const res=await apiPost('/api/kalender/sync',{});
+      toast(`✅ Sync: ${res.count} Events`,'ok');
+      if(r)r.innerHTML=`<span style="color:var(--success)">✅ ${res.count} Events · ${new Date(res.letzter_sync).toLocaleString('de-AT')}</span>`;
+    }catch(e){toast(e.message,'err');if(r)r.innerHTML=`<span style="color:var(--danger)">Fehler: ${esc(e.message)}</span>`;}
+  })}
+
   const na=document.getElementById('btn-new-anlage');
   if(na&&!na._bound){na._bound=true;na.addEventListener('click',()=>modalAnlage())}
   const nm=document.getElementById('btn-new-ma');
