@@ -1044,7 +1044,7 @@ async function renderTabNachrichten(){
       <div class="form-group"><label class="form-label">Empfänger *</label>
         <select class="form-input" id="nach-an-id">
           <option value="">-- Mitarbeiter wählen --</option>
-          ${maList.filter(m=>!m.ist_admin&&!m.ist_chef).map(m=>`<option value="${m.id}" data-name="${esc(m.name)}">${esc(m.name)}</option>`).join('')}
+          ${maList.filter(m=>m.id!==user?.id).map(m=>`<option value="${m.id}" data-name="${esc(m.name)}">${esc(m.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Nachricht *</label>
