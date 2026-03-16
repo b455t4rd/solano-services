@@ -25,6 +25,7 @@ app.use('/api/gps', require('./routes/gps'));
 app.use('/api/fotos', require('./routes/fotos'));
 app.use('/api/todos', require('./routes/todos'));
 app.use('/api/push',  require('./routes/push'));
+app.use('/api/nachrichten', require('./routes/nachrichten'));
 
 // Health Check
 app.get('/api/health', (req, res) => {

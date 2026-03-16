@@ -370,13 +370,36 @@ async function pageHome(){
     try{const td=await apiGet('/api/todos?erledigt=false');if(td.length>0)todoHint=`<div class="card" style="background:#fffbeb;border:1.5px solid #fcd34d;margin-bottom:16px;cursor:pointer" id="btn-open-todos"><div class="card-body" style="display:flex;align-items:center;gap:12px"><div style="font-size:28px">📋</div><div style="flex:1"><div style="font-weight:700">${td.length} offene${td.length===1?' Meldung':' Meldungen'}</div><div style="font-size:13px;color:#92400e">Bitte prüfen &amp; abhaken</div></div><span style="font-size:18px;color:var(--text-muted)">›</span></div></div>`}catch(e){}
   } else {
     try{
-      const meine=await apiGet('/api/todos/meine');
+      const [meine, meineNach] = await Promise.all([
+        apiGet('/api/todos/meine'),
+        apiGet('/api/nachrichten')
+      ]);
+      if(meineNach.length>0){
+        const offene=meineNach.filter(n=>!n.antwort);
+        const alle=meineNach;
+        const nachRows=alle.map(n=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)" data-nach-id="${n.id}">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Von ${esc(n.von_name)} · ${new Date(n.gesendet_am).toLocaleString('de-AT')}</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:8px">${esc(n.text)}</div>
+            ${n.antwort
+              ?(n.antwort==='ja'
+                ?'<span class="badge badge-green">✅ Du hast Ja geantwortet</span>'
+                :'<span class="badge badge-red">❌ Du hast Nein geantwortet</span>')
+              :`<div style="display:flex;gap:8px">
+                  <button class="btn-icon nach-ja" data-id="${n.id}" style="background:var(--success)">✅ Ja, erledige ich</button>
+                  <button class="btn-icon nach-nein" data-id="${n.id}" style="background:var(--danger)">❌ Nicht möglich</button>
+                </div>`}
+          </div>`).join('');
+        todoHint=`<div class="card" style="margin-bottom:16px;${offene.length>0?'border:1.5px solid #3b82f6;background:#eff6ff':''}"><div class="card-body" style="padding-bottom:8px">
+          <div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px"><span>💬</span> Nachrichten (${offene.length} offen)</div>
+          ${nachRows}
+        </div></div>`;
+      }
       if(meine.length>0){
         const rows=meine.map(t=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;display:flex;align-items:flex-start;gap:10px">
             <input type="checkbox" class="mein-todo-check" data-id="${t.id}" style="width:18px;height:18px;margin-top:2px;cursor:pointer;flex-shrink:0;accent-color:var(--success)">
             <div><div style="font-weight:600">${esc(t.beschreibung)}</div>${t.anlage_name?`<div style="font-size:12px;color:var(--text-muted)">📍 ${esc(t.anlage_name)}</div>`:''}</div>
           </div>`).join('');
-        todoHint=`<div class="card" style="margin-bottom:16px"><div class="card-body" style="padding-bottom:8px"><div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px"><span>📋</span> Meine offenen Aufgaben (${meine.length})</div>${rows}</div></div>`;
+        todoHint+=`<div class="card" style="margin-bottom:16px"><div class="card-body" style="padding-bottom:8px"><div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px"><span>📋</span> Meine offenen Aufgaben (${meine.length})</div>${rows}</div></div>`;
       }
     }catch(e){}
   }
@@ -516,6 +539,7 @@ async function pageAdmin(){
     <button class="tab-btn ${tab==='berichte'?'active':''}" data-tab="berichte">Berichte</button>
     <button class="tab-btn ${tab==='karte'?'active':''}" data-tab="karte">🗺️ Karte</button>
     <button class="tab-btn ${tab==='todos'?'active':''}" data-tab="todos">📋 TODOs</button>
+    <button class="tab-btn ${tab==='nachrichten'?'active':''}" data-tab="nachrichten">💬 Nachrichten</button>
     ${pushTab}
   </div>
   <div id="admin-tab-content">${await renderTab(tab)}</div>`;
@@ -528,6 +552,7 @@ async function renderTab(tab){
   if(tab==='karte')return renderTabKarte();
   if(tab==='todos')return renderTabTodos();
   if(tab==='push')return renderTabPush();
+  if(tab==='nachrichten')return renderTabNachrichten();
   return'';
 }
 
@@ -994,6 +1019,44 @@ async function renderTabPush(){
   </div>`;
 }
 
+// ── NACHRICHTEN TAB (Admin/Chef) ──
+async function renderTabNachrichten(){
+  let nachrichten=[],maList=[];
+  try{[nachrichten,maList]=await Promise.all([apiGet('/api/nachrichten'),apiGet('/api/mitarbeiter')])}catch(e){}
+  const statusBadge=n=>{
+    if(n.antwort==='ja')return'<span class="badge badge-green">✅ Ja, erledige ich</span>';
+    if(n.antwort==='nein')return'<span class="badge badge-red">❌ Nicht möglich</span>';
+    return'<span class="badge badge-gray">⏳ Ausstehend</span>';
+  };
+  const rows=nachrichten.length===0
+    ?`<div class="empty" style="padding:32px"><div class="empty-icon">💬</div><div class="empty-text">Noch keine Nachrichten</div></div>`
+    :nachrichten.map(n=>`<div class="card" style="margin-bottom:10px"><div class="card-body">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+          <div style="font-size:12px;color:var(--text-muted)">${new Date(n.gesendet_am).toLocaleString('de-AT')} · Von: <b>${esc(n.von_name)}</b> → <b>${esc(n.an_name)}</b></div>
+          ${statusBadge(n)}
+        </div>
+        <div style="font-size:15px;line-height:1.5">${esc(n.text)}</div>
+        ${n.antwort_am?`<div style="font-size:12px;color:var(--text-muted);margin-top:6px">Geantwortet: ${new Date(n.antwort_am).toLocaleString('de-AT')}</div>`:''}
+      </div></div>`).join('');
+  return`<div class="admin-wrap">
+    <div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="font-weight:700;margin-bottom:12px;font-size:15px">💬 Neue Nachricht senden</div>
+      <div class="form-group"><label class="form-label">Empfänger *</label>
+        <select class="form-input" id="nach-an-id">
+          <option value="">-- Mitarbeiter wählen --</option>
+          ${maList.filter(m=>!m.ist_admin&&!m.ist_chef).map(m=>`<option value="${m.id}" data-name="${esc(m.name)}">${esc(m.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Nachricht *</label>
+        <textarea class="form-input" id="nach-text" rows="3" placeholder="z.B. Fahre beim Schmidts vorbei und hol 4x50er Schrauben…"></textarea>
+      </div>
+      <button class="btn btn-primary" id="btn-nach-senden">💬 Senden + Push</button>
+    </div></div>
+    <div style="font-weight:700;margin-bottom:10px;font-size:15px">📬 Gesendete Nachrichten (${nachrichten.length})</div>
+    ${rows}
+  </div>`;
+}
+
 // ── DRAG & DROP SORT ──
 function bindDragSort(){
   const container=document.getElementById('anlagen-list');
@@ -1109,6 +1172,19 @@ function bindEvents(){
     }catch(e){toast(e.message,'err')}
   });
   o('pin-input','keydown',e=>{if(e.key==='Enter')document.getElementById('btn-login')?.click()});
+
+  // Nachrichten ✅/❌ (Mitarbeiter-Startseite)
+  document.querySelectorAll('.nach-ja,.nach-nein').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const id=btn.dataset.id;
+      const antwort=btn.classList.contains('nach-ja')?'ja':'nein';
+      try{
+        await apiPut(`/api/nachrichten/${id}/antwort`,{antwort});
+        toast(antwort==='ja'?'✅ Bestätigt!':'❌ Abgelehnt','ok');
+        setTimeout(()=>go('home'),800);
+      }catch(e){toast(e.message,'err')}
+    });
+  });
 
   // Meine TODOs abhaken (Startseite)
   document.querySelectorAll('.mein-todo-check').forEach(cb=>{
@@ -1287,6 +1363,23 @@ function bindAdminEvents(){
       }catch(e){toast(e.message,'err')}
     });
   });
+
+  // Nachricht senden (Nachrichten-Tab)
+  const ns=document.getElementById('btn-nach-senden');
+  if(ns&&!ns._bound){ns._bound=true;ns.addEventListener('click',async()=>{
+    const sel=document.getElementById('nach-an-id');
+    const anId=sel?.value;
+    const anName=sel?.options[sel.selectedIndex]?.dataset?.name||'';
+    const text=document.getElementById('nach-text')?.value?.trim();
+    if(!anId){toast('Empfänger wählen','err');return}
+    if(!text){toast('Nachricht eingeben','err');return}
+    try{
+      await apiPost('/api/nachrichten',{an_id:parseInt(anId),an_name:anName,text});
+      toast('Nachricht gesendet ✓','ok');
+      document.getElementById('nach-text').value='';
+      reloadTab();
+    }catch(e){toast(e.message,'err')}
+  })}
 
   // Push senden
   const ps=document.getElementById('btn-push-senden');
