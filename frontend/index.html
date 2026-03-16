@@ -283,7 +283,7 @@ async function apiDel(p){const r=await fetch(API+p,{method:'DELETE',headers:ah()
 async function apiUp(p,fd){const r=await fetch(API+p,{method:'POST',headers:ah(),body:fd});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
 
 // ── ROUTER ──
-function go(p,data={}){pageData={...data};page=p;if(user)updateNachBadge();renderPage()}
+function go(p,data={}){pageData={...data};page=p;if(user){updateNachBadge();checkPauseErinnerung();}renderPage()}
 
 async function renderPage(){
   document.getElementById('modal-container').innerHTML='';
@@ -314,7 +314,46 @@ function getTitle(){
   if(page==='admin')return'⚙️ Admin';
   if(page==='nachrichten')return'📬 Nachrichten';
   if(page==='alarm')return'🚨 ALARM';
+  if(page==='zeit')return'⏱️ Zeiterfassung';
   return'SolanoServices';
+}
+
+async function checkPauseErinnerung(){
+  if(!user)return;
+  const heute=new Date().toISOString().split('T')[0];
+  const flagKey=`solano_pause_hint_${user.id}_${heute}`;
+  if(localStorage.getItem(flagKey))return; // Heute schon gefragt
+  const jetzt=new Date();
+  if(jetzt.getHours()<13)return; // Erst ab 13:00 Uhr fragen
+  try{
+    const eintraege=await apiGet('/api/zeit/heute');
+    const hatKommen=eintraege.some(e=>e.typ==='kommen');
+    const hatPause=eintraege.some(e=>e.typ==='pause_start');
+    if(!hatKommen||hatPause)return; // Nicht eingestempelt oder Pause bereits gebucht
+    localStorage.setItem(flagKey,'asked');
+    // Banner anzeigen
+    const banner=document.createElement('div');
+    banner.id='pause-erinnerung';
+    banner.innerHTML=`<div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e40af;color:white;border-radius:14px;padding:14px 18px;z-index:9998;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:340px;text-align:center">
+      <div style="font-weight:700;margin-bottom:8px">⏸ Hast du heute Mittag Pause gemacht?</div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button id="pause-ja" style="background:white;color:#1e40af;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer">✅ Ja, 12–13 Uhr</button>
+        <button id="pause-nein" style="background:rgba(255,255,255,.2);color:white;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer">❌ Nein</button>
+      </div>
+    </div>`;
+    document.body.appendChild(banner);
+    document.getElementById('pause-ja').onclick=async()=>{
+      const d=new Date().toISOString().split('T')[0];
+      try{
+        await apiPost('/api/zeit/stempeln',{typ:'pause_start',zeitpunkt:`${d}T12:00:00`});
+        await apiPost('/api/zeit/stempeln',{typ:'pause_ende',zeitpunkt:`${d}T13:00:00`});
+        toast('✅ Pause 12–13 Uhr eingetragen','ok');
+      }catch(e){}
+      banner.remove();
+    };
+    document.getElementById('pause-nein').onclick=()=>banner.remove();
+    setTimeout(()=>{if(banner.parentNode)banner.remove()},15000);
+  }catch(e){}
 }
 
 async function updateNachBadge(){
@@ -346,6 +385,7 @@ function sidebarHTML(){
   return`
     ${si('nav-home','🏠','Übersicht',page==='home')}
     ${si('nav-nachrichten','📬','Nachrichten'+(window._nachBadge>0?` (${window._nachBadge})`:''),page==='nachrichten')}
+    ${si('nav-zeit','⏱️','Zeiterfassung',page==='zeit')}
     ${showW?`<div class="sidebar-label">WINTERDIENST</div>${si('nav-winter','❄️','Anlagen',page==='anlagen'&&pageData.sparte==='winterdienst')}`:''}
     ${showG?`<div class="sidebar-label">GEBÄUDEREINIGUNG</div>${si('nav-gebaeude','🧹','Anlagen',page==='anlagen'&&pageData.sparte==='gebaeudereinigung')}`:''}
     ${showGr?`<div class="sidebar-label">GRÜNPFLEGE</div>${si('nav-gruenpflege','🌿','Anlagen',page==='anlagen'&&pageData.sparte==='gruenpflege')}`:''}
@@ -365,6 +405,7 @@ async function getPageContent(){
     case'admin':return pageAdmin();
     case'nachrichten':return pageNachrichten();
     case'alarm':return pageAlarm();
+    case'zeit':return pageZeit();
     default:return`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Seite nicht gefunden</div></div>`;
   }
 }
@@ -597,6 +638,7 @@ async function pageAdmin(){
     <button class="tab-btn ${tab==='todos'?'active':''}" data-tab="todos">📋 TODOs</button>
     <button class="tab-btn ${tab==='nachrichten'?'active':''}" data-tab="nachrichten">💬 Nachrichten</button>
     <button class="tab-btn ${tab==='alarm'?'active':''}" data-tab="alarm">🚨 Alarm</button>
+    <button class="tab-btn ${tab==='zeitauswertung'?'active':''}" data-tab="zeitauswertung">⏱️ Zeiterfassung</button>
     ${user?.ist_admin?`<button class="tab-btn ${tab==='reset'?'active':''}" data-tab="reset">🗑️ Reset</button>`:''}
     ${pushTab}
   </div>
@@ -612,6 +654,7 @@ async function renderTab(tab){
   if(tab==='push')return renderTabPush();
   if(tab==='nachrichten')return renderTabNachrichten();
   if(tab==='alarm')return renderTabAlarm();
+  if(tab==='zeitauswertung')return renderTabZeit();
   if(tab==='reset'&&user?.ist_admin)return renderTabReset();
   return'';
 }
@@ -1126,6 +1169,174 @@ async function renderTabNachrichten(){
   </div>`;
 }
 
+// ── ZEITERFASSUNG ──
+function zeitStatus(eintraege){
+  if(!eintraege||!eintraege.length)return{status:'frei',letzter:null};
+  const letzter=eintraege[eintraege.length-1];
+  return{status:letzter.typ,letzter,zeitpunkt:new Date(letzter.zeitpunkt)};
+}
+
+function fUhr(ts){if(!ts)return'–';return new Date(ts).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})}
+
+async function pageZeit(){
+  let heute=[];
+  try{heute=await apiGet('/api/zeit/heute')}catch(e){}
+  const {status}=zeitStatus(heute);
+
+  // Buttons aktivieren/deaktivieren
+  const kannKommen=status==='frei'||status==='gehen';
+  const kannGehen=status==='kommen'||status==='pause_ende';
+  const kannPause=status==='kommen'||status==='pause_ende';
+  const kannPauseEnde=status==='pause_start';
+  const kannUrlaub=status==='frei';
+
+  // Status-Anzeige
+  const kommenEintrag=heute.find(e=>e.typ==='kommen');
+  const gehenEintrag=[...heute].reverse().find(e=>e.typ==='gehen');
+  let statusText='Noch nicht eingestempelt';
+  if(status==='urlaub')statusText='🏖️ Urlaub';
+  else if(status==='gehen')statusText=`Feierabend seit ${fUhr(gehenEintrag?.zeitpunkt)}`;
+  else if(status==='pause_start'){const p=heute.filter(e=>e.typ==='pause_start').pop();statusText=`⏸ Pause seit ${fUhr(p?.zeitpunkt)}`;}
+  else if(kommenEintrag)statusText=`✅ Eingestempelt seit ${fUhr(kommenEintrag?.zeitpunkt)}`;
+
+  // Pausen-Übersicht
+  let pausenHTML='';
+  let lastPS=null;
+  for(const e of heute){
+    if(e.typ==='pause_start')lastPS=e;
+    if(e.typ==='pause_ende'&&lastPS){
+      const min=Math.round((new Date(e.zeitpunkt)-new Date(lastPS.zeitpunkt))/60000);
+      pausenHTML+=`<span class="badge badge-gray">⏸ ${fUhr(lastPS.zeitpunkt)}–${fUhr(e.zeitpunkt)} (${min} min)</span> `;
+      lastPS=null;
+    }
+  }
+
+  const btnStyle=(aktiv,farbe)=>`style="flex:1;padding:14px 8px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${aktiv?'pointer':'default'};background:${aktiv?farbe:'#e5e7eb'};color:${aktiv?'white':'#9ca3af'}"`;
+
+  // Admin-Bereich zeigt auch den Zeiterfassungs-Tab
+  const adminHinweis=isManager()?`<button class="btn" id="btn-zeit-admin" style="background:#6b7280;color:white;margin-top:12px;width:100%">📊 Übersicht alle Mitarbeiter</button>`:'';
+
+  return`<div class="content">
+    <div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">Heute, ${new Date().toLocaleDateString('de-AT',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'})}</div>
+      <div style="font-size:14px;color:var(--text-muted)">${statusText}</div>
+      ${pausenHTML?`<div style="margin-top:8px">${pausenHTML}</div>`:''}
+    </div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <button id="btn-z-kommen" ${btnStyle(kannKommen,'#16a34a')}>🟢 KOMMEN</button>
+      <button id="btn-z-gehen"  ${btnStyle(kannGehen,'#dc2626')}>🔴 GEHEN</button>
+      <button id="btn-z-pause"  ${btnStyle(kannPause,'#d97706')}>⏸ PAUSE START</button>
+      <button id="btn-z-pauseende" ${btnStyle(kannPauseEnde,'#2563eb')}>▶️ PAUSE ENDE</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <button id="btn-z-urlaub" ${btnStyle(kannUrlaub,'#7c3aed')} style="flex:1;padding:14px 8px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${kannUrlaub?'pointer':'default'};background:${kannUrlaub?'#7c3aed':'#e5e7eb'};color:${kannUrlaub?'white':'#9ca3af'}">🏖️ URLAUB</button>
+      <button id="btn-z-nachtrag" style="flex:1;padding:14px 8px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;background:#f3f4f6;color:#374151">⏱ Pause nachtragen</button>
+    </div>
+    ${adminHinweis}
+    ${heute.length>0?`<div style="font-weight:700;margin:16px 0 8px">Heutige Einträge</div>
+    <div class="card"><div class="card-body" style="padding:0">${heute.map(e=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border)">
+        <div><span style="font-weight:600">${{kommen:'🟢 Kommen',gehen:'🔴 Gehen',pause_start:'⏸ Pause Start',pause_ende:'▶️ Pause Ende',urlaub:'🏖️ Urlaub'}[e.typ]||e.typ}</span></div>
+        <div style="color:var(--text-muted);font-size:13px">${fUhr(e.zeitpunkt)}</div>
+      </div>`).join('')}</div></div>`:''}
+  </div>`;
+}
+
+async function renderTabZeit(){
+  let auswertung=[];
+  let maList=[];
+  const von=pageData.zeitVon||new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().split('T')[0];
+  const bis=pageData.zeitBis||new Date().toISOString().split('T')[0];
+  const maId=pageData.zeitMa||'';
+  try{
+    [auswertung,maList]=await Promise.all([
+      apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`),
+      apiGet('/api/mitarbeiter')
+    ]);
+  }catch(e){}
+
+  // Summen pro Mitarbeiter
+  const summen={};
+  for(const r of auswertung){
+    if(!summen[r.mitarbeiter_id])summen[r.mitarbeiter_id]={name:r.name,min:0,urlaub:0};
+    if(r.urlaub)summen[r.mitarbeiter_id].urlaub++;
+    else summen[r.mitarbeiter_id].min+=r.netto_minuten;
+  }
+
+  const rows=auswertung.map(r=>`<tr>
+    <td>${esc(r.name)}</td>
+    <td>${fDate(r.datum)}</td>
+    <td>${r.urlaub?'🏖️ Urlaub':fUhr(r.kommen)}</td>
+    <td>${r.urlaub?'–':r.gehen?fUhr(r.gehen):'<span style="color:var(--success)">läuft</span>'}</td>
+    <td>${r.pause_minuten>0?r.pause_minuten+' min':'–'}</td>
+    <td style="font-weight:700">${r.urlaub?'8:00':fMin(r.netto_minuten)}</td>
+    ${isManager()?`<td><button class="tbl-btn danger" data-action="del-zeit" data-id="${r.eintraege?.[0]?.id||''}">⚠️</button></td>`:''}
+  </tr>`).join('');
+
+  const sumHTML=Object.values(summen).map(s=>`<span class="badge badge-blue">${esc(s.name)}: ${fMin(s.min)}${s.urlaub>0?' + '+s.urlaub+'× Urlaub':''}</span> `).join('');
+
+  return`<div class="admin-wrap">
+    <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="zeit-von" value="${von}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Bis</label><input type="date" class="form-input" id="zeit-bis" value="${bis}"></div>
+      </div>
+      <div class="form-group" style="margin:0"><label class="form-label">Mitarbeiter</label>
+        <select class="form-input" id="zeit-ma">
+          <option value="">Alle Mitarbeiter</option>
+          ${maList.map(m=>`<option value="${m.id}" ${maId==m.id?'selected':''}>${esc(m.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="btn-zeit-laden" style="flex:1">Laden</button>
+        ${auswertung.length>0?`<button class="btn" id="btn-zeit-pdf" style="background:#6b7280;color:white">🖨️ PDF</button>
+        <button class="btn" id="btn-zeit-csv" style="background:#16a34a;color:white">📥 Excel</button>`:''}
+      </div>
+    </div></div>
+    ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
+    <div class="card" style="overflow:auto">
+      <table class="tbl"><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Kommen</th><th>Gehen</th><th>Pause</th><th>Stunden</th>${isManager()?'<th></th>':''}</tr></thead>
+      <tbody>${rows||`<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Keine Einträge im Zeitraum</td></tr>`}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function exportZeitCSV(daten, von, bis){
+  const header='Mitarbeiter;Datum;Kommen;Gehen;Pause (min);Netto-Stunden\n';
+  const rows=daten.map(r=>[
+    r.name,
+    fDate(r.datum),
+    r.urlaub?'Urlaub':fUhr(r.kommen),
+    r.urlaub?'':r.gehen?fUhr(r.gehen):'läuft',
+    r.urlaub?'':r.pause_minuten,
+    r.urlaub?'8:00':fMin(r.netto_minuten)
+  ].join(';')).join('\n');
+  const blob=new Blob(['\ufeff'+header+rows],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`Zeiterfassung_${von||''}_${bis||''}.csv`;
+  a.click();
+}
+
+function exportZeitPDF(daten, von, bis){
+  const rows=daten.map(r=>`<tr>
+    <td>${esc(r.name)}</td><td>${fDate(r.datum)}</td>
+    <td>${r.urlaub?'🏖️ Urlaub':fUhr(r.kommen)}</td>
+    <td>${r.urlaub?'–':r.gehen?fUhr(r.gehen):'läuft'}</td>
+    <td>${r.pause_minuten>0?r.pause_minuten+' min':'–'}</td>
+    <td style="font-weight:700">${r.urlaub?'8:00':fMin(r.netto_minuten)}</td>
+  </tr>`).join('');
+  const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Zeiterfassung</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}h1{font-size:18px}table{width:100%;border-collapse:collapse}
+  th{background:#1e40af;color:white;padding:6px 8px;text-align:left}td{padding:5px 8px;border-bottom:1px solid #ddd}
+  tr:nth-child(even)td{background:#f8f8f8}@media print{button{display:none}}</style></head><body>
+  <h1>Solano – Zeiterfassung ${von?'von '+von:''} ${bis?'bis '+bis:''}</h1>
+  <button onclick="window.print()" style="margin-bottom:12px;padding:8px 16px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Drucken / Als PDF</button>
+  <table><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Kommen</th><th>Gehen</th><th>Pause</th><th>Stunden</th></tr></thead>
+  <tbody>${rows}</tbody></table></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+}
+
 // ── ALARM ──
 async function renderTabAlarm(){
   let log=[];
@@ -1338,6 +1549,48 @@ function bindEvents(){
   o('nav-einsatz','click',()=>go('einsatz'));
   o('nav-admin','click',()=>go('admin',{adminTab:'anlagen'}));
   o('nav-nachrichten','click',()=>go('nachrichten'));
+  o('nav-zeit','click',()=>go('zeit'));
+
+  // Zeiterfassung Stempel-Buttons
+  const stempelBtn=(id,typ)=>{
+    const b=document.getElementById(id);
+    if(b&&!b._bound&&b.style.background!=='rgb(229, 231, 235)'){
+      b._bound=true;
+      b.addEventListener('click',async()=>{
+        try{await apiPost('/api/zeit/stempeln',{typ});toast('✅ '+typ+' gestempelt','ok');go('zeit')}
+        catch(e){toast(e.message,'err')}
+      });
+    }
+  };
+  stempelBtn('btn-z-kommen','kommen');
+  stempelBtn('btn-z-gehen','gehen');
+  stempelBtn('btn-z-pause','pause_start');
+  stempelBtn('btn-z-pauseende','pause_ende');
+  stempelBtn('btn-z-urlaub','urlaub');
+
+  // Pause nachtragen
+  o('btn-z-nachtrag','click',()=>{
+    showModal(`
+      <button class="modal-close" id="modal-close">×</button>
+      <div class="modal-title">⏸ Pause nachtragen</div>
+      <div class="form-group"><label class="form-label">Pause von</label><input type="time" class="form-input" id="nachtrag-von" value="12:00"></div>
+      <div class="form-group"><label class="form-label">Pause bis</label><input type="time" class="form-input" id="nachtrag-bis" value="13:00"></div>
+      <button class="btn btn-primary" id="btn-nachtrag-save">Eintragen</button>`);
+  });
+  o('btn-nachtrag-save','click',async()=>{
+    const von=document.getElementById('nachtrag-von')?.value;
+    const bis=document.getElementById('nachtrag-bis')?.value;
+    if(!von||!bis){toast('Von und Bis angeben','err');return}
+    const heute=new Date().toISOString().split('T')[0];
+    try{
+      await apiPost('/api/zeit/stempeln',{typ:'pause_start',zeitpunkt:`${heute}T${von}:00`});
+      await apiPost('/api/zeit/stempeln',{typ:'pause_ende',zeitpunkt:`${heute}T${bis}:00`});
+      closeModal();toast('✅ Pause eingetragen','ok');go('zeit');
+    }catch(e){toast(e.message,'err')}
+  });
+
+  // Admin: zur Zeitauswertung springen
+  o('btn-zeit-admin','click',()=>go('admin',{adminTab:'zeitauswertung'}));
 
   // Alarm bestätigen (Mitarbeiter)
   o('btn-alarm-best','click',async()=>{
@@ -1584,6 +1837,26 @@ function bindAdminEvents(){
       }catch(e){toast(e.message,'err')}
     });
   });
+
+  // Zeiterfassung Admin-Tab
+  const zl=document.getElementById('btn-zeit-laden');
+  if(zl&&!zl._bound){zl._bound=true;zl.addEventListener('click',async()=>{
+    pageData.zeitVon=document.getElementById('zeit-von')?.value||'';
+    pageData.zeitBis=document.getElementById('zeit-bis')?.value||'';
+    pageData.zeitMa=document.getElementById('zeit-ma')?.value||'';
+    const c=document.getElementById('admin-tab-content');
+    if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTabZeit();bindAdminEvents()}
+  })}
+  const zpdf=document.getElementById('btn-zeit-pdf');
+  if(zpdf&&!zpdf._bound){zpdf._bound=true;zpdf.addEventListener('click',async()=>{
+    const von=pageData.zeitVon||'',bis=pageData.zeitBis||'',maId=pageData.zeitMa||'';
+    try{const d=await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`);exportZeitPDF(d,von,bis)}catch(e){toast('Fehler','err')}
+  })}
+  const zcsv=document.getElementById('btn-zeit-csv');
+  if(zcsv&&!zcsv._bound){zcsv._bound=true;zcsv.addEventListener('click',async()=>{
+    const von=pageData.zeitVon||'',bis=pageData.zeitBis||'',maId=pageData.zeitMa||'';
+    try{const d=await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`);exportZeitCSV(d,von,bis)}catch(e){toast('Fehler','err')}
+  })}
 
   // Reset-Buttons
   const resetActions={

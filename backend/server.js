@@ -28,6 +28,7 @@ app.use('/api/push',  require('./routes/push'));
 app.use('/api/nachrichten', require('./routes/nachrichten'));
 app.use('/api/alarm',      require('./routes/alarm'));
 app.use('/api/admin',      require('./routes/admin'));
+app.use('/api/zeit',       require('./routes/zeit'));
 
 // Health Check
 app.get('/api/health', (req, res) => {
