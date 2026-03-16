@@ -1145,37 +1145,71 @@ async function renderTabAlarm(){
 }
 
 async function pageAlarm(){
-  const params=new URLSearchParams(location.search);
-  const alarmId=params.get('id')||pageData.alarmId;
-  // Alarm-Sound starten
+  const alarmId=pageData?.alarmId||'';
   window._alarmPlaying=true;
-  playAlarmSound();
+  window._alarmCtx=null;
+  // Kurze Verzögerung damit DOM gerendert ist, dann Sound starten
+  setTimeout(()=>playAlarmSound(),100);
   return`<div style="position:fixed;inset:0;background:#dc2626;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:white;text-align:center;padding:24px">
-    <div style="font-size:80px;animation:pulse 0.8s infinite alternate">🚨</div>
+    <div style="font-size:80px;animation:pulse 0.6s infinite alternate">🚨</div>
     <div style="font-size:28px;font-weight:800;margin:16px 0 8px;text-shadow:0 2px 4px rgba(0,0,0,.3)">WINTERDIENST ALARM</div>
-    <div style="font-size:16px;opacity:.9;margin-bottom:32px">Sofortige Alarmierung ausgelöst!</div>
-    <button id="btn-alarm-best" data-id="${alarmId||''}" style="background:white;color:#dc2626;border:none;border-radius:16px;padding:18px 40px;font-size:18px;font-weight:800;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.3)">✅ BESTÄTIGEN & STOPP</button>
-    <style>@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}</style>
+    <div style="font-size:16px;opacity:.9;margin-bottom:12px">Sofortige Alarmierung ausgelöst!</div>
+    <div id="alarm-tap-hint" style="font-size:13px;opacity:.75;margin-bottom:24px">⬇ Tippe zum Starten des Tons</div>
+    <button id="btn-alarm-best" data-id="${alarmId}" style="background:white;color:#dc2626;border:none;border-radius:16px;padding:20px 44px;font-size:20px;font-weight:800;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.4)">✅ BESTÄTIGEN & STOPP</button>
+    <style>@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.2)}}</style>
   </div>`;
 }
 
 function playAlarmSound(){
   if(!window._alarmPlaying)return;
   try{
-    const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    const beep=(freq,start,dur)=>{
-      const o=ctx.createOscillator(),g=ctx.createGain();
-      o.connect(g);g.connect(ctx.destination);
-      o.frequency.value=freq;o.type='square';
-      g.gain.setValueAtTime(0.4,ctx.currentTime+start);
-      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
-      o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur);
-    };
-    // Alarm-Muster: hoch-tief-hoch-tief
-    [880,660,880,660,880].forEach((f,i)=>beep(f,i*0.3,0.25));
-    // Wiederholen solange _alarmPlaying
-    setTimeout(()=>{if(window._alarmPlaying)playAlarmSound()},2000);
-  }catch(e){}
+    // AudioContext wiederverwenden oder neu erstellen
+    if(!window._alarmCtx||window._alarmCtx.state==='closed'){
+      window._alarmCtx=new(window.AudioContext||window.webkitAudioContext)();
+    }
+    const ctx=window._alarmCtx;
+    // Resume falls suspended (Autoplay-Policy)
+    ctx.resume().then(()=>{
+      const now=ctx.currentTime;
+      // Kompressor für maximalen Lautstärke-Eindruck
+      const comp=ctx.createDynamicsCompressor();
+      comp.connect(ctx.destination);
+
+      const tone=(freq,startOffset,duration,type='sawtooth')=>{
+        const o=ctx.createOscillator();
+        const g=ctx.createGain();
+        o.connect(g);g.connect(comp);
+        o.type=type;
+        o.frequency.setValueAtTime(freq,now+startOffset);
+        g.gain.setValueAtTime(1.0,now+startOffset);
+        g.gain.setValueAtTime(1.0,now+startOffset+duration-0.02);
+        g.gain.linearRampToValueAtTime(0,now+startOffset+duration);
+        o.start(now+startOffset);
+        o.stop(now+startOffset+duration+0.05);
+      };
+
+      // Alarm-Sirene: Frequenz-Sweep hoch-runter + kurze Pieps
+      for(let i=0;i<4;i++){
+        const base=i*0.45;
+        // Sweep hoch
+        const o=ctx.createOscillator();
+        const g=ctx.createGain();
+        o.connect(g);g.connect(comp);
+        o.type='sawtooth';
+        o.frequency.setValueAtTime(600,now+base);
+        o.frequency.linearRampToValueAtTime(1200,now+base+0.2);
+        o.frequency.linearRampToValueAtTime(600,now+base+0.4);
+        g.gain.setValueAtTime(1.0,now+base);
+        g.gain.setValueAtTime(0,now+base+0.42);
+        o.start(now+base);o.stop(now+base+0.45);
+      }
+      // Kurze Pause dann wiederholen
+      setTimeout(()=>{if(window._alarmPlaying)playAlarmSound();},2200);
+    });
+  }catch(e){
+    // Fallback: nochmal versuchen nach Tap
+    setTimeout(()=>{if(window._alarmPlaying)playAlarmSound();},1000);
+  }
 }
 
 // ── DRAG & DROP SORT ──
@@ -1283,7 +1317,16 @@ function bindEvents(){
 
   // Alarm bestätigen (Mitarbeiter)
   o('btn-alarm-best','click',async()=>{
+    // Beim ersten Tap: Sound starten (iOS braucht User-Gesture)
+    if(!window._alarmCtx||window._alarmCtx.state==='suspended'){
+      playAlarmSound();
+      // Hinweis ausblenden
+      const hint=document.getElementById('alarm-tap-hint');
+      if(hint)hint.style.display='none';
+      return; // Erst beim zweiten Tap bestätigen
+    }
     window._alarmPlaying=false;
+    try{if(window._alarmCtx)window._alarmCtx.close()}catch(e){}
     const id=document.getElementById('btn-alarm-best')?.dataset.id;
     try{if(id)await apiPost(`/api/alarm/${id}/bestaetigen`,{})}catch(e){}
     toast('✅ Bestätigt!','ok');
