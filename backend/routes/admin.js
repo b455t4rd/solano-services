@@ -1,7 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { adminMiddleware } = require('../middleware/auth');
+const { adminMiddleware, authMiddleware } = require('../middleware/auth');
+
+// PIN-Verifikation (für gefährliche Aktionen)
+router.post('/verify-pin', authMiddleware, async (req, res) => {
+  const { pin } = req.body;
+  if (!pin) return res.status(400).json({ error: 'PIN erforderlich' });
+  try {
+    const r = await pool.query(
+      'SELECT id FROM mitarbeiter WHERE pin=$1 AND ist_admin=true AND aktiv=true',
+      [pin]
+    );
+    res.json({ ok: r.rows.length > 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Alarme löschen
 router.delete('/reset/alarme', adminMiddleware, async (req, res) => {

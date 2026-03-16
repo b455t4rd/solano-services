@@ -175,7 +175,7 @@ router.delete('/:id', managerMiddleware, async (req, res) => {
   try {
     await pool.query('DELETE FROM erledigte_aufgaben WHERE einsatz_id=$1', [req.params.id]);
     await pool.query('DELETE FROM einsatz_fotos WHERE einsatz_id=$1', [req.params.id]);
-    await pool.query('DELETE FROM gps_punkte WHERE einsatz_id=$1', [req.params.id]);
+    await pool.query('DELETE FROM gps_tracks WHERE einsatz_id=$1', [req.params.id]);
     await pool.query('DELETE FROM todos WHERE einsatz_id=$1', [req.params.id]);
     await pool.query('DELETE FROM einsaetze WHERE id=$1', [req.params.id]);
     res.json({ success: true });

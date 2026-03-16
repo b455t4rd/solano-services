@@ -1,6 +1,9 @@
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
+const https   = require('https');
+const http    = require('http');
+const { URL }  = require('url');
 const { authMiddleware, managerMiddleware, adminMiddleware } = require('../middleware/auth');
 
 // GET /api/kalender/settings  (managerMiddleware) – ohne Passwort
@@ -31,17 +34,17 @@ router.put('/settings', adminMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/kalender/sync  (managerMiddleware) – manueller Sync
+// POST /api/kalender/sync  (managerMiddleware)
 router.post('/sync', managerMiddleware, async (req, res) => {
   try {
     const sr = await pool.query('SELECT * FROM kalender_settings WHERE id=1');
     if (!sr.rows.length || !sr.rows[0].exchange_url)
-      return res.status(400).json({ error: 'Exchange-Einstellungen nicht konfiguriert' });
+      return res.status(400).json({ error: 'CalDAV-URL nicht konfiguriert' });
     const settings = sr.rows[0];
     if (!settings.exchange_user || !settings.exchange_pass)
-      return res.status(400).json({ error: 'Exchange Benutzername oder Passwort fehlt' });
+      return res.status(400).json({ error: 'Benutzername oder Passwort fehlt' });
 
-    const count = await syncFromExchange(settings);
+    const count = await syncFromCalDAV(settings);
     await pool.query('UPDATE kalender_settings SET letzter_sync=NOW() WHERE id=1');
     res.json({ success:true, count, letzter_sync: new Date().toISOString() });
   } catch (err) {
@@ -60,7 +63,6 @@ router.get('/events', authMiddleware, async (req, res) => {
     if (von) { params.push(von); q += ` AND start_zeit >= $${params.length}`; }
     if (bis)  { params.push(bis); q += ` AND start_zeit <= $${params.length}`; }
 
-    // Mitarbeiter sehen nur eigene Events
     const isMgr = req.user.ist_admin || req.user.ist_chef;
     if (!isMgr) {
       params.push(req.user.id);
@@ -77,77 +79,136 @@ router.get('/events', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── EWS SYNC ─────────────────────────────────────────────────────────────────
-async function syncFromExchange(settings) {
-  let NtlmClient;
-  try { NtlmClient = require('node-ews'); }
-  catch(e) { throw new Error('node-ews nicht installiert. Bitte "npm install node-ews" ausführen.'); }
+// ── CalDAV HTTP-Anfrage ───────────────────────────────────────────────────────
+function caldavRequest(method, urlStr, auth, body, extraHeaders = {}) {
+  return new Promise((resolve, reject) => {
+    const u   = new URL(urlStr);
+    const lib = u.protocol === 'https:' ? https : http;
+    const authHeader = 'Basic ' + Buffer.from(`${auth.user}:${auth.pass}`).toString('base64');
 
-  const ews = new NtlmClient({
-    username: settings.exchange_user,
-    password: settings.exchange_pass,
-    host:     settings.exchange_url,
-    auth:     'ntlm'
+    const headers = {
+      'Authorization': authHeader,
+      'Content-Type':  'application/xml; charset=utf-8',
+      'Depth':         '1',
+      ...extraHeaders
+    };
+    if (body) headers['Content-Length'] = Buffer.byteLength(body);
+
+    const req = lib.request({
+      hostname: u.hostname,
+      port:     u.port || (u.protocol === 'https:' ? 443 : 80),
+      path:     u.pathname + u.search,
+      method,
+      headers,
+      rejectUnauthorized: false // für self-signed Zertifikate (on-premises)
+    }, res => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
   });
+}
 
+// ── iCal Parser ───────────────────────────────────────────────────────────────
+function parseIcal(icalStr) {
+  const events = [];
+  // Zeilenumbrüche normalisieren (RFC 5545 folded lines)
+  const text = icalStr.replace(/\r\n /g, '').replace(/\r\n\t/g, '').replace(/\r\n/g, '\n');
+  const veventBlocks = text.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || [];
+
+  for (const block of veventBlocks) {
+    const get = (key) => {
+      const m = block.match(new RegExp(`^${key}[;:][^\n]*`, 'm'));
+      if (!m) return null;
+      return m[0].replace(new RegExp(`^${key}[^:]*:`), '').trim();
+    };
+
+    const uid        = get('UID');
+    const summary    = (get('SUMMARY') || '(Kein Betreff)').replace(/\\n/g, ' ').replace(/\\,/g, ',');
+    const dtstart    = get('DTSTART');
+    const dtend      = get('DTEND');
+    const location   = (get('LOCATION') || '').replace(/\\n/g, ' ').replace(/\\,/g, ',') || null;
+    const desc       = (get('DESCRIPTION') || '').replace(/\\n/g, '\n').replace(/\\,/g, ',').substring(0, 2000) || null;
+    const organizer  = get('ORGANIZER')?.replace(/.*CN=/,'')?.split(':')[0] || null;
+
+    if (!uid) continue;
+
+    const parseDate = (d) => {
+      if (!d) return null;
+      // Format: 20260315T090000Z oder 20260315T090000 oder 20260315
+      const clean = d.replace(/;.*/, ''); // strip TZID params
+      if (clean.length === 8) return `${clean.slice(0,4)}-${clean.slice(4,6)}-${clean.slice(6,8)}T00:00:00Z`;
+      return `${clean.slice(0,4)}-${clean.slice(4,6)}-${clean.slice(6,8)}T${clean.slice(9,11)}:${clean.slice(11,13)}:${clean.slice(13,15)}${clean.endsWith('Z')?'Z':''}`;
+    };
+
+    events.push({ uid, summary, dtstart: parseDate(dtstart), dtend: parseDate(dtend), location, desc, organizer });
+  }
+  return events;
+}
+
+// ── CalDAV Sync ────────────────────────────────────────────────────────────────
+async function syncFromCalDAV(settings) {
+  const auth = { user: settings.exchange_user, pass: settings.exchange_pass };
+  const baseUrl = settings.exchange_url.replace(/\/$/, '');
+
+  // Datum-Range: heute bis +60 Tage
   const now    = new Date();
   const future = new Date(now);
   future.setDate(future.getDate() + 60);
 
-  const ewsArgs = {
-    attributes: { Traversal: 'Shallow' },
-    ItemShape: { BaseShape: 'AllProperties' },
-    CalendarView: {
-      attributes: {
-        MaxReturnsPerPage: '200',
-        StartDate: now.toISOString(),
-        EndDate:   future.toISOString()
-      }
-    },
-    ParentFolderIds: {
-      DistinguishedFolderId: { attributes: { Id: 'calendar' } }
-    }
-  };
+  const fmt = (d) => d.toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
 
-  const result = await ews.run('FindItem', ewsArgs);
-  const rootFolder = result?.ResponseMessages?.FindItemResponseMessage?.RootFolder;
-  if (!rootFolder) return 0;
+  const reportBody = `<?xml version="1.0" encoding="utf-8"?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop><D:getetag/><C:calendar-data/></D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT">
+        <C:time-range start="${fmt(now)}" end="${fmt(future)}"/>
+      </C:comp-filter>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>`;
 
-  const itemsRaw = rootFolder?.Items?.CalendarItem;
-  if (!itemsRaw) return 0;
-  const items = Array.isArray(itemsRaw) ? itemsRaw : [itemsRaw];
+  const resp = await caldavRequest('REPORT', baseUrl, auth, reportBody, { 'Depth': '1' });
+
+  if (resp.status < 200 || resp.status >= 400) {
+    throw new Error(`CalDAV Server Fehler ${resp.status}: ${resp.body.substring(0, 300)}`);
+  }
+
+  // Alle calendar-data Blöcke aus der XML-Antwort extrahieren
+  const calDataBlocks = resp.body.match(/<[^>]*calendar-data[^>]*>([\s\S]*?)<\/[^>]*calendar-data>/gi) || [];
+
+  // HTML-Entities dekodieren
+  const decode = (s) => s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&#13;/g,'');
 
   let count = 0;
-  for (const item of items) {
-    try {
-      const ewsId = item?.ItemId?.attributes?.Id || item?.ItemId?.Id || null;
-      if (!ewsId) continue;
+  for (const block of calDataBlocks) {
+    const icalContent = decode(block.replace(/<[^>]+>/g, ''));
+    const events = parseIcal(icalContent);
 
-      const titel       = item.Subject || '(Kein Betreff)';
-      const start_zeit  = item.Start   || null;
-      const end_zeit    = item.End     || null;
-      const ort         = item.Location || null;
-      const beschreibung = typeof item.Body === 'string' ? item.Body : (item.Body?._ || null);
-      const organisator  = item.Organizer?.Mailbox?.Name || item.Organizer?.Mailbox?.EmailAddress || null;
-
-      await pool.query(
-        `INSERT INTO kalender_events (id,titel,start_zeit,end_zeit,ort,beschreibung,organisator,mitarbeiter_ids,synced_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
-         ON CONFLICT (id) DO UPDATE SET
-           titel=EXCLUDED.titel, start_zeit=EXCLUDED.start_zeit, end_zeit=EXCLUDED.end_zeit,
-           ort=EXCLUDED.ort, beschreibung=EXCLUDED.beschreibung, organisator=EXCLUDED.organisator,
-           synced_at=NOW()`,
-        [ewsId, titel, start_zeit, end_zeit, ort,
-         beschreibung ? String(beschreibung).substring(0,2000) : null,
-         organisator, []]
-      );
-      count++;
-    } catch(e) { console.error('Fehler bei Kalendereintrag:', e.message); }
+    for (const ev of events) {
+      try {
+        await pool.query(
+          `INSERT INTO kalender_events (id,titel,start_zeit,end_zeit,ort,beschreibung,organisator,mitarbeiter_ids,synced_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+           ON CONFLICT (id) DO UPDATE SET
+             titel=EXCLUDED.titel, start_zeit=EXCLUDED.start_zeit, end_zeit=EXCLUDED.end_zeit,
+             ort=EXCLUDED.ort, beschreibung=EXCLUDED.beschreibung, organisator=EXCLUDED.organisator,
+             synced_at=NOW()`,
+          [ev.uid, ev.summary, ev.dtstart, ev.dtend, ev.location, ev.desc, ev.organizer, []]
+        );
+        count++;
+      } catch(e) { console.error('Fehler bei Event:', ev.uid, e.message); }
+    }
   }
   return count;
 }
 
-// ── AUTO-SYNC ─────────────────────────────────────────────────────────────────
+// ── Auto-Sync ──────────────────────────────────────────────────────────────────
 let _syncTimer = null;
 async function scheduleAutoSync() {
   try {
@@ -158,7 +219,7 @@ async function scheduleAutoSync() {
     if (_syncTimer) clearTimeout(_syncTimer);
     _syncTimer = setTimeout(async () => {
       try {
-        await syncFromExchange(settings);
+        await syncFromCalDAV(settings);
         await pool.query('UPDATE kalender_settings SET letzter_sync=NOW() WHERE id=1');
         console.log('Kalender Auto-Sync:', new Date().toISOString());
       } catch(e) { console.error('Kalender Auto-Sync Fehler:', e.message); }
