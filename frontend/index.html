@@ -667,7 +667,10 @@ async function renderTabBerichte(){
       <div class="form-group" style="margin:0"><label class="form-label">Sparte</label>
         <select class="form-input" id="bericht-sparte"><option value="">Alle Sparten</option><option value="winterdienst" ${sparte==='winterdienst'?'selected':''}>❄️ Winterdienst</option><option value="gebaeudereinigung" ${sparte==='gebaeudereinigung'?'selected':''}>🧹 Gebäudereinigung</option><option value="gruenpflege" ${sparte==='gruenpflege'?'selected':''}>🌿 Grünpflege</option></select>
       </div>
-      <button class="btn btn-primary" id="btn-bericht-laden">Berichte laden</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="btn-bericht-laden" style="flex:1">Berichte laden</button>
+        ${berichte.length>0?`<button class="btn" id="btn-bericht-print" style="background:#6b7280;color:white" title="Als PDF drucken">🖨️ PDF</button>`:''}
+      </div>
     </div></div>
     <div class="search-wrap" style="padding:8px 0"><input class="search-input" id="bericht-search" placeholder="Adresse oder Anlage suchen…" type="search" autocomplete="off"></div>
     <div class="card" id="bericht-results">${rows}</div>
@@ -784,8 +787,10 @@ async function renderTabTodos(){
 // ── MODALS ──
 function showModal(html){
   const c=document.getElementById('modal-container');
-  c.innerHTML=`<div class="modal-bg" id="modal-bg"><div class="modal">${html}</div></div>`;
-  c.querySelector('#modal-bg').addEventListener('click',e=>{if(e.target.id==='modal-bg')closeModal()});
+  c.innerHTML=`<div class="modal-bg" id="modal-bg"><div class="modal" id="modal-inner">${html}</div></div>`;
+  c.querySelector('#modal-bg').addEventListener('click',closeModal);
+  c.querySelector('#modal-inner').addEventListener('click',e=>e.stopPropagation());
+  c.querySelector('#modal-inner').addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
   bindModalEvents();
 }
 function closeModal(){document.getElementById('modal-container').innerHTML=''}
@@ -1158,6 +1163,53 @@ async function pageAlarm(){
   </div>`;
 }
 
+// ── BERICHT DRUCKEN ──
+function druckeBerichte(berichte,von,bis,sparte){
+  const titel=`Solano Berichte${von||bis?' ('+[von?'von '+von:'',bis?'bis '+bis:''].filter(Boolean).join(' ')+')'  :''}`;
+  const sparteLabel={'winterdienst':'❄️ Winterdienst','gebaeudereinigung':'🧹 Gebäudereinigung','gruenpflege':'🌿 Grünpflege'};
+  const rows=berichte.map(b=>{
+    const erl=parseInt(b.aufgaben_erledigt)||0,ges=parseInt(b.aufgaben_gesamt)||0;
+    const gps=b.gps_check_ok===true?'✅ GPS OK':b.gps_check_ok===false?'❌ GPS außerhalb':'⚪ kein GPS';
+    return`<tr>
+      <td>${fDate(b.datum)}<br><span style="color:#666;font-size:11px">${fTime(b.start_zeit)}${b.end_zeit?' – '+fTime(b.end_zeit):''}</span></td>
+      <td><b>${esc(b.anlage_name)}</b><br><span style="color:#666;font-size:11px">${esc(b.adresse||'')}</span></td>
+      <td>${esc(b.mitarbeiter)}</td>
+      <td>${fMin(b.dauer_minuten)}</td>
+      <td>${ges>0?`${erl}/${ges}`:erl}</td>
+      <td>${gps}</td>
+      <td>${b.sparte?sparteLabel[b.sparte]||b.sparte:''}</td>
+      <td style="font-size:11px;color:#666">${esc(b.notiz||'')}</td>
+    </tr>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+  <title>${titel}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;margin:20px;color:#111}
+    h1{font-size:18px;margin-bottom:4px}
+    .sub{color:#666;font-size:12px;margin-bottom:16px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#1e40af;color:white;padding:6px 8px;text-align:left;font-size:11px}
+    td{padding:5px 8px;border-bottom:1px solid #ddd;vertical-align:top}
+    tr:nth-child(even) td{background:#f8f8f8}
+    .footer{margin-top:16px;font-size:10px;color:#999}
+    @media print{body{margin:10px}button{display:none}}
+  </style></head><body>
+  <h1>Solano Beschattungsmontagen – ${titel}</h1>
+  <div class="sub">Erstellt: ${new Date().toLocaleString('de-AT')} · ${berichte.length} Einsätze${sparte?' · '+sparteLabel[sparte]:''}</div>
+  <button onclick="window.print()" style="margin-bottom:12px;padding:8px 16px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Drucken / Als PDF speichern</button>
+  <table>
+    <thead><tr><th>Datum / Zeit</th><th>Anlage</th><th>Mitarbeiter</th><th>Dauer</th><th>Aufgaben</th><th>GPS</th><th>Sparte</th><th>Notiz</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">Solano Beschattungsmontagen · app.solano.co.at</div>
+  </body></html>`;
+
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
 // ── RESET ──
 function renderTabReset(){
   const btn=(id,label,color,warning)=>`
@@ -1177,6 +1229,7 @@ function renderTabReset(){
         <div style="font-size:13px;color:var(--text-muted)">Gelöschte Daten können nicht wiederhergestellt werden.</div>
       </div>
     </div>
+    ${btn('btn-reset-alarme','🚨 Alle Alarmierungen löschen','#6b7280','Löscht alle Alarm-Logs und Bestätigungen')}
     ${btn('btn-reset-nachrichten','💬 Alle Nachrichten löschen','#6b7280','Löscht alle gesendeten und empfangenen Nachrichten')}
     ${btn('btn-reset-todos','✅ Alle TODOs löschen','#f59e0b','Löscht alle TODOs und Zuweisungen')}
     ${btn('btn-reset-einsaetze','📋 Alle Einsätze & Berichte löschen','#ef4444','Löscht alle Einsätze, Fotos, GPS-Tracks und erledigte Aufgaben')}
@@ -1505,6 +1558,13 @@ function bindAdminEvents(){
     const c=document.getElementById('admin-tab-content');
     if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTabBerichte();bindAdminEvents()}
   })}
+  const bp=document.getElementById('btn-bericht-print');
+  if(bp&&!bp._bound){bp._bound=true;bp.addEventListener('click',async()=>{
+    const von=pageData.berichtVon||'',bis=pageData.berichtBis||'',sparte=pageData.berichtSparte||'';
+    let berichte=[];
+    try{berichte=await apiGet(`/api/einsaetze/berichte?von=${von}&bis=${bis}${sparte?'&sparte='+sparte:''}`)}catch(e){toast('Fehler beim Laden','err');return}
+    druckeBerichte(berichte,von,bis,sparte);
+  })}
   const bs=document.getElementById('bericht-search');
   if(bs&&!bs._bound){bs._bound=true;bs.addEventListener('input',e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('#bericht-results .report-row').forEach(r=>r.style.display=!q||r.dataset.search?.includes(q)?'':'none')})}
   const kr=document.getElementById('btn-karte-reload');
@@ -1528,6 +1588,7 @@ function bindAdminEvents(){
 
   // Reset-Buttons
   const resetActions={
+    'btn-reset-alarme':{label:'alle Alarmierungen',endpoint:'/api/admin/reset/alarme'},
     'btn-reset-nachrichten':{label:'alle Nachrichten',endpoint:'/api/admin/reset/nachrichten'},
     'btn-reset-todos':{label:'alle TODOs',endpoint:'/api/admin/reset/todos'},
     'btn-reset-einsaetze':{label:'alle Einsätze & Berichte',endpoint:'/api/admin/reset/einsaetze'},

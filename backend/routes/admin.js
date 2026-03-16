@@ -3,6 +3,17 @@ const router = express.Router();
 const pool = require('../db');
 const { adminMiddleware } = require('../middleware/auth');
 
+// Alarme löschen
+router.delete('/reset/alarme', adminMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM alarm_bestaetigung');
+    await pool.query('DELETE FROM alarm_log');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Nachrichten löschen
 router.delete('/reset/nachrichten', adminMiddleware, async (req, res) => {
   try {
