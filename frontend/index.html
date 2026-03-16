@@ -1245,8 +1245,10 @@ async function pageZeit(){
 async function renderTabZeit(){
   let auswertung=[];
   let maList=[];
-  const von=pageData.zeitVon||new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().split('T')[0];
-  const bis=pageData.zeitBis||new Date().toISOString().split('T')[0];
+  const _h=new Date(),_mo=new Date(_h);
+  _mo.setDate(_h.getDate()-(_h.getDay()===0?6:_h.getDay()-1)); // Montag dieser Woche
+  const von=pageData.zeitVon||_mo.toISOString().split('T')[0];
+  const bis=pageData.zeitBis||_h.toISOString().split('T')[0];
   const maId=pageData.zeitMa||'';
   try{
     [auswertung,maList]=await Promise.all([
@@ -1287,8 +1289,8 @@ async function renderTabZeit(){
           ${maList.map(m=>`<option value="${m.id}" ${maId==m.id?'selected':''}>${esc(m.name)}</option>`).join('')}
         </select>
       </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-primary" id="btn-zeit-laden" style="flex:1">Laden</button>
+      <div style="display:grid;grid-template-columns:${auswertung.length>0?'1fr 1fr 1fr':'1fr'};gap:8px">
+        <button class="btn btn-primary" id="btn-zeit-laden">🔍 Laden</button>
         ${auswertung.length>0?`<button class="btn" id="btn-zeit-pdf" style="background:#6b7280;color:white">🖨️ PDF</button>
         <button class="btn" id="btn-zeit-csv" style="background:#16a34a;color:white">📥 Excel</button>`:''}
       </div>
