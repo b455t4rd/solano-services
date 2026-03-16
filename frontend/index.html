@@ -278,6 +278,7 @@ function ah(){return user?.token?{'Authorization':`Bearer ${user.token}`}:{}}
 async function apiGet(p){const r=await fetch(API+p,{headers:ah()});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
 async function apiPost(p,b){const r=await fetch(API+p,{method:'POST',headers:{...ah(),'Content-Type':'application/json'},body:JSON.stringify(b)});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
 async function apiPut(p,b){const r=await fetch(API+p,{method:'PUT',headers:{...ah(),'Content-Type':'application/json'},body:JSON.stringify(b)});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
+async function apiDelete(p){const r=await fetch(API+p,{method:'DELETE',headers:ah()});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
 async function apiDel(p){const r=await fetch(API+p,{method:'DELETE',headers:ah()});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
 async function apiUp(p,fd){const r=await fetch(API+p,{method:'POST',headers:ah(),body:fd});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
 
@@ -594,6 +595,7 @@ async function pageAdmin(){
     <button class="tab-btn ${tab==='todos'?'active':''}" data-tab="todos">📋 TODOs</button>
     <button class="tab-btn ${tab==='nachrichten'?'active':''}" data-tab="nachrichten">💬 Nachrichten</button>
     <button class="tab-btn ${tab==='alarm'?'active':''}" data-tab="alarm">🚨 Alarm</button>
+    ${user?.ist_admin?`<button class="tab-btn ${tab==='reset'?'active':''}" data-tab="reset">🗑️ Reset</button>`:''}
     ${pushTab}
   </div>
   <div id="admin-tab-content">${await renderTab(tab)}</div>`;
@@ -608,6 +610,7 @@ async function renderTab(tab){
   if(tab==='push')return renderTabPush();
   if(tab==='nachrichten')return renderTabNachrichten();
   if(tab==='alarm')return renderTabAlarm();
+  if(tab==='reset'&&user?.ist_admin)return renderTabReset();
   return'';
 }
 
@@ -1146,70 +1149,39 @@ async function renderTabAlarm(){
 
 async function pageAlarm(){
   const alarmId=pageData?.alarmId||'';
-  window._alarmPlaying=true;
-  window._alarmCtx=null;
-  // Kurze Verzögerung damit DOM gerendert ist, dann Sound starten
-  setTimeout(()=>playAlarmSound(),100);
   return`<div style="position:fixed;inset:0;background:#dc2626;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:white;text-align:center;padding:24px">
     <div style="font-size:80px;animation:pulse 0.6s infinite alternate">🚨</div>
     <div style="font-size:28px;font-weight:800;margin:16px 0 8px;text-shadow:0 2px 4px rgba(0,0,0,.3)">WINTERDIENST ALARM</div>
-    <div style="font-size:16px;opacity:.9;margin-bottom:12px">Sofortige Alarmierung ausgelöst!</div>
-    <div id="alarm-tap-hint" style="font-size:13px;opacity:.75;margin-bottom:24px">⬇ Tippe zum Starten des Tons</div>
-    <button id="btn-alarm-best" data-id="${alarmId}" style="background:white;color:#dc2626;border:none;border-radius:16px;padding:20px 44px;font-size:20px;font-weight:800;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.4)">✅ BESTÄTIGEN & STOPP</button>
+    <div style="font-size:16px;opacity:.9;margin-bottom:32px">Sofortige Alarmierung ausgelöst!</div>
+    <button id="btn-alarm-best" data-id="${alarmId}" style="background:white;color:#dc2626;border:none;border-radius:16px;padding:20px 44px;font-size:20px;font-weight:800;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.4)">✅ BESTÄTIGEN</button>
     <style>@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.2)}}</style>
   </div>`;
 }
 
-function playAlarmSound(){
-  if(!window._alarmPlaying)return;
-  try{
-    // AudioContext wiederverwenden oder neu erstellen
-    if(!window._alarmCtx||window._alarmCtx.state==='closed'){
-      window._alarmCtx=new(window.AudioContext||window.webkitAudioContext)();
-    }
-    const ctx=window._alarmCtx;
-    // Resume falls suspended (Autoplay-Policy)
-    ctx.resume().then(()=>{
-      const now=ctx.currentTime;
-      // Kompressor für maximalen Lautstärke-Eindruck
-      const comp=ctx.createDynamicsCompressor();
-      comp.connect(ctx.destination);
-
-      const tone=(freq,startOffset,duration,type='sawtooth')=>{
-        const o=ctx.createOscillator();
-        const g=ctx.createGain();
-        o.connect(g);g.connect(comp);
-        o.type=type;
-        o.frequency.setValueAtTime(freq,now+startOffset);
-        g.gain.setValueAtTime(1.0,now+startOffset);
-        g.gain.setValueAtTime(1.0,now+startOffset+duration-0.02);
-        g.gain.linearRampToValueAtTime(0,now+startOffset+duration);
-        o.start(now+startOffset);
-        o.stop(now+startOffset+duration+0.05);
-      };
-
-      // Alarm-Sirene: Frequenz-Sweep hoch-runter + kurze Pieps
-      for(let i=0;i<4;i++){
-        const base=i*0.45;
-        // Sweep hoch
-        const o=ctx.createOscillator();
-        const g=ctx.createGain();
-        o.connect(g);g.connect(comp);
-        o.type='sawtooth';
-        o.frequency.setValueAtTime(600,now+base);
-        o.frequency.linearRampToValueAtTime(1200,now+base+0.2);
-        o.frequency.linearRampToValueAtTime(600,now+base+0.4);
-        g.gain.setValueAtTime(1.0,now+base);
-        g.gain.setValueAtTime(0,now+base+0.42);
-        o.start(now+base);o.stop(now+base+0.45);
-      }
-      // Kurze Pause dann wiederholen
-      setTimeout(()=>{if(window._alarmPlaying)playAlarmSound();},2200);
-    });
-  }catch(e){
-    // Fallback: nochmal versuchen nach Tap
-    setTimeout(()=>{if(window._alarmPlaying)playAlarmSound();},1000);
-  }
+// ── RESET ──
+function renderTabReset(){
+  const btn=(id,label,color,warning)=>`
+    <div class="card" style="margin-bottom:12px;border:2px solid ${color}20">
+      <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:15px">${label}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${warning}</div>
+        </div>
+        <button class="btn" id="${id}" style="background:${color};color:white;white-space:nowrap">Leeren</button>
+      </div>
+    </div>`;
+  return`<div class="admin-wrap">
+    <div class="card" style="margin-bottom:20px;background:#fff5f5;border:2px solid #ef4444">
+      <div class="card-body" style="padding:16px">
+        <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:4px">⚠️ Achtung — Nicht rückgängig machbar!</div>
+        <div style="font-size:13px;color:var(--text-muted)">Gelöschte Daten können nicht wiederhergestellt werden.</div>
+      </div>
+    </div>
+    ${btn('btn-reset-nachrichten','💬 Alle Nachrichten löschen','#6b7280','Löscht alle gesendeten und empfangenen Nachrichten')}
+    ${btn('btn-reset-todos','✅ Alle TODOs löschen','#f59e0b','Löscht alle TODOs und Zuweisungen')}
+    ${btn('btn-reset-einsaetze','📋 Alle Einsätze & Berichte löschen','#ef4444','Löscht alle Einsätze, Fotos, GPS-Tracks und erledigte Aufgaben')}
+    ${btn('btn-reset-anlagen','🏢 Alle Anlagen löschen','#dc2626','Löscht alle Anlagen, Aufgaben und zugehörige Daten')}
+  </div>`;
 }
 
 // ── DRAG & DROP SORT ──
@@ -1317,16 +1289,6 @@ function bindEvents(){
 
   // Alarm bestätigen (Mitarbeiter)
   o('btn-alarm-best','click',async()=>{
-    // Beim ersten Tap: Sound starten (iOS braucht User-Gesture)
-    if(!window._alarmCtx||window._alarmCtx.state==='suspended'){
-      playAlarmSound();
-      // Hinweis ausblenden
-      const hint=document.getElementById('alarm-tap-hint');
-      if(hint)hint.style.display='none';
-      return; // Erst beim zweiten Tap bestätigen
-    }
-    window._alarmPlaying=false;
-    try{if(window._alarmCtx)window._alarmCtx.close()}catch(e){}
     const id=document.getElementById('btn-alarm-best')?.dataset.id;
     try{if(id)await apiPost(`/api/alarm/${id}/bestaetigen`,{})}catch(e){}
     toast('✅ Bestätigt!','ok');
@@ -1562,6 +1524,26 @@ function bindAdminEvents(){
         toast(names?`Zugewiesen: ${names}`:'Zuweisung entfernt','ok');
       }catch(e){toast(e.message,'err')}
     });
+  });
+
+  // Reset-Buttons
+  const resetActions={
+    'btn-reset-nachrichten':{label:'alle Nachrichten',endpoint:'/api/admin/reset/nachrichten'},
+    'btn-reset-todos':{label:'alle TODOs',endpoint:'/api/admin/reset/todos'},
+    'btn-reset-einsaetze':{label:'alle Einsätze & Berichte',endpoint:'/api/admin/reset/einsaetze'},
+    'btn-reset-anlagen':{label:'alle Anlagen',endpoint:'/api/admin/reset/anlagen'},
+  };
+  Object.entries(resetActions).forEach(([id,{label,endpoint}])=>{
+    const b=document.getElementById(id);
+    if(b&&!b._bound){b._bound=true;b.addEventListener('click',async()=>{
+      if(!confirm(`⚠️ Wirklich ${label} unwiderruflich löschen?`))return;
+      if(!confirm(`Letzte Sicherheitsabfrage: ${label} endgültig löschen?`))return;
+      try{
+        await apiDelete(endpoint);
+        toast(`${label} gelöscht`,'ok');
+        reloadTab();
+      }catch(e){toast(e.message,'err')}
+    })}
   });
 
   // Alarm auslösen
