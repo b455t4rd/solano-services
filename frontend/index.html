@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Solano">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/Logo.png">
+  <title>SolanoServices</title>
+  <style>
+    :root {
+      --primary:#1e40af;--primary-light:#3b82f6;--success:#16a34a;--danger:#dc2626;--warning:#d97706;
+      --bg:#f1f5f9;--card:#fff;--text:#0f172a;--text-muted:#64748b;--border:#e2e8f0;
+      --r:12px;--shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.08);
+      --shadow-md:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06);
+      --sidebar-w:220px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+
+    /* APP SHELL */
+    #app{display:flex;flex-direction:column;min-height:100vh;max-width:540px;margin:0 auto}
+    .layout-wrap{flex:1;display:flex;overflow:hidden;min-height:0}
+    .sidebar{display:none}
+    .main-content{flex:1;overflow-y:auto;min-height:calc(100vh - 56px)}
+
+    /* DESKTOP */
+    @media(min-width:768px){
+      body{background:#cbd5e1}
+      #app{max-width:100%;height:100vh;overflow:hidden}
+      .layout-wrap{height:calc(100vh - 56px);overflow:hidden}
+      .sidebar{display:flex;flex-direction:column;width:var(--sidebar-w);background:white;border-right:1px solid var(--border);flex-shrink:0;overflow-y:auto;padding:12px 0}
+      .main-content{overflow-y:auto;min-height:0;background:var(--bg)}
+      .content,.content-sm{max-width:820px;padding:24px 32px}
+      .sparte-grid{grid-template-columns:1fr 1fr}
+      .admin-wrap{max-width:960px;padding:24px 32px}
+      .header-back{display:none}
+    }
+
+    /* SIDEBAR */
+    .sidebar-item{padding:10px 14px;font-size:14px;font-weight:500;color:var(--text-muted);cursor:pointer;border-radius:8px;margin:2px 8px;display:flex;align-items:center;gap:8px;transition:background .1s,color .1s;white-space:nowrap}
+    .sidebar-item:hover{background:var(--bg);color:var(--text)}
+    .sidebar-item.active{background:#dbeafe;color:var(--primary);font-weight:600}
+    .sidebar-label{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;padding:12px 16px 4px}
+    .sidebar-spacer{flex:1}
+    .sidebar-divider{border-top:1px solid var(--border);margin:8px}
+
+    /* HEADER */
+    .header{background:var(--primary);color:white;padding:0 16px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-md);flex-shrink:0}
+    .header-title{font-size:17px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .header-back{background:none;border:none;color:white;cursor:pointer;font-size:22px;line-height:1;padding:4px;border-radius:6px;flex-shrink:0}
+    .header-back:active{background:rgba(255,255,255,.2)}
+    .header-btn{background:rgba(255,255,255,.15);border:none;color:white;cursor:pointer;font-size:13px;font-weight:500;padding:6px 12px;border-radius:20px;white-space:nowrap}
+    .header-btn:active{background:rgba(255,255,255,.3)}
+
+    /* CONTENT */
+    .content{flex:1;padding:16px}
+    .content-sm{flex:1;padding:12px}
+    .admin-wrap{padding:12px}
+
+    /* CARD */
+    .card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+    .card+.card{margin-top:12px}
+    .card-body{padding:16px}
+    .card-img{width:100%;max-height:220px;object-fit:cover;display:block}
+
+    /* BUTTONS */
+    .btn{display:block;width:100%;padding:14px;border:none;border-radius:var(--r);cursor:pointer;font-size:15px;font-weight:600;text-align:center;transition:opacity .15s,transform .1s}
+    .btn:active{opacity:.85;transform:scale(.98)}
+    .btn-primary{background:var(--primary);color:white}
+    .btn-success{background:var(--success);color:white}
+    .btn-danger{background:var(--danger);color:white}
+    .btn-outline{background:none;border:2px solid var(--primary);color:var(--primary)}
+    .btn-sm{display:inline-block;width:auto;padding:8px 16px;font-size:13px;font-weight:600}
+    .btn-icon{background:var(--primary-light);color:white;border:none;border-radius:8px;cursor:pointer;padding:8px 14px;font-size:13px;font-weight:600}
+    .btn-icon:active{opacity:.8}
+    .btn+.btn{margin-top:10px}
+    .btn-ghost{background:var(--bg);border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+    .btn-ghost:hover{background:var(--border)}
+
+    /* FORM */
+    .form-group{margin-bottom:14px}
+    .form-label{display:block;font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+    .form-input{display:block;width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;color:var(--text);background:white;outline:none;transition:border-color .15s}
+    .form-input:focus{border-color:var(--primary-light)}
+    select.form-input{cursor:pointer}
+    textarea.form-input{resize:vertical;min-height:80px}
+
+    /* LIST */
+    .list-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:white;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+    .list-item:last-child{border-bottom:none}
+    .list-item:active{background:var(--bg)}
+    .list-item-body{flex:1;min-width:0}
+    .list-item-title{font-size:15px;font-weight:600}
+    .list-item-sub{font-size:13px;color:var(--text-muted);margin-top:2px}
+    .list-item-arrow{color:var(--text-muted);font-size:18px}
+
+    /* BADGE */
+    .badge{display:inline-block;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px}
+    .badge-blue{background:#dbeafe;color:var(--primary)}
+    .badge-green{background:#dcfce7;color:var(--success)}
+    .badge-gray{background:var(--border);color:var(--text-muted)}
+    .badge-red{background:#fee2e2;color:var(--danger)}
+    .badge-teal{background:#ccfbf1;color:#0f766e}
+
+    /* CHECKBOX */
+    .check-item{display:flex;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+    .check-item:last-child{border-bottom:none}
+    .check-item:active{background:var(--bg)}
+    .check-box{width:22px;height:22px;border-radius:6px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .check-box.done{background:var(--success);border-color:var(--success);color:white;font-size:13px}
+    .check-label{font-size:15px;flex:1}
+    .check-label.done{text-decoration:line-through;color:var(--text-muted)}
+
+    /* GPS */
+    .gps-bar{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:13px;font-weight:600}
+    .gps-dot{width:10px;height:10px;border-radius:50%;background:var(--text-muted);flex-shrink:0}
+    .gps-dot.active{background:var(--success);animation:pulse 1.5s infinite}
+    .gps-dot.error{background:var(--danger)}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+    /* TIMER */
+    .timer-display{font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--primary);text-align:center;padding:8px 0;letter-spacing:.02em}
+
+    /* PHOTOS */
+    .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 16px 16px}
+    .photo-thumb{aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;cursor:pointer}
+    .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .photo-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:white;border:none;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;line-height:22px;text-align:center}
+
+    /* SPARTE CARDS */
+    .sparte-grid{display:grid;gap:14px;margin-top:8px}
+    .sparte-card{background:white;border-radius:16px;padding:28px 20px;box-shadow:var(--shadow-md);cursor:pointer;text-align:center;border:2px solid transparent;transition:border-color .15s,transform .1s}
+    .sparte-card:active,.sparte-card:hover{transform:scale(.98);border-color:var(--primary)}
+    .sparte-icon{font-size:48px;margin-bottom:12px;display:block}
+    .sparte-title{font-size:18px;font-weight:700}
+    .sparte-sub{font-size:13px;color:var(--text-muted);margin-top:4px}
+
+    /* SEARCH */
+    .search-wrap{padding:12px 16px 4px}
+    .search-input{width:100%;padding:10px 14px 10px 38px;border:1.5px solid var(--border);border-radius:24px;font-size:15px;background:white;outline:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:12px center}
+    .search-input:focus{border-color:var(--primary-light)}
+
+    /* TOAST */
+    #toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+    .toast{padding:12px 20px;border-radius:24px;font-size:14px;font-weight:600;color:white;box-shadow:var(--shadow-md);animation:slideUp .2s ease;white-space:nowrap}
+    .toast-ok{background:var(--success)}.toast-err{background:var(--danger)}.toast-info{background:var(--primary)}
+    @keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+    /* PWA INSTALL BANNER */
+    #pwa-banner{position:fixed;bottom:0;left:0;right:0;z-index:1000;background:#fff;border-top:1.5px solid var(--border);box-shadow:0 -4px 16px rgba(0,0,0,.12);padding:16px;display:flex;align-items:center;gap:12px;transform:translateY(100%);transition:transform .3s ease;animation:none}
+    #pwa-banner.show{transform:translateY(0)}
+    #pwa-banner .pwa-icon{width:48px;height:48px;border-radius:12px;object-fit:cover;flex-shrink:0}
+    #pwa-banner .pwa-text{flex:1;min-width:0}
+    #pwa-banner .pwa-title{font-weight:700;font-size:15px;color:var(--text)}
+    #pwa-banner .pwa-sub{font-size:13px;color:var(--text-muted);margin-top:2px}
+    #pwa-banner .pwa-install-btn{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
+    #pwa-banner .pwa-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);padding:4px;flex-shrink:0;line-height:1}
+    /* iOS hint */
+    #ios-hint{position:fixed;bottom:0;left:0;right:0;z-index:1000;background:#1e293b;color:#fff;padding:16px 16px 24px;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.25);transform:translateY(100%);transition:transform .3s ease}
+    #ios-hint.show{transform:translateY(0)}
+    #ios-hint .ios-title{font-weight:700;font-size:15px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+    #ios-hint .ios-steps{font-size:13px;line-height:1.8;color:#cbd5e1}
+    #ios-hint .ios-close{position:absolute;top:12px;right:16px;background:none;border:none;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1}
+    #ios-hint .ios-arrow{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:24px;animation:bounce .8s infinite alternate}
+    @keyframes bounce{from{transform:translateX(-50%) translateY(0)}to{transform:translateX(-50%) translateY(-6px)}}
+
+    /* MISC */
+    .section-label{font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;padding:16px 16px 6px}
+    .info-box{background:#eff6ff;border-left:3px solid var(--primary-light);border-radius:0 8px 8px 0;padding:12px 14px;font-size:14px;line-height:1.5}
+    .nav-btn{display:flex;align-items:center;gap:8px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:11px 16px;color:var(--primary);font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:8px}
+    .nav-btn:active{background:#dbeafe}
+    .einsatz-header{background:white;padding:12px 16px 8px;border-bottom:1px solid var(--border)}
+    .empty{text-align:center;padding:48px 24px;color:var(--text-muted)}
+    .empty-icon{font-size:48px;margin-bottom:12px}
+    .empty-text{font-size:15px;font-weight:500}
+    .empty-sub{font-size:13px;margin-top:6px}
+    .loading{text-align:center;padding:48px;color:var(--text-muted)}
+    .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ADMIN */
+    .tbl{width:100%;border-collapse:collapse;font-size:14px}
+    .tbl th{background:var(--bg);padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)}
+    .tbl td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+    .tbl tr:last-child td{border-bottom:none}
+    .tbl-actions{display:flex;gap:6px;flex-wrap:wrap}
+    .tbl-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+    .tbl-btn:hover{background:var(--bg)}
+    .tbl-btn.danger{color:var(--danger);border-color:#fecaca}
+    .tbl-btn.danger:hover{background:#fee2e2}
+
+    /* TABS */
+    .tabs{display:flex;background:white;border-bottom:1px solid var(--border);flex-shrink:0}
+    .tab-btn{flex:1;padding:12px 6px;background:none;border:none;font-size:13px;font-weight:600;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+    .tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+
+    /* MODAL */
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end}
+    @media(min-width:768px){.modal-bg{align-items:center;justify-content:center}}
+    .modal{background:white;border-radius:20px 20px 0 0;width:100%;max-width:520px;margin:0 auto;padding:20px 20px 32px;max-height:90vh;overflow-y:auto}
+    @media(min-width:768px){.modal{border-radius:16px}}
+    .modal-title{font-size:18px;font-weight:700;margin-bottom:16px}
+    .modal-close{float:right;background:var(--bg);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;line-height:30px;text-align:center}
+
+    /* LOGIN */
+    .login-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;background:var(--primary)}
+    .login-logo{font-size:56px;margin-bottom:8px}
+    .login-title{font-size:28px;font-weight:800;color:white;margin-bottom:4px}
+    .login-sub{font-size:14px;color:rgba(255,255,255,.7);margin-bottom:36px}
+    .login-card{background:white;border-radius:20px;padding:28px 24px;width:100%;max-width:360px;box-shadow:var(--shadow-md)}
+    .pin-input{font-size:28px;letter-spacing:.3em;text-align:center;padding:16px;font-weight:700}
+
+    /* REPORT */
+    .report-row{padding:14px 16px;border-bottom:1px solid var(--border)}
+    .report-row:last-child{border-bottom:none}
+    .report-date{font-size:12px;color:var(--text-muted);margin-bottom:2px}
+    .report-name{font-size:15px;font-weight:700;margin-bottom:4px}
+    .report-meta{font-size:13px;color:var(--text-muted);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .report-fotos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .report-foto-thumb{width:72px;height:72px;border-radius:8px;object-fit:cover;cursor:pointer;border:2px solid var(--border)}
+    .report-foto-thumb:hover{border-color:var(--primary-light)}
+
+    /* MAP */
+  #map-container{height:calc(100vh - 56px - 46px);min-height:400px}
+
+  /* SPARTE CHECKBOXES */
+    .sparte-checks{display:flex;gap:12px;flex-wrap:wrap}
+    .sparte-check-label{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;cursor:pointer;padding:9px 14px;border-radius:8px;border:1.5px solid var(--border);background:white;transition:all .15s;user-select:none}
+    .sparte-check-label:hover{background:var(--bg)}
+    .sparte-check-label input{width:16px;height:16px;cursor:pointer;accent-color:var(--primary)}
+
+    /* DRAG & DROP */
+    .drag-handle{color:var(--text-muted);font-size:20px;cursor:grab;padding:0 4px;flex-shrink:0;user-select:none;touch-action:none}
+    .drag-handle:active{cursor:grabbing}
+    .list-item.dragging{opacity:.4;background:var(--bg)}
+    .list-item.drag-over{border-top:2px solid var(--primary)}
+
+    /* ZULETZT BESUCHT */
+    .zuletzt-badge{font-size:12px;color:var(--text-muted);margin-top:3px}
+    .zuletzt-badge.heute{color:var(--success);font-weight:600}
+  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast-container"></div>
+<div id="modal-container"></div>
+<script>
+// ── CONFIG & STATE ──
+const API = '';
+let user       = JSON.parse(localStorage.getItem('solano_user') || 'null');
+let einsatzAkt = JSON.parse(localStorage.getItem('solano_einsatz') || 'null');
+function isManager(){return!!(user?.ist_admin||user?.ist_chef)}
+let gpsBatch   = JSON.parse(localStorage.getItem('solano_gps_batch') || '[]');
+let page = 'login', pageData = {}, gpsWatcher = null, timerIv = null;
+let _draftAufg = [], _draftCtr = 0;
+
+// ── UTILS ──
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function toast(msg,type='ok'){const el=document.createElement('div');el.className=`toast toast-${type}`;el.textContent=msg;document.getElementById('toast-container').appendChild(el);setTimeout(()=>el.remove(),3000)}
+function formatDur(s,e){const sec=Math.max(0,Math.floor((new Date(e)-new Date(s))/1000));const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),sc=sec%60;return h>0?`${h}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`}
+function fDate(dt){return dt?new Date(dt).toLocaleDateString('de-AT',{day:'2-digit',month:'2-digit',year:'numeric'}):'–'}
+function fTime(dt){return dt?new Date(dt).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'–'}
+function fMin(min){if(!min&&min!==0)return'–';const m=Math.round(min);return m<60?`${m} min`:`${Math.floor(m/60)}h ${m%60}min`}
+function sparteBadges(a){let h='';if(a.in_winterdienst)h+=`<span class="badge badge-blue">❄️ Winterdienst</span>`;if(a.in_gebaeudereinigung)h+=`<span class="badge badge-green">🧹 Gebäudereinigung</span>`;if(a.in_gruenpflege)h+=`<span class="badge badge-teal">🌿 Grünpflege</span>`;return h||`<span class="badge badge-gray">Keine Sparte</span>`}
+function openNav(lat,lng,adr){const d=(lat&&lng)?`${lat},${lng}`:encodeURIComponent(adr);const iOS=/iPad|iPhone|iPod/.test(navigator.userAgent);window.open(iOS?`maps://maps.apple.com/?daddr=${d}`:`https://www.google.com/maps/dir/?api=1&destination=${d}`,'_blank')}
+function haversineDist(lat1,lng1,lat2,lng2){const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180,a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))}
+
+// ── API ──
+function ah(){return user?.token?{'Authorization':`Bearer ${user.token}`}:{}}
+async function apiGet(p){const r=await fetch(API+p,{headers:ah()});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
+async function apiPost(p,b){const r=await fetch(API+p,{method:'POST',headers:{...ah(),'Content-Type':'application/json'},body:JSON.stringify(b)});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
+async function apiPut(p,b){const r=await fetch(API+p,{method:'PUT',headers:{...ah(),'Content-Type':'application/json'},body:JSON.stringify(b)});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
+async function apiDel(p){const r=await fetch(API+p,{method:'DELETE',headers:ah()});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
+async function apiUp(p,fd){const r=await fetch(API+p,{method:'POST',headers:ah(),body:fd});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
+
+// ── ROUTER ──
+function go(p,data={}){pageData={...data};page=p;renderPage()}
+
+async function renderPage(){
+  document.getElementById('modal-container').innerHTML='';
+  const app=document.getElementById('app');
+  if(!user||page==='login'){
+    app.innerHTML=loginHTML();
+    bindEvents();return;
+  }
+  const backBtn=page!=='home'&&page!=='login'?`<button class="header-back" id="btn-back">‹</button>`:'';
+  const title=getTitle();
+  const right=getHeaderRight();
+  app.innerHTML=`
+    <div class="header">${backBtn}<span class="header-title">${title}</span>${right}</div>
+    <div class="layout-wrap">
+      <nav class="sidebar">${sidebarHTML()}</nav>
+      <div class="main-content" id="app-main"><div class="loading"><div class="spinner"></div></div></div>
+    </div>`;
+  try{document.getElementById('app-main').innerHTML=await getPageContent()}
+  catch(e){document.getElementById('app-main').innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">${esc(e.message)}</div></div>`}
+  bindEvents();
+}
+
+function getTitle(){
+  if(page==='home')return'SolanoServices';
+  if(page==='anlagen')return pageData.sparte==='winterdienst'?'❄️ Winterdienst':pageData.sparte==='gruenpflege'?'🌿 Grünpflege':'🧹 Gebäudereinigung';
+  if(page==='anlage-detail')return pageData.anlage?.name||'Anlage';
+  if(page==='einsatz')return pageData.anlage?.name||einsatzAkt?.anlage_name||'Einsatz';
+  if(page==='admin')return'⚙️ Admin';
+  return'SolanoServices';
+}
+function getHeaderRight(){
+  if(page==='home')return`<button class="header-btn" id="btn-logout">Abmelden</button>`;
+  if(page==='einsatz')return`<button class="header-btn" id="btn-end-einsatz" style="background:rgba(220,38,38,.8)">Beenden</button>`;
+  return`<span style="font-size:13px;opacity:.7">${esc(user?.name||'')}</span>`;
+}
+
+function sidebarHTML(){
+  const si=(id,icon,label,active)=>`<div class="sidebar-item${active?' active':''}" id="${id}">${icon} ${label}</div>`;
+  const showW=user?.zeige_winterdienst!==false;
+  const showG=user?.zeige_gebaeudereinigung!==false;
+  const showGr=user?.zeige_gruenpflege!==false;
+  return`
+    ${si('nav-home','🏠','Übersicht',page==='home')}
+    ${showW?`<div class="sidebar-label">WINTERDIENST</div>${si('nav-winter','❄️','Anlagen',page==='anlagen'&&pageData.sparte==='winterdienst')}`:''}
+    ${showG?`<div class="sidebar-label">GEBÄUDEREINIGUNG</div>${si('nav-gebaeude','🧹','Anlagen',page==='anlagen'&&pageData.sparte==='gebaeudereinigung')}`:''}
+    ${showGr?`<div class="sidebar-label">GRÜNPFLEGE</div>${si('nav-gruenpflege','🌿','Anlagen',page==='anlagen'&&pageData.sparte==='gruenpflege')}`:''}
+    ${einsatzAkt?`<div class="sidebar-label">AKTIVER EINSATZ</div>${si('nav-einsatz','🟢',esc(einsatzAkt.anlage_name||'Einsatz'),page==='einsatz')}`:''}
+    ${isManager()?`<div class="sidebar-label">VERWALTUNG</div>${si('nav-admin','⚙️','Admin',page==='admin')}`:''}
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-item" id="nav-logout" style="color:var(--danger)">⇥ Abmelden</div>`;
+}
+
+async function getPageContent(){
+  switch(page){
+    case'home':return pageHome();
+    case'anlagen':return pageAnlagen();
+    case'anlage-detail':return pageAnlageDetail();
+    case'einsatz':return pageEinsatz();
+    case'admin':return pageAdmin();
+    default:return`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Seite nicht gefunden</div></div>`;
+  }
+}
+
+// ── PAGES ──
+function loginHTML(){
+  return`<div class="login-wrap">
+    <img src="/Logo.png" alt="Solano 360" style="height:88px;margin-bottom:8px;object-fit:contain;border-radius:12px" onerror="this.style.display='none';document.getElementById('logo-fb').style.display=''">
+    <div id="logo-fb" class="login-logo" style="display:none">🏢</div>
+    <div class="login-title">SolanoServices</div>
+    <div class="login-sub">Solano Beschattungsmontagen OG</div>
+    <div class="login-card">
+      <div class="form-group">
+        <label class="form-label">PIN eingeben</label>
+        <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" class="form-input pin-input" placeholder="••••" autocomplete="off" maxlength="10">
+      </div>
+      <button class="btn btn-primary" id="btn-login">Anmelden</button>
+    </div>
+  </div>`;
+}
+
+async function pageHome(){
+  const hint=einsatzAkt?`<div class="card" style="background:#dcfce7;border:1.5px solid #86efac;margin-bottom:16px"><div class="card-body" style="display:flex;align-items:center;gap:12px"><div style="font-size:28px">🟢</div><div style="flex:1"><div style="font-weight:700">Aktiver Einsatz läuft</div><div style="font-size:13px;color:#166534">${esc(einsatzAkt.anlage_name)} · ${fTime(einsatzAkt.start_zeit)}</div></div><button class="btn-icon" id="btn-resume">Weiter →</button></div></div>`:'';
+  let todoHint='';
+  if(isManager()){
+    try{const td=await apiGet('/api/todos?erledigt=false');if(td.length>0)todoHint=`<div class="card" style="background:#fffbeb;border:1.5px solid #fcd34d;margin-bottom:16px;cursor:pointer" id="btn-open-todos"><div class="card-body" style="display:flex;align-items:center;gap:12px"><div style="font-size:28px">📋</div><div style="flex:1"><div style="font-weight:700">${td.length} offene${td.length===1?' Meldung':' Meldungen'}</div><div style="font-size:13px;color:#92400e">Bitte prüfen &amp; abhaken</div></div><span style="font-size:18px;color:var(--text-muted)">›</span></div></div>`}catch(e){}
+  } else {
+    try{
+      const meine=await apiGet('/api/todos/meine');
+      if(meine.length>0){
+        const rows=meine.map(t=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;display:flex;align-items:flex-start;gap:10px">
+            <input type="checkbox" class="mein-todo-check" data-id="${t.id}" style="width:18px;height:18px;margin-top:2px;cursor:pointer;flex-shrink:0;accent-color:var(--success)">
+            <div><div style="font-weight:600">${esc(t.beschreibung)}</div>${t.anlage_name?`<div style="font-size:12px;color:var(--text-muted)">📍 ${esc(t.anlage_name)}</div>`:''}</div>
+          </div>`).join('');
+        todoHint=`<div class="card" style="margin-bottom:16px"><div class="card-body" style="padding-bottom:8px"><div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px"><span>📋</span> Meine offenen Aufgaben (${meine.length})</div>${rows}</div></div>`;
+      }
+    }catch(e){}
+  }
+  const adminBtn=isManager()?`<button class="btn btn-outline" style="margin-top:20px" id="nav-admin-home">⚙️ Admin-Bereich</button>`:'';
+  const showW=user?.zeige_winterdienst!==false;
+  const showG=user?.zeige_gebaeudereinigung!==false;
+  const showGr=user?.zeige_gruenpflege!==false;
+  const cards=[
+    showW?`<div class="sparte-card" id="card-winter"><span class="sparte-icon">❄️</span><div class="sparte-title">Winterdienst</div><div class="sparte-sub">Räumen &amp; Streuen</div></div>`:'',
+    showG?`<div class="sparte-card" id="card-gebaeude"><span class="sparte-icon">🧹</span><div class="sparte-title">Gebäudereinigung</div><div class="sparte-sub">Facility Management</div></div>`:'',
+    showGr?`<div class="sparte-card" id="card-gruenpflege"><span class="sparte-icon">🌿</span><div class="sparte-title">Grünpflege</div><div class="sparte-sub">Garten &amp; Außenanlagen</div></div>`:'',
+  ].join('');
+  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">Was steht heute an?</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${adminBtn}</div>`;
+}
+
+function fZuletzt(ts){
+  if(!ts)return null;
+  const d=new Date(ts),now=new Date();
+  const heute=d.toDateString()===now.toDateString();
+  return heute?`Heute ${fTime(ts)}`:`${fDate(ts)} ${fTime(ts)}`;
+}
+
+async function pageAnlagen(){
+  const sparte=pageData.sparte||'winterdienst';
+  const [list,reihenfolge]=await Promise.all([
+    apiGet(`/api/anlagen?sparte=${sparte}`),
+    apiGet(`/api/anlagen/reihenfolge?sparte=${sparte}`).catch(()=>[])
+  ]);
+  // Reihenfolge anwenden
+  if(reihenfolge.length){
+    const posMap=Object.fromEntries(reihenfolge.map(r=>[String(r.anlage_id),r.position]));
+    list.sort((a,b)=>{
+      const pa=posMap[String(a.id)]??999,pb=posMap[String(b.id)]??999;
+      return pa!==pb?pa-pb:a.name.localeCompare(b.name);
+    });
+  }
+  pageData.anlagen=list;
+  if(pageData.mapView){
+    // Karten-Ansicht
+    const withCoords=list.filter(a=>a.lat&&a.lng);
+    window._anlagenKarteList=list;
+    return`<div id="anlagen-map-container" style="height:calc(100vh - 56px)"></div>
+      <div style="padding:8px 16px;font-size:13px;color:var(--text-muted)">${withCoords.length} von ${list.length} Anlagen mit Koordinaten</div>`;
+  }
+  const rows=list.length===0
+    ?`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Keine Anlagen</div><div class="empty-sub">Im Admin-Bereich anlegen</div></div>`
+    :list.map(a=>{
+      const zl=fZuletzt(a.zuletzt_besucht);
+      const erl=parseInt(a.zuletzt_erledigt)||0,ges=parseInt(a.zuletzt_gesamt)||0;
+      const zlHtml=zl?`<div class="zuletzt-badge ${a.zuletzt_besucht&&new Date(a.zuletzt_besucht).toDateString()===new Date().toDateString()?'heute':''}">Zuletzt: ${zl} · ${erl}/${ges} Aufg. ${erl<ges?'⚠️':'✅'}</div>`:'<div class="zuletzt-badge">Noch kein Besuch</div>';
+      return`<div class="list-item" data-id="${a.id}" style="gap:8px">
+        <span class="drag-handle" title="Halten und ziehen zum Sortieren">⠿</span>
+        <div class="list-item-body">
+          <div class="list-item-title">${esc(a.name)}</div>
+          <div class="list-item-sub">${esc(a.adresse)}${a.plz?', '+esc(a.plz):''}${a.ort?' '+esc(a.ort):''}</div>
+          <div style="margin-top:4px"><span class="badge badge-blue">${a.aufgaben_count} Aufgaben</span></div>
+          ${zlHtml}
+        </div>
+        <span class="list-item-arrow">›</span>
+      </div>`;
+    }).join('');
+  return`<div class="search-wrap" style="display:flex;gap:8px;align-items:center">
+    <input class="search-input" id="search-input" placeholder="Anlage suchen…" type="search" style="flex:1">
+    <button class="btn-icon" id="btn-toggle-map" style="flex-shrink:0;background:var(--text-muted)">🗺️</button>
+  </div>
+  <div class="card" style="margin:8px 16px" id="anlagen-list">${rows}</div>`;
+}
+
+async function pageAnlageDetail(){
+  const anlage=await apiGet(`/api/anlagen/${pageData.anlageId}`);
+  pageData.anlage=anlage;
+  const sparte=pageData.sparte||'winterdienst';
+  const sparteKey=sparte==='gebaeudereinigung'?'bild_url_gebaeudereinigung':sparte==='gruenpflege'?'bild_url_gruenpflege':'bild_url_winter';
+  const bildUrl=anlage[sparteKey]||anlage.bild_url;
+  const img=bildUrl?`<img src="${esc(bildUrl)}" class="card-img" alt="Lagerbild" onerror="this.style.display='none'">`:`<div style="height:100px;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">📷 Kein Lagerbild</div>`;
+  const aufgabenGefiltert=(anlage.aufgaben||[]).filter(a=>!a.sparte||a.sparte===sparte);
+  const aufgaben=aufgabenGefiltert.map(a=>`<div class="check-item" style="cursor:default"><div class="check-box"></div><span class="check-label">${esc(a.bezeichnung)}</span></div>`).join('')||`<div style="padding:12px 16px;color:var(--text-muted);font-size:14px">Keine Aufgaben definiert</div>`;
+  const info=anlage.info_text?`<div class="card-body" style="padding-top:0"><div class="info-box">${esc(anlage.info_text).replace(/\n/g,'<br>')}</div></div>`:'';
+  const istAktiv=einsatzAkt&&einsatzAkt.anlage_id==anlage.id;
+  return`<div class="content-sm">
+    <div class="card" style="margin-bottom:12px">
+      ${img}
+      <div class="card-body">
+        <div style="margin-bottom:6px">${sparteBadges(anlage)}</div>
+        <div style="font-size:17px;font-weight:700">${esc(anlage.name)}</div>
+        <div style="font-size:14px;color:var(--text-muted);margin-top:2px">📍 ${esc(anlage.adresse)}${anlage.plz?', '+esc(anlage.plz):''}${anlage.ort?' '+esc(anlage.ort):''}</div>
+        <button class="nav-btn" id="btn-nav">🗺️ Navigation starten</button>
+      </div>
+      ${info}
+    </div>
+    <p class="section-label">Checkliste (${aufgabenGefiltert.length} Aufgaben)</p>
+    <div class="card" style="margin-bottom:16px">${aufgaben}</div>
+    ${istAktiv?`<button class="btn btn-success" id="btn-einsatz">▶ Laufenden Einsatz fortführen</button>`:`<button class="btn btn-primary" id="btn-einsatz">▶ Einsatz starten</button>`}
+  </div>`;
+}
+
+async function pageEinsatz(){
+  if(!einsatzAkt){go('home');return''}
+  let details;
+  try{details=await apiGet(`/api/einsaetze/${einsatzAkt.id}`)}catch(e){details={erledigte_aufgaben:[],fotos:[]}}
+  if(!pageData.anlage){try{pageData.anlage=await apiGet(`/api/anlagen/${einsatzAkt.anlage_id}`)}catch(e){}}
+  const einsatzSparte=einsatzAkt.sparte||'winterdienst';
+  const aufgaben=(pageData.anlage?.aufgaben||[]).filter(t=>!t.sparte||t.sparte===einsatzSparte);
+  const erledigt=new Set((details.erledigte_aufgaben||[]).map(e=>String(e.aufgabe_id)));
+  const fotos=details.fotos||[];
+  const done=erledigt.size,total=aufgaben.length,pct=total>0?Math.round(done/total*100):0;
+  const rows=aufgaben.map(t=>`<div class="check-item" data-aufgabe="${t.id}" id="check-${t.id}"><div class="check-box ${erledigt.has(String(t.id))?'done':''}">${erledigt.has(String(t.id))?'✓':''}</div><span class="check-label ${erledigt.has(String(t.id))?'done':''}">${esc(t.bezeichnung)}</span></div>`).join('')||`<div style="padding:12px 16px;color:var(--text-muted);font-size:14px">Keine Aufgaben</div>`;
+  const fItems=fotos.map(f=>`<div class="photo-thumb"><img src="${esc(f.foto_url)}" alt="Foto"><button class="photo-del" data-fotoid="${f.id}">×</button></div>`).join('');
+  return`<div class="einsatz-header"><div class="timer-display" id="timer-display">00:00</div><div class="gps-bar"><div class="gps-dot" id="gps-dot"></div><span id="gps-text">GPS wird aktiviert…</span></div></div>
+    <div style="padding:0 16px;margin:12px 0"><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-muted);margin-bottom:4px"><span>Aufgaben</span><span id="progress-count">${done}/${total}</span></div><div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden"><div id="progress-bar" style="background:var(--success);height:100%;width:${pct}%;transition:width .3s"></div></div></div>
+    <p class="section-label">Checkliste</p>
+    <div class="card" style="margin:0 16px 12px" id="checklist">${rows}</div>
+    <p class="section-label">Fotos (Schäden, Verschmutzungen, etc.)</p>
+    <div style="padding:0 16px 8px;display:flex;gap:8px;flex-wrap:wrap">
+      <label class="btn-icon" style="cursor:pointer">📷 Kamera <input type="file" accept="image/*" capture="environment" id="foto-input" style="display:none"></label>
+      <label class="btn-icon" style="cursor:pointer;background:var(--text-muted)">🖼️ Galerie <input type="file" accept="image/*" id="galerie-input" style="display:none"></label>
+    </div>
+    <div class="photo-grid" id="foto-grid">${fItems}</div>
+    <p class="section-label">Meldung erstellen (TODO)</p>
+    <div style="padding:0 16px 8px">
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="todo-input" placeholder="z.B. Glühbirne defekt im Eingang…" style="flex:1">
+        <button class="btn-icon" id="btn-add-todo" type="button">+ Melden</button>
+      </div>
+      <div id="todo-list" style="margin-top:8px"></div>
+    </div>
+    <p class="section-label">Notiz</p>
+    <div style="padding:0 16px 32px"><textarea class="form-input" id="notiz-input" rows="3" placeholder="Optionale Anmerkungen…">${esc(einsatzAkt.notiz||'')}</textarea></div>`;
+}
+
+async function pageAdmin(){
+  const tab=pageData.adminTab||'anlagen';
+  const pushTab=user?.ist_admin?`<button class="tab-btn ${tab==='push'?'active':''}" data-tab="push">🔔 Push</button>`:'';
+  return`<div class="tabs" style="overflow-x:auto;flex-wrap:nowrap">
+    <button class="tab-btn ${tab==='anlagen'?'active':''}" data-tab="anlagen">Anlagen</button>
+    <button class="tab-btn ${tab==='mitarbeiter'?'active':''}" data-tab="mitarbeiter">Mitarbeiter</button>
+    <button class="tab-btn ${tab==='berichte'?'active':''}" data-tab="berichte">Berichte</button>
+    <button class="tab-btn ${tab==='karte'?'active':''}" data-tab="karte">🗺️ Karte</button>
+    <button class="tab-btn ${tab==='todos'?'active':''}" data-tab="todos">📋 TODOs</button>
+    ${pushTab}
+  </div>
+  <div id="admin-tab-content">${await renderTab(tab)}</div>`;
+}
+
+async function renderTab(tab){
+  if(tab==='anlagen')return renderTabAnlagen();
+  if(tab==='mitarbeiter')return renderTabMitarbeiter();
+  if(tab==='berichte')return renderTabBerichte();
+  if(tab==='karte')return renderTabKarte();
+  if(tab==='todos')return renderTabTodos();
+  if(tab==='push')return renderTabPush();
+  return'';
+}
+
+async function renderTabAnlagen(){
+  const list=await apiGet('/api/anlagen');
+  const rows=list.map(a=>`<tr><td><div style="font-weight:600">${esc(a.name)}</div><div style="font-size:12px;color:var(--text-muted)">${esc(a.adresse)}${a.plz?', '+esc(a.plz):''}${a.ort?' '+esc(a.ort):''}</div><div style="margin-top:4px">${sparteBadges(a)}</div></td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-anlage" data-id="${a.id}">Bearbeiten</button><button class="tbl-btn" data-action="aufgaben" data-id="${a.id}" data-name="${esc(a.name)}">Aufgaben</button><button class="tbl-btn danger" data-action="del-anlage" data-id="${a.id}">Löschen</button></div></td></tr>`).join('');
+  return`<div class="admin-wrap"><button class="btn btn-primary btn-sm" id="btn-new-anlage" style="margin-bottom:12px">+ Neue Anlage</button><div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Anlage</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+async function renderTabMitarbeiter(){
+  const list=await apiGet('/api/mitarbeiter');
+  const rows=list.map(m=>{
+    const sparteIcons=[m.zeige_winterdienst!==false?'❄️':'',m.zeige_gebaeudereinigung!==false?'🧹':'',m.zeige_gruenpflege!==false?'🌿':''].filter(Boolean).join(' ')||'–';
+    const roleBadge=m.ist_admin?'<span class="badge badge-red">👑 Admin</span>':m.ist_chef?'<span class="badge badge-blue">⭐ Chef</span>':'<span class="badge badge-gray">Mitarbeiter</span>';
+    return`<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef||false}" data-zw="${m.zeige_winterdienst!==false}" data-zg="${m.zeige_gebaeudereinigung!==false}" data-zgr="${m.zeige_gruenpflege!==false}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
+  }).join('');
+  return`<div class="admin-wrap"><button class="btn btn-primary btn-sm" id="btn-new-ma" style="margin-bottom:12px">+ Neuer Mitarbeiter</button><div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Name</th><th>PIN</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+async function renderTabBerichte(){
+  const von=pageData.berichtVon||'',bis=pageData.berichtBis||'',sparte=pageData.berichtSparte||'';
+  let berichte=[];
+  try{berichte=await apiGet(`/api/einsaetze/berichte?von=${von}&bis=${bis}${sparte?'&sparte='+sparte:''}`)}catch(e){}
+  const rows=berichte.length===0
+    ?`<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Keine Einsätze im Zeitraum</div></div>`
+    :berichte.map(b=>`<div class="report-row" data-search="${esc(((b.anlage_name||'')+' '+(b.adresse||'')+' '+(b.mitarbeiter||'')).toLowerCase())}">
+        <div class="report-date">${fDate(b.datum)} · ${fTime(b.start_zeit)}${b.end_zeit?' – '+fTime(b.end_zeit):' (läuft noch)'}</div>
+        <div class="report-name">${esc(b.anlage_name)}</div>
+        <div class="report-meta">
+          <span>👤 ${esc(b.mitarbeiter)}</span>
+          <span>⏱ ${fMin(b.dauer_minuten)}</span>
+          ${(()=>{const erl=parseInt(b.aufgaben_erledigt)||0,ges=parseInt(b.aufgaben_gesamt)||0,fehlen=ges-erl;return ges>0?`<span style="font-weight:700;color:${fehlen>0?'var(--danger)':'var(--success)'}">${fehlen>0?'⚠️':'✅'} ${erl}/${ges} Aufg.</span>`:`<span>✅ ${erl} Aufg.</span>`})()}
+          ${b.gps_check_ok===true?'<span class="badge badge-green" title="GPS-Prüfung bestanden">📍✅ GPS</span>':b.gps_check_ok===false?'<span class="badge badge-red" title="Außerhalb 500m Radius">📍❌ GPS</span>':'<span class="badge badge-gray" title="Kein GPS-Check (keine Koordinaten oder GPS nicht verfügbar)">📍⚪ GPS</span>'}
+          ${(b.sparte==='winterdienst'||(!b.sparte&&b.in_winterdienst))?'<span class="badge badge-blue">❄️ Winter</span>':''}
+          ${(b.sparte==='gebaeudereinigung'||(!b.sparte&&b.in_gebaeudereinigung))?'<span class="badge badge-green">🧹 Gebäude</span>':''}
+          ${b.sparte==='gruenpflege'?'<span class="badge badge-teal">🌿 Grünpflege</span>':''}
+        </div>
+        ${b.notiz?`<div style="font-size:13px;color:var(--text-muted);margin-top:4px;font-style:italic">"${esc(b.notiz)}"</div>`:''}
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-ghost" data-action="toggle-fotos" data-id="${b.id}">📷 Fotos anzeigen</button>
+          ${(parseInt(b.aufgaben_gesamt)||0)>(parseInt(b.aufgaben_erledigt)||0)?`<button class="btn-ghost" data-action="toggle-unerledigt" data-id="${b.id}" style="color:var(--danger);border-color:#fecaca">⚠️ Fehlende Aufgaben</button>`:''}
+          <button class="btn-ghost" data-action="del-bericht" data-id="${b.id}" style="color:var(--danger);border-color:#fecaca">🗑️ Löschen</button>
+        </div>
+        <div class="report-fotos" id="fotos-${b.id}" style="display:none"></div>
+        <div id="unerledigt-${b.id}" style="display:none;margin-top:6px"></div>
+      </div>`).join('');
+  return`<div class="admin-wrap">
+    <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="bericht-von" value="${esc(von)}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Bis</label><input type="date" class="form-input" id="bericht-bis" value="${esc(bis)}"></div>
+      </div>
+      <div class="form-group" style="margin:0"><label class="form-label">Sparte</label>
+        <select class="form-input" id="bericht-sparte"><option value="">Alle Sparten</option><option value="winterdienst" ${sparte==='winterdienst'?'selected':''}>❄️ Winterdienst</option><option value="gebaeudereinigung" ${sparte==='gebaeudereinigung'?'selected':''}>🧹 Gebäudereinigung</option><option value="gruenpflege" ${sparte==='gruenpflege'?'selected':''}>🌿 Grünpflege</option></select>
+      </div>
+      <button class="btn btn-primary" id="btn-bericht-laden">Berichte laden</button>
+    </div></div>
+    <div class="search-wrap" style="padding:8px 0"><input class="search-input" id="bericht-search" placeholder="Adresse oder Anlage suchen…" type="search" autocomplete="off"></div>
+    <div class="card" id="bericht-results">${rows}</div>
+  </div>`;
+}
+
+async function renderTabKarte(){
+  let pos=[];
+  try{pos=await apiGet('/api/gps/aktuell')}catch(e){}
+  window._kartePos=pos;
+  const info=pos.length===0
+    ?'Keine aktiven Mitarbeiter mit GPS-Daten'
+    :pos.length+' Mitarbeiter aktiv';
+  return`<div id="map-container"></div>
+  <div style="display:flex;align-items:center;gap:12px;padding:10px 16px">
+    <span style="font-size:13px;color:var(--text-muted);flex:1">${info}</span>
+    <button class="btn-ghost" id="btn-karte-reload">↺ Aktualisieren</button>
+  </div>`;
+}
+
+async function reloadKarte(){
+  let pos=[];
+  try{pos=await apiGet('/api/gps/aktuell')}catch(e){}
+  window._kartePos=pos;
+  const map=document.getElementById('map-container')?._mapObj;
+  if(map){
+    map.eachLayer(l=>{if(l instanceof L.Marker)map.removeLayer(l)});
+    if(pos.length){
+      pos.forEach(p=>{
+        const ago=Math.round((Date.now()-new Date(p.zeitpunkt))/60000);
+        L.marker([p.lat,p.lng]).addTo(map).bindPopup(`<b>${p.mitarbeiter}</b><br>📍 ${p.anlage_name}<br><small>vor ${ago} min · ±${Math.round(p.genauigkeit||0)} m</small>`);
+      });
+      if(pos.length===1)map.setView([pos[0].lat,pos[0].lng],14);
+      else map.fitBounds(L.latLngBounds(pos.map(p=>[p.lat,p.lng])),{padding:[40,40]});
+    }
+  }
+  const info=document.querySelector('#admin-tab-content .btn-ghost')?.previousElementSibling;
+  if(info)info.textContent=pos.length===0?'Keine aktiven Mitarbeiter mit GPS-Daten':pos.length+' Mitarbeiter aktiv';
+  toast('Karte aktualisiert','ok');
+}
+
+function initAnlagenKarteIfNeeded(){
+  const el=document.getElementById('anlagen-map-container');
+  if(!el||el._mapInit||typeof L==='undefined')return;
+  el._mapInit=true;
+  const map=L.map(el).setView([47.22,9.6],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
+  const list=window._anlagenKarteList||[];
+  const withCoords=list.filter(a=>a.lat&&a.lng);
+  if(withCoords.length){
+    withCoords.forEach(a=>{
+      const zl=fZuletzt(a.zuletzt_besucht);
+      const erl=parseInt(a.zuletzt_erledigt)||0,ges=parseInt(a.zuletzt_gesamt)||0;
+      const popup=`<b>${a.name}</b><br>📍 ${a.adresse}${a.plz?', '+a.plz:''}${a.ort?' '+a.ort:''}<br>${zl?`Zuletzt: ${zl} · ${erl}/${ges} Aufg.`:'Noch kein Besuch'}<br><small style="color:#1e40af;cursor:pointer" onclick="go('anlage-detail',{anlageId:${a.id},sparte:'${pageData.sparte||'winterdienst'}'})">→ Öffnen</small>`;
+      L.marker([parseFloat(a.lat),parseFloat(a.lng)]).addTo(map).bindPopup(popup);
+    });
+    if(withCoords.length===1)map.setView([parseFloat(withCoords[0].lat),parseFloat(withCoords[0].lng)],15);
+    else map.fitBounds(L.latLngBounds(withCoords.map(a=>[parseFloat(a.lat),parseFloat(a.lng)])),{padding:[30,30]});
+  }
+}
+
+function initKarteIfNeeded(){
+  const el=document.getElementById('map-container');
+  if(!el||el._mapInit||typeof L==='undefined')return;
+  el._mapInit=true;
+  const map=L.map(el).setView([47.22,9.6],11);
+  el._mapObj=map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
+  const pos=window._kartePos||[];
+  if(pos.length){
+    const markers=pos.map(p=>{
+      const ago=Math.round((Date.now()-new Date(p.zeitpunkt))/60000);
+      return L.marker([p.lat,p.lng]).addTo(map).bindPopup(`<b>${p.mitarbeiter}</b><br>📍 ${p.anlage_name}<br><small>vor ${ago} min · ±${Math.round(p.genauigkeit||0)} m</small>`);
+    });
+    if(pos.length===1)map.setView([pos[0].lat,pos[0].lng],14);
+    else map.fitBounds(L.latLngBounds(pos.map(p=>[p.lat,p.lng])),{padding:[40,40]});
+    markers[0]?.openPopup();
+  }
+}
+
+async function renderTabTodos(){
+  let todos=[],maList=[];
+  try{[todos,maList]=await Promise.all([apiGet('/api/todos'),apiGet('/api/mitarbeiter')])}catch(e){}
+  const filter=pageData.todoFilter||'alle';
+  const list=filter==='offen'?todos.filter(t=>!t.erledigt):todos;
+  const maOptions=maList.map(m=>`<option value="${m.id}" data-name="${esc(m.name)}">${esc(m.name)}</option>`).join('');
+  const rows=list.length===0
+    ?`<tr><td colspan="7"><div class="empty" style="padding:32px"><div class="empty-icon">✅</div><div class="empty-text">Keine TODOs</div></div></td></tr>`
+    :list.map(t=>`<tr style="${t.erledigt?'opacity:.6':''}">
+        <td style="text-align:center;width:36px">
+          <input type="checkbox" ${t.erledigt?'checked':''} data-action="toggle-todo" data-id="${t.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--success)">
+        </td>
+        <td style="white-space:nowrap;color:var(--text-muted);font-size:12px">${fDate(t.erstellt_am)}</td>
+        <td><div style="font-weight:600;font-size:13px">${esc(t.anlage_name||'–')}</div><div style="font-size:12px;color:var(--text-muted)">${esc(t.adresse||'')}</div></td>
+        <td style="font-size:13px">${esc(t.mitarbeiter||'–')}</td>
+        <td style="font-size:14px;${t.erledigt?'text-decoration:line-through;color:var(--text-muted)':''}">${esc(t.beschreibung)}</td>
+        <td style="min-width:160px">
+          ${t.erledigt?`<div style="font-size:12px;color:var(--text-muted)">${(t.zuweisungen||[]).map(z=>`✓ ${esc(z.name)}`).join('<br>')||'–'}</div>`:`
+          <div style="display:flex;flex-direction:column;gap:3px">
+            ${maList.map(m=>{const assigned=(t.zuweisungen||[]).some(z=>z.id==m.id);return`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" class="todo-assign-cb" data-todo="${t.id}" data-ma-id="${m.id}" data-ma-name="${esc(m.name)}" ${assigned?'checked':''} style="width:14px;height:14px;accent-color:var(--primary)">${esc(m.name)}</label>`}).join('')}
+          </div>`}
+        </td>
+        <td><div class="tbl-actions"><button class="tbl-btn danger" data-action="del-todo" data-id="${t.id}">🗑️</button></div>${t.erledigt?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px">${esc(t.erledigt_von||'')}</div>`:''}</td>
+      </tr>`).join('');
+  return`<div class="admin-wrap">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <button class="btn-ghost" id="todo-filter-alle" style="${filter==='alle'?'background:var(--primary);color:white;border-color:var(--primary)':''}">Alle (${todos.length})</button>
+      <button class="btn-ghost" id="todo-filter-offen" style="${filter==='offen'?'background:var(--primary);color:white;border-color:var(--primary)':''}">Offen (${todos.filter(t=>!t.erledigt).length})</button>
+    </div>
+    <div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th></th><th>Datum</th><th>Anlage</th><th>Gemeldet von</th><th>Meldung</th><th>Zugewiesen an</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+
+// ── MODALS ──
+function showModal(html){
+  const c=document.getElementById('modal-container');
+  c.innerHTML=`<div class="modal-bg" id="modal-bg"><div class="modal">${html}</div></div>`;
+  c.querySelector('#modal-bg').addEventListener('click',e=>{if(e.target.id==='modal-bg')closeModal()});
+  bindModalEvents();
+}
+function closeModal(){document.getElementById('modal-container').innerHTML=''}
+
+function modalAnlage(a=null){
+  _draftAufg=[];_draftCtr=0;
+  const wChk=a?a.in_winterdienst:true;
+  const gChk=a?a.in_gebaeudereinigung:false;
+  const grChk=a?a.in_gruenpflege:false;
+  showModal(`
+    <button class="modal-close" id="modal-close">×</button>
+    <div class="modal-title">${a?'Anlage bearbeiten':'Neue Anlage'}</div>
+    <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="m-name" value="${esc(a?.name||'')}" placeholder="z.B. Wohnpark Muster"></div>
+    <div class="form-group"><label class="form-label">Adresse *</label><input class="form-input" id="m-adresse" value="${esc(a?.adresse||'')}" placeholder="Musterstraße 1"></div>
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px">
+      <div class="form-group"><label class="form-label">PLZ</label><input class="form-input" id="m-plz" value="${esc(a?.plz||'')}"></div>
+      <div class="form-group"><label class="form-label">Ort</label><input class="form-input" id="m-ort" value="${esc(a?.ort||'')}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label class="form-label">Lat</label><input class="form-input" id="m-lat" value="${esc(a?.lat||'')}" placeholder="47.2372"></div>
+      <div class="form-group"><label class="form-label">Lng</label><input class="form-input" id="m-lng" value="${esc(a?.lng||'')}" placeholder="9.5966"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Infotext</label><textarea class="form-input" id="m-info" rows="3">${esc(a?.info_text||'')}</textarea></div>
+    <div class="form-group">
+      <label class="form-label">Sparte(n) – Mehrfachauswahl möglich</label>
+      <div class="sparte-checks">
+        <label class="sparte-check-label"><input type="checkbox" id="m-in-winter" ${wChk?'checked':''}> ❄️ Winterdienst</label>
+        <label class="sparte-check-label"><input type="checkbox" id="m-in-gebaeude" ${gChk?'checked':''}> 🧹 Gebäudereinigung</label>
+        <label class="sparte-check-label"><input type="checkbox" id="m-in-gruen" ${grChk?'checked':''}> 🌿 Grünpflege</label>
+      </div>
+    </div>
+
+    <div id="aufg-winter-section" ${wChk?'':'style="display:none"'}>
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;padding:10px 0 5px">❄️ Winterdienst – Lagerbild</div>
+      <div class="form-group"><input type="file" class="form-input" id="m-bild-winter" accept="image/*">${a?.bild_url_winter?`<div style="font-size:12px;color:var(--success);margin-top:4px">✓ Bild vorhanden</div>`:''}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;padding:4px 0 5px">❄️ Winterdienst – Aufgaben</div>
+      <div id="aufg-winter-list" style="border:1px solid var(--border);border-radius:8px;min-height:4px;padding:0 12px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input class="form-input" id="aufg-winter-input" placeholder="Aufgabe eingeben…" style="flex:1">
+        <button class="btn-icon" id="btn-add-winter-aufg" type="button">+ Hinzufügen</button>
+      </div>
+    </div>
+
+    <div id="aufg-gebaeude-section" ${gChk?'':'style="display:none"'}>
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;padding:10px 0 5px">🧹 Gebäudereinigung – Lagerbild</div>
+      <div class="form-group"><input type="file" class="form-input" id="m-bild-gebaeude" accept="image/*">${a?.bild_url_gebaeudereinigung?`<div style="font-size:12px;color:var(--success);margin-top:4px">✓ Bild vorhanden</div>`:''}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;padding:4px 0 5px">🧹 Gebäudereinigung – Aufgaben</div>
+      <div id="aufg-gebaeude-list" style="border:1px solid var(--border);border-radius:8px;min-height:4px;padding:0 12px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input class="form-input" id="aufg-gebaeude-input" placeholder="Aufgabe eingeben…" style="flex:1">
+        <button class="btn-icon" id="btn-add-gebaeude-aufg" type="button">+ Hinzufügen</button>
+      </div>
+    </div>
+
+    <div id="aufg-gruen-section" ${grChk?'':'style="display:none"'}>
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;padding:10px 0 5px">🌿 Grünpflege – Lagerbild</div>
+      <div class="form-group"><input type="file" class="form-input" id="m-bild-gruen" accept="image/*">${a?.bild_url_gruenpflege?`<div style="font-size:12px;color:var(--success);margin-top:4px">✓ Bild vorhanden</div>`:''}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;padding:4px 0 5px">🌿 Grünpflege – Aufgaben</div>
+      <div id="aufg-gruen-list" style="border:1px solid var(--border);border-radius:8px;min-height:4px;padding:0 12px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input class="form-input" id="aufg-gruen-input" placeholder="Aufgabe eingeben…" style="flex:1">
+        <button class="btn-icon" id="btn-add-gruen-aufg" type="button">+ Hinzufügen</button>
+      </div>
+    </div>
+
+    <div style="margin-top:6px">
+      <button class="btn btn-primary" id="btn-save-anlage" data-id="${a?.id||''}">
+        ${a?'Speichern':'Anlage anlegen'}
+      </button>
+    </div>`);
+  if(a?.id) loadModalAufgaben(a.id);
+}
+
+async function loadModalAufgaben(anlageId){
+  try{
+    const list=await apiGet(`/api/aufgaben/anlage/${anlageId}`);
+    list.forEach(auf=>{
+      const sec=auf.sparte==='gebaeudereinigung'?'gebaeude':auf.sparte==='gruenpflege'?'gruen':'winter';
+      const el=document.getElementById(`aufg-${sec}-list`);
+      if(el) el.appendChild(aufgabeModalRow(auf));
+    });
+  }catch(e){}
+}
+
+function aufgabeModalRow(auf){
+  const d=document.createElement('div');
+  d.style.cssText='display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)';
+  d.innerHTML=`<span style="flex:1;font-size:14px">${esc(auf.bezeichnung)}</span><button class="tbl-btn danger" type="button" style="flex-shrink:0">×</button>`;
+  d.querySelector('button').addEventListener('click',async()=>{
+    if(auf.id){
+      if(!confirm('Aufgabe löschen?'))return;
+      try{await apiDel(`/api/aufgaben/${auf.id}`);d.remove();toast('Gelöscht','ok')}
+      catch(e){toast(e.message,'err')}
+    }else{
+      _draftAufg=_draftAufg.filter(x=>x.draftId!==auf.draftId);
+      d.remove();
+    }
+  });
+  return d;
+}
+
+function aufgabeRowEl(a){
+  const d=document.createElement('div');
+  d.setAttribute('data-row','');d.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)';
+  d.innerHTML=`<span style="flex:1;font-size:14px">${esc(a.bezeichnung)}</span><button class="tbl-btn danger" data-action="del-aufgabe" data-id="${a.id}">×</button>`;
+  d.querySelector('[data-action]').addEventListener('click',()=>delAuf(a.id,d));
+  return d;
+}
+async function delAuf(id,el){
+  if(!confirm('Aufgabe löschen?'))return;
+  try{await apiDel(`/api/aufgaben/${id}`);el?.remove();toast('Gelöscht','ok')}catch(e){toast(e.message,'err')}
+}
+
+function modalAufgaben(anlageId,name){
+  showModal(`
+    <button class="modal-close" id="modal-close">×</button>
+    <div class="modal-title">Aufgaben: ${esc(name)}</div>
+    <div id="aufgaben-liste" style="margin-bottom:16px"><div class="loading"><div class="spinner"></div></div></div>
+    <div style="display:flex;gap:8px">
+      <input class="form-input" id="neue-aufgabe-input" placeholder="Neue Aufgabe…" style="flex:1">
+      <button class="btn-icon" id="btn-add-aufgabe" data-anlage="${anlageId}">+ Hinzufügen</button>
+    </div>`);
+  apiGet(`/api/aufgaben/anlage/${anlageId}`).then(list=>{
+    const el=document.getElementById('aufgaben-liste');if(!el)return;
+    if(list.length===0){el.innerHTML='<div style="color:var(--text-muted);font-size:14px;padding:8px 0">Noch keine Aufgaben</div>';return}
+    el.innerHTML='';list.forEach(a=>el.appendChild(aufgabeRowEl(a)));
+  });
+}
+
+function modalMitarbeiter(m=null){
+  const zW=m?.zeige_winterdienst!==false;
+  const zG=m?.zeige_gebaeudereinigung!==false;
+  const zGr=m?.zeige_gruenpflege!==false;
+  showModal(`
+    <button class="modal-close" id="modal-close">×</button>
+    <div class="modal-title">${m?'Mitarbeiter bearbeiten':'Neuer Mitarbeiter'}</div>
+    <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="m-ma-name" value="${esc(m?.name||'')}" placeholder="Vorname Nachname"></div>
+    <div class="form-group"><label class="form-label">PIN</label><input class="form-input pin-input" id="m-ma-pin" type="password" inputmode="numeric" value="${esc(m?.pin||'')}" placeholder="••••" maxlength="10"></div>
+    <div class="form-group">
+      <label class="form-label">Rolle</label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+          <input type="checkbox" id="m-ma-admin" ${m?.ist_admin?'checked':''} style="width:18px;height:18px"> 👑 Admin (vollständiger Zugriff inkl. Push-Log)
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+          <input type="checkbox" id="m-ma-chef" ${m?.ist_chef?'checked':''} style="width:18px;height:18px"> ⭐ Chef (Berichte, Anlagen, Mitarbeiter, TODOs – ohne Push-Log)
+        </label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sichtbare Sparten</label>
+      <div class="sparte-checks">
+        <label class="sparte-check-label"><input type="checkbox" id="m-ma-zw" ${zW?'checked':''}> ❄️ Winterdienst</label>
+        <label class="sparte-check-label"><input type="checkbox" id="m-ma-zg" ${zG?'checked':''}> 🧹 Gebäudereinigung</label>
+        <label class="sparte-check-label"><input type="checkbox" id="m-ma-zgr" ${zGr?'checked':''}> 🌿 Grünpflege</label>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-save-ma" data-id="${m?.id||''}">${m?'Speichern':'Anlegen'}</button>`);
+}
+
+// ── GPS & TIMER ──
+let _speedHighCount=0;
+async function autoEndeEinsatz(grund){
+  if(!einsatzAkt)return;
+  try{
+    await flushGPS();
+    await apiPut(`/api/einsaetze/${einsatzAkt.id}/ende`,{notiz:`Auto-Abmeldung: ${grund}`});
+    stopGPS();stopTimer();
+    einsatzAkt=null;
+    localStorage.removeItem('solano_einsatz');
+    localStorage.removeItem('solano_gps_batch');
+    toast('Auto-Abmeldung: '+grund,'info');
+    go('home');
+  }catch(e){toast('Auto-Abmeldung fehlgeschlagen','err')}
+}
+function startGPS(){
+  if(!navigator.geolocation){updGPS('error','GPS nicht verfügbar');return}
+  _speedHighCount=0;
+  gpsWatcher=navigator.geolocation.watchPosition(pos=>{
+    // Auto-Abmeldung bei >8 km/h (2.22 m/s) – 2 aufeinanderfolgende Messungen
+    if(pos.coords.speed!=null&&pos.coords.speed>2.22){
+      _speedHighCount++;
+      if(_speedHighCount>=2){autoEndeEinsatz('Fahrt erkannt (>8 km/h)');return}
+    }else{_speedHighCount=0}
+    updGPS('active',`GPS aktiv · ±${Math.round(pos.coords.accuracy||0)} m`);
+    gpsBatch.push({einsatz_id:einsatzAkt.id,lat:pos.coords.latitude,lng:pos.coords.longitude,genauigkeit:pos.coords.accuracy,zeitpunkt:new Date().toISOString()});
+    localStorage.setItem('solano_gps_batch',JSON.stringify(gpsBatch));
+    if(gpsBatch.length>=3)flushGPS();
+  },err=>{
+    if(err.code===1){
+      const needsHttps=location.protocol!=='https:'&&location.hostname!=='localhost';
+      updGPS('error',needsHttps?'GPS braucht HTTPS – bitte https:// verwenden':'GPS verweigert – iOS: Einstellungen > Datenschutz > Ortungsdienste');
+    }else if(err.code===2){updGPS('error','GPS Signal nicht verfügbar')}
+    else{updGPS('error','GPS Timeout – bitte warten')}
+  },{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
+}
+function updGPS(s,t){const d=document.getElementById('gps-dot'),x=document.getElementById('gps-text');if(d)d.className='gps-dot'+(s==='active'?' active':s==='error'?' error':'');if(x)x.textContent=t}
+async function flushGPS(){
+  if(!gpsBatch.length||!einsatzAkt)return;
+  const b=[...gpsBatch];gpsBatch=[];localStorage.setItem('solano_gps_batch','[]');
+  try{await apiPost('/api/gps/batch',{punkte:b})}catch(e){gpsBatch=[...b,...gpsBatch];localStorage.setItem('solano_gps_batch',JSON.stringify(gpsBatch))}
+}
+function stopGPS(){if(gpsWatcher!==null){navigator.geolocation.clearWatch(gpsWatcher);gpsWatcher=null}}
+function startTimer(startZeit){
+  clearInterval(timerIv);
+  const upd=()=>{const el=document.getElementById('timer-display');if(el)el.textContent=formatDur(startZeit,new Date())};
+  upd();timerIv=setInterval(upd,1000);
+}
+function stopTimer(){clearInterval(timerIv);timerIv=null}
+
+// ── FOTO ──
+async function handleFoto(file){
+  if(!file||!einsatzAkt)return;
+  const fd=new FormData();fd.append('foto',file);
+  try{
+    const foto=await apiUp(`/api/fotos/${einsatzAkt.id}`,fd);
+    const grid=document.getElementById('foto-grid');
+    if(grid){const d=document.createElement('div');d.className='photo-thumb';d.innerHTML=`<img src="${esc(foto.foto_url)}" alt=""><button class="photo-del" data-fotoid="${foto.id}">×</button>`;d.querySelector('.photo-del').addEventListener('click',()=>delFoto(foto.id,d));grid.prepend(d)}
+    toast('Foto gespeichert','ok');
+  }catch(e){toast(e.message,'err')}
+}
+async function delFoto(id,el){
+  if(!confirm('Foto löschen?'))return;
+  try{await apiDel(`/api/fotos/${id}`);el?.remove();toast('Gelöscht','ok')}catch(e){toast(e.message,'err')}
+}
+
+function doLogout(){stopGPS();stopTimer();user=null;einsatzAkt=null;localStorage.removeItem('solano_user');localStorage.removeItem('solano_einsatz');go('login')}
+
+// ── PUSH NOTIFICATIONS ──
+async function registerPushSubscription(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+  try{
+    const reg=await navigator.serviceWorker.register('/sw.js');
+    const {publicKey}=await apiGet('/api/push/vapid-public-key');
+    const sub=await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:urlBase64ToUint8Array(publicKey)
+    });
+    await apiPost('/api/push/subscribe',{subscription:sub});
+  }catch(e){console.log('Push-Subscription fehlgeschlagen:',e.message)}
+}
+function urlBase64ToUint8Array(b64){
+  const p='='.repeat((4-b64.length%4)%4);
+  const b=(b64+p).replace(/-/g,'+').replace(/_/g,'/');
+  const r=atob(b);return Uint8Array.from(r,c=>c.charCodeAt(0));
+}
+
+async function renderTabPush(){
+  let log=[],abonnenten=[];
+  try{[log,abonnenten]=await Promise.all([apiGet('/api/push/log'),apiGet('/api/push/abonnenten')])}catch(e){}
+  let maList=[];try{maList=await apiGet('/api/mitarbeiter')}catch(e){}
+  const logRows=log.length===0
+    ?`<tr><td colspan="5"><div class="empty" style="padding:24px"><div class="empty-icon">📭</div><div class="empty-text">Noch keine Nachrichten gesendet</div></div></td></tr>`
+    :log.map(l=>`<tr>
+        <td style="white-space:nowrap;font-size:12px;color:var(--text-muted)">${new Date(l.gesendet_am).toLocaleString('de-AT')}</td>
+        <td style="font-size:13px">${esc(l.gesendet_von)}</td>
+        <td style="font-size:13px">${esc(l.empfaenger)}</td>
+        <td style="font-size:14px">${esc(l.nachricht)}</td>
+        <td style="font-size:12px"><span style="color:var(--success)">✓${l.erfolg}</span> / <span style="color:var(--danger)">✗${l.fehler}</span></td>
+      </tr>`).join('');
+  const aboInfo=abonnenten.length===0
+    ?`<div style="font-size:13px;color:var(--text-muted)">Keine angemeldeten Geräte. Mitarbeiter müssen sich mindestens einmal über HTTPS einloggen.</div>`
+    :abonnenten.map(a=>`<span class="badge badge-green">📱 ${esc(a.mitarbeiter_name)}</span>`).join(' ');
+  const isHttps=location.protocol==='https:';
+  const httpsWarning=!isHttps?`<div class="info-box" style="background:#fff7ed;border-color:#f97316;margin-bottom:16px">⚠️ <b>HTTPS erforderlich!</b> Push-Nachrichten funktionieren nur über eine HTTPS-Verbindung. Aktuell läuft die App über HTTP. Sobald der Server mit einem SSL-Zertifikat ausgestattet ist, wird diese Funktion automatisch aktiv.</div>`:'';
+  return`<div class="admin-wrap">
+    ${httpsWarning}
+    <div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="font-weight:700;margin-bottom:12px;font-size:15px">🔔 Nachricht senden</div>
+      <div class="form-group"><label class="form-label">Empfänger</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="radio" name="push-emp" id="push-alle" value="alle" checked style="cursor:pointer"> Alle Mitarbeiter
+          </label>
+          ${maList.map(m=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="push-emp" class="push-emp-radio" value="${m.id}" style="cursor:pointer"> ${esc(m.name)}</label>`).join('')}
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Nachricht *</label>
+        <textarea class="form-input" id="push-nachricht" rows="3" placeholder="z.B. Bitte heute bis 14 Uhr in der Zentrale melden…"></textarea>
+      </div>
+      <button class="btn btn-primary" id="btn-push-senden" ${!isHttps?'title="Nur über HTTPS verfügbar"':''}>🔔 Nachricht senden</button>
+    </div></div>
+    <div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="font-weight:700;margin-bottom:8px">📱 Angemeldete Geräte (${abonnenten.length})</div>
+      ${aboInfo}
+    </div></div>
+    <div class="card"><div style="font-weight:700;padding:14px 16px 8px">📋 Versandprotokoll</div>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Zeitpunkt</th><th>Von</th><th>An</th><th>Nachricht</th><th>Status</th></tr></thead><tbody>${logRows}</tbody></table></div>
+    </div>
+  </div>`;
+}
+
+// ── DRAG & DROP SORT ──
+function bindDragSort(){
+  const container=document.getElementById('anlagen-list');
+  if(!container)return;
+  const items=()=>[...container.querySelectorAll('.list-item[data-id]')];
+  let dragged=null,saveTimer=null;
+
+  function saveOrder(){
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(async()=>{
+      const sparte=pageData.sparte||'winterdienst';
+      const reihenfolge=items().map((el,i)=>({anlage_id:parseInt(el.dataset.id),position:i}));
+      try{await apiPost('/api/anlagen/reihenfolge',{sparte,reihenfolge})}catch(e){}
+    },600);
+  }
+
+  items().forEach(item=>{
+    const handle=item.querySelector('.drag-handle');
+    if(!handle)return;
+
+    // Mouse drag
+    item.setAttribute('draggable','true');
+    item.addEventListener('dragstart',e=>{
+      if(!e.target.closest('.drag-handle')){e.preventDefault();return}
+      dragged=item;item.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+    });
+    item.addEventListener('dragend',()=>{dragged=null;item.classList.remove('dragging');document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'))});
+    item.addEventListener('dragover',e=>{
+      e.preventDefault();if(!dragged||dragged===item)return;
+      document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+      item.classList.add('drag-over');
+    });
+    item.addEventListener('drop',e=>{
+      e.preventDefault();if(!dragged||dragged===item)return;
+      item.classList.remove('drag-over');
+      const allItems=items();
+      const fromIdx=allItems.indexOf(dragged),toIdx=allItems.indexOf(item);
+      if(fromIdx<toIdx)container.insertBefore(dragged,item.nextSibling);
+      else container.insertBefore(dragged,item);
+      saveOrder();
+    });
+
+    // Touch drag (Long Press → Move)
+    let touchTimer=null,touchDrag=false,ghost=null,startY=0,offsetY=0;
+    handle.addEventListener('touchstart',e=>{
+      e.preventDefault();
+      const touch=e.touches[0];
+      startY=touch.clientY;
+      touchTimer=setTimeout(()=>{
+        touchDrag=true;
+        dragged=item;item.classList.add('dragging');
+        ghost=item.cloneNode(true);
+        ghost.style.cssText=`position:fixed;left:${item.getBoundingClientRect().left}px;top:${item.getBoundingClientRect().top}px;width:${item.offsetWidth}px;opacity:.85;z-index:999;pointer-events:none;background:white;box-shadow:0 8px 24px rgba(0,0,0,.2);border-radius:12px`;
+        document.body.appendChild(ghost);
+        offsetY=touch.clientY-item.getBoundingClientRect().top;
+      },400);
+    },{passive:false});
+    handle.addEventListener('touchmove',e=>{
+      if(touchTimer&&Math.abs(e.touches[0].clientY-startY)>5){clearTimeout(touchTimer);touchTimer=null}
+      if(!touchDrag)return;
+      e.preventDefault();
+      const touch=e.touches[0];
+      if(ghost)ghost.style.top=(touch.clientY-offsetY)+'px';
+      const el=document.elementFromPoint(touch.clientX,touch.clientY)?.closest('.list-item[data-id]');
+      if(el&&el!==dragged){
+        document.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));
+        el.classList.add('drag-over');
+      }
+    },{passive:false});
+    handle.addEventListener('touchend',e=>{
+      clearTimeout(touchTimer);touchTimer=null;
+      if(!touchDrag){touchDrag=false;dragged=null;return}
+      touchDrag=false;
+      if(ghost){ghost.remove();ghost=null}
+      const touch=e.changedTouches[0];
+      const target=document.elementFromPoint(touch.clientX,touch.clientY)?.closest('.list-item[data-id]');
+      if(target&&target!==dragged){
+        const allItems=items();
+        const fromIdx=allItems.indexOf(dragged),toIdx=allItems.indexOf(target);
+        if(fromIdx<toIdx)container.insertBefore(dragged,target.nextSibling);
+        else container.insertBefore(dragged,target);
+        saveOrder();
+      }
+      if(dragged)dragged.classList.remove('dragging');
+      document.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));
+      dragged=null;
+    });
+  });
+}
+
+// ── EVENTS ──
+function o(id,ev,fn){const el=document.getElementById(id);if(el)el.addEventListener(ev,fn)}
+
+function bindEvents(){
+  // Sidebar
+  o('nav-home','click',()=>go('home'));
+  o('nav-winter','click',()=>go('anlagen',{sparte:'winterdienst'}));
+  o('nav-gebaeude','click',()=>go('anlagen',{sparte:'gebaeudereinigung'}));
+  o('nav-einsatz','click',()=>go('einsatz'));
+  o('nav-admin','click',()=>go('admin',{adminTab:'anlagen'}));
+  o('nav-logout','click',doLogout);
+
+  // Login
+  o('btn-login','click',async()=>{
+    const pin=document.getElementById('pin-input')?.value?.trim();
+    if(!pin){toast('PIN eingeben','err');return}
+    try{
+      user=await apiPost('/api/mitarbeiter/login',{pin});
+      localStorage.setItem('solano_user',JSON.stringify(user));
+      registerPushSubscription();
+      go('home');
+    }catch(e){toast(e.message,'err')}
+  });
+  o('pin-input','keydown',e=>{if(e.key==='Enter')document.getElementById('btn-login')?.click()});
+
+  // Meine TODOs abhaken (Startseite)
+  document.querySelectorAll('.mein-todo-check').forEach(cb=>{
+    cb.addEventListener('change',async()=>{
+      const id=cb.dataset.id;
+      try{
+        await apiPut(`/api/todos/${id}`,{});
+        const row=cb.closest('div[style*="border-bottom"]');
+        if(row){row.style.opacity='.4';row.style.textDecoration='line-through'}
+        toast('Erledigt ✓','ok');
+        // Kurz warten dann neu laden
+        setTimeout(()=>go('home'),1200);
+      }catch(e){cb.checked=false;toast(e.message,'err')}
+    });
+  });
+
+  // Home
+  o('btn-logout','click',doLogout);
+  o('btn-resume','click',()=>go('einsatz'));
+  o('card-winter','click',()=>go('anlagen',{sparte:'winterdienst'}));
+  o('card-gebaeude','click',()=>go('anlagen',{sparte:'gebaeudereinigung'}));
+  o('card-gruenpflege','click',()=>go('anlagen',{sparte:'gruenpflege'}));
+  o('nav-gruenpflege','click',()=>go('anlagen',{sparte:'gruenpflege'}));
+  o('btn-open-todos','click',()=>go('admin',{adminTab:'todos'}));
+  o('nav-admin-home','click',()=>go('admin',{adminTab:'anlagen'}));
+
+  // Back
+  o('btn-back','click',()=>{
+    if(page==='anlage-detail')go('anlagen',{sparte:pageData.sparte||'winterdienst'});
+    else if(page==='einsatz'&&einsatzAkt)go('anlage-detail',{anlageId:einsatzAkt.anlage_id,sparte:einsatzAkt.sparte||'winterdienst'});
+    else go('home');
+  });
+
+  // Karten-Toggle
+  o('btn-toggle-map','click',()=>{pageData.mapView=!pageData.mapView;go('anlagen',{...pageData})});
+
+  // Suche
+  o('search-input','input',e=>{
+    const q=e.target.value.toLowerCase();
+    document.querySelectorAll('#anlagen-list .list-item').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q)?'':'none'});
+  });
+
+  // Anlagen Liste — Klick auf Zeile (nicht auf Drag-Handle)
+  document.querySelectorAll('#anlagen-list .list-item').forEach(r=>{
+    r.addEventListener('click',e=>{
+      if(e.target.closest('.drag-handle'))return;
+      go('anlage-detail',{anlageId:r.dataset.id,sparte:pageData.sparte});
+    });
+  });
+
+  // Drag & Drop Reihenfolge
+  bindDragSort();
+
+  // Anlagen-Karte für Mitarbeiter
+  initAnlagenKarteIfNeeded();
+
+  // Anlage Detail
+  o('btn-nav','click',()=>{const a=pageData.anlage;if(a)openNav(a.lat,a.lng,`${a.adresse} ${a.plz||''} ${a.ort||''}`)});
+  o('btn-einsatz','click',async()=>{
+    const a=pageData.anlage;if(!a)return;
+    if(einsatzAkt&&einsatzAkt.anlage_id==a.id){go('einsatz');return}
+    // GPS-Radius-Check (nur wenn Anlage Koordinaten hat)
+    let gps_check_ok=null;
+    if(a.lat&&a.lng&&navigator.geolocation){
+      try{
+        const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:true,timeout:8000}));
+        const dist=haversineDist(pos.coords.latitude,pos.coords.longitude,parseFloat(a.lat),parseFloat(a.lng));
+        if(dist>500){toast(`Zu weit entfernt (${Math.round(dist)} m). Bitte vor Ort sein.`,'err');return}
+        gps_check_ok=true;
+      }catch(e){
+        // GPS nicht verfügbar → ohne Check starten
+        gps_check_ok=null;
+      }
+    }
+    try{const e=await apiPost('/api/einsaetze/start',{anlage_id:a.id,sparte:pageData.sparte||'winterdienst',gps_check_ok});einsatzAkt={...e,anlage_name:a.name,anlage_id:a.id};localStorage.setItem('solano_einsatz',JSON.stringify(einsatzAkt));go('einsatz')}
+    catch(err){toast(err.message,'err')}
+  });
+
+  // Einsatz
+  if(page==='einsatz'&&einsatzAkt){startTimer(einsatzAkt.start_zeit);startGPS()}
+  o('btn-end-einsatz','click',async()=>{
+    if(!confirm('Einsatz wirklich beenden?'))return;
+    const notiz=document.getElementById('notiz-input')?.value||'';
+    try{await flushGPS();await apiPut(`/api/einsaetze/${einsatzAkt.id}/ende`,{notiz});stopGPS();stopTimer();einsatzAkt=null;localStorage.removeItem('solano_einsatz');localStorage.removeItem('solano_gps_batch');toast('Einsatz beendet','ok');go('home')}
+    catch(e){toast(e.message,'err')}
+  });
+
+  // Checklist
+  document.querySelectorAll('.check-item[data-aufgabe]').forEach(item=>{
+    item.addEventListener('click',async()=>{
+      const aid=item.dataset.aufgabe;
+      try{
+        const r=await apiPost(`/api/einsaetze/${einsatzAkt.id}/aufgabe`,{aufgabe_id:aid});
+        const box=item.querySelector('.check-box'),lbl=item.querySelector('.check-label');
+        if(r.erledigt){box.className='check-box done';box.textContent='✓';lbl.className='check-label done'}
+        else{box.className='check-box';box.textContent='';lbl.className='check-label'}
+        const done=document.querySelectorAll('.check-box.done').length,total=document.querySelectorAll('.check-item[data-aufgabe]').length,pct=total?Math.round(done/total*100):0;
+        const bar=document.getElementById('progress-bar');if(bar)bar.style.width=pct+'%';
+        const cnt=document.getElementById('progress-count');if(cnt)cnt.textContent=`${done}/${total}`;
+      }catch(e){toast(e.message,'err')}
+    });
+  });
+
+  // TODOs Einsatz
+  o('btn-add-todo','click',async()=>{
+    const bez=document.getElementById('todo-input')?.value?.trim();
+    if(!bez)return;
+    try{
+      const t=await apiPost('/api/todos',{anlage_id:einsatzAkt?.anlage_id,einsatz_id:einsatzAkt?.id,beschreibung:bez});
+      document.getElementById('todo-input').value='';
+      const list=document.getElementById('todo-list');
+      if(list){const d=document.createElement('div');d.style.cssText='padding:6px 0;font-size:13px;color:var(--success);border-bottom:1px solid var(--border)';d.textContent='✓ '+t.beschreibung;list.prepend(d)}
+      toast('Meldung gespeichert','ok');
+    }catch(e){toast(e.message,'err')}
+  });
+  o('todo-input','keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('btn-add-todo')?.click()}});
+
+  // Fotos Einsatz
+  o('foto-input','change',e=>handleFoto(e.target.files[0]));
+  o('galerie-input','change',e=>handleFoto(e.target.files[0]));
+  document.querySelectorAll('.photo-del').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();delFoto(btn.dataset.fotoid,btn.closest('.photo-thumb'))}));
+
+  // Admin Tabs
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      pageData.adminTab=btn.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+      const c=document.getElementById('admin-tab-content');
+      if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTab(btn.dataset.tab);bindAdminEvents();initKarteIfNeeded()}
+    });
+  });
+
+  // Admin buttons (auch in bindAdminEvents für Tab-Wechsel)
+  o('btn-new-anlage','click',()=>modalAnlage());
+  o('btn-new-ma','click',()=>modalMitarbeiter());
+
+  bindAdminEvents();
+  initKarteIfNeeded();
+  initAnlagenKarteIfNeeded();
+}
+
+function bindAdminEvents(){
+  const na=document.getElementById('btn-new-anlage');
+  if(na&&!na._bound){na._bound=true;na.addEventListener('click',()=>modalAnlage())}
+  const nm=document.getElementById('btn-new-ma');
+  if(nm&&!nm._bound){nm._bound=true;nm.addEventListener('click',()=>modalMitarbeiter())}
+  const tfa=document.getElementById('todo-filter-alle');
+  if(tfa&&!tfa._bound){tfa._bound=true;tfa.addEventListener('click',async()=>{pageData.todoFilter='alle';const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTabTodos();bindAdminEvents()}})}
+  const tfo=document.getElementById('todo-filter-offen');
+  if(tfo&&!tfo._bound){tfo._bound=true;tfo.addEventListener('click',async()=>{pageData.todoFilter='offen';const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTabTodos();bindAdminEvents()}})}
+  const bl=document.getElementById('btn-bericht-laden');
+  if(bl&&!bl._bound){bl._bound=true;bl.addEventListener('click',async()=>{
+    pageData.berichtVon=document.getElementById('bericht-von')?.value||'';
+    pageData.berichtBis=document.getElementById('bericht-bis')?.value||'';
+    pageData.berichtSparte=document.getElementById('bericht-sparte')?.value||'';
+    const c=document.getElementById('admin-tab-content');
+    if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTabBerichte();bindAdminEvents()}
+  })}
+  const bs=document.getElementById('bericht-search');
+  if(bs&&!bs._bound){bs._bound=true;bs.addEventListener('input',e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('#bericht-results .report-row').forEach(r=>r.style.display=!q||r.dataset.search?.includes(q)?'':'none')})}
+  const kr=document.getElementById('btn-karte-reload');
+  if(kr&&!kr._bound){kr._bound=true;kr.addEventListener('click',reloadKarte)}
+  // Multi-Assign TODO Checkboxen
+  document.querySelectorAll('.todo-assign-cb').forEach(cb=>{
+    if(cb._b)return;cb._b=true;
+    cb.addEventListener('change',async()=>{
+      const todoId=cb.dataset.todo;
+      // Alle aktuell gesetzten Checkboxen für dieses TODO
+      const zuweisungen=[...document.querySelectorAll(`.todo-assign-cb[data-todo="${todoId}"]`)]
+        .filter(c=>c.checked)
+        .map(c=>({id:parseInt(c.dataset.maId),name:c.dataset.maName}));
+      try{
+        await apiPut(`/api/todos/${todoId}/zuweisen`,{zuweisungen});
+        const names=zuweisungen.map(z=>z.name).join(', ');
+        toast(names?`Zugewiesen: ${names}`:'Zuweisung entfernt','ok');
+      }catch(e){toast(e.message,'err')}
+    });
+  });
+
+  // Push senden
+  const ps=document.getElementById('btn-push-senden');
+  if(ps&&!ps._bound){ps._bound=true;ps.addEventListener('click',async()=>{
+    const nachricht=document.getElementById('push-nachricht')?.value?.trim();
+    if(!nachricht){toast('Nachricht eingeben','err');return}
+    const alleRadio=document.getElementById('push-alle');
+    let mitarbeiter_ids=[];
+    if(!alleRadio?.checked){
+      const sel=document.querySelector('input[name="push-emp"]:checked');
+      if(sel&&sel.value!=='alle')mitarbeiter_ids=[parseInt(sel.value)];
+    }
+    try{
+      const r=await apiPost('/api/push/senden',{nachricht,mitarbeiter_ids});
+      toast(`Gesendet: ${r.erfolg} ✓, ${r.fehler} ✗`,'ok');
+      document.getElementById('push-nachricht').value='';
+      reloadTab();
+    }catch(e){toast(e.message,'err')}
+  })}
+  document.querySelectorAll('[data-action]').forEach(btn=>{
+    if(btn._b)return;btn._b=true;
+    btn.addEventListener('click',async()=>{
+      const{action,id,name,pin}=btn.dataset;
+      if(action==='del-anlage'){
+        if(!confirm('Anlage löschen?'))return;
+        try{await apiDel(`/api/anlagen/${id}`);toast('Gelöscht','ok');reloadTab()}catch(e){toast(e.message,'err')}
+      }else if(action==='edit-anlage'){
+        try{const a=await apiGet(`/api/anlagen/${id}`);modalAnlage(a)}catch(e){toast(e.message,'err')}
+      }else if(action==='aufgaben'){
+        modalAufgaben(id,name);
+      }else if(action==='del-ma'){
+        if(!confirm('Mitarbeiter löschen?'))return;
+        try{await apiDel(`/api/mitarbeiter/${id}`);toast('Gelöscht','ok');reloadTab()}catch(e){toast(e.message,'err')}
+      }else if(action==='edit-ma'){
+        modalMitarbeiter({id,name,pin,ist_admin:btn.dataset.admin==='true',ist_chef:btn.dataset.chef==='true',zeige_winterdienst:btn.dataset.zw!=='false',zeige_gebaeudereinigung:btn.dataset.zg!=='false',zeige_gruenpflege:btn.dataset.zgr!=='false'});
+      }else if(action==='toggle-todo'){
+        try{
+          await apiPut(`/api/todos/${id}`,{});
+          toast('TODO aktualisiert','ok');
+          reloadTab();
+        }catch(e){toast(e.message,'err')}
+      }else if(action==='del-todo'){
+        if(!confirm('TODO wirklich löschen?'))return;
+        try{
+          await apiDel(`/api/todos/${id}`);
+          toast('Gelöscht','ok');
+          reloadTab();
+        }catch(e){toast(e.message,'err')}
+      }else if(action==='del-bericht'){
+        if(!confirm('Bericht wirklich löschen? (Fotos, GPS-Daten und TODOs werden ebenfalls gelöscht)'))return;
+        try{
+          await apiDel(`/api/einsaetze/${id}`);
+          toast('Bericht gelöscht','ok');
+          const row=btn.closest('.report-row');if(row)row.remove();
+        }catch(e){toast(e.message,'err')}
+      }else if(action==='toggle-unerledigt'){
+        const c=document.getElementById(`unerledigt-${id}`);if(!c)return;
+        if(c.style.display==='none'||!c.style.display){
+          c.style.display='block';btn.textContent='⚠️ Fehlende ausblenden';
+          if(!c.dataset.loaded){
+            c.innerHTML='<span style="color:var(--text-muted);font-size:13px">Laden…</span>';
+            try{
+              const list=await apiGet(`/api/einsaetze/${id}/unerledigt`);c.dataset.loaded='true';
+              c.innerHTML=list.length===0
+                ?'<span style="color:var(--success);font-size:13px">✅ Alle Aufgaben erledigt</span>'
+                :`<div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">Nicht erledigt (${list.length}):</div>`+list.map(a=>`<div style="font-size:13px;color:var(--danger);padding:2px 0">✗ ${esc(a.bezeichnung)}</div>`).join('');
+            }catch(e){c.innerHTML=`<span style="color:var(--danger);font-size:13px">${esc(e.message)}</span>`}
+          }
+        }else{c.style.display='none';btn.textContent='⚠️ Fehlende Aufgaben'}
+      }else if(action==='toggle-fotos'){
+        const c=document.getElementById(`fotos-${id}`);if(!c)return;
+        if(c.style.display==='none'||!c.style.display){
+          c.style.display='flex';btn.textContent='📷 Fotos verbergen';
+          if(!c.dataset.loaded){
+            c.innerHTML='<span style="color:var(--text-muted);font-size:13px">Laden…</span>';
+            try{
+              const list=await apiGet(`/api/fotos/${id}`);c.dataset.loaded='true';
+              c.innerHTML=list.length===0?'<span style="color:var(--text-muted);font-size:13px">Keine Fotos</span>':list.map(f=>`<a href="${esc(f.foto_url)}" target="_blank"><img class="report-foto-thumb" src="${esc(f.foto_url)}" alt="Foto" title="${esc(f.beschreibung||'')}"></a>`).join('');
+            }catch(e){c.innerHTML=`<span style="color:var(--danger);font-size:13px">${esc(e.message)}</span>`}
+          }
+        }else{c.style.display='none';btn.textContent='📷 Fotos anzeigen'}
+      }
+    });
+  });
+}
+
+function bindModalEvents(){
+  o('modal-close','click',closeModal);
+  o('btn-save-anlage','click',async()=>{
+    const id=document.getElementById('btn-save-anlage')?.dataset.id;
+    const body={
+      name:document.getElementById('m-name')?.value?.trim(),
+      adresse:document.getElementById('m-adresse')?.value?.trim(),
+      plz:document.getElementById('m-plz')?.value?.trim(),
+      ort:document.getElementById('m-ort')?.value?.trim(),
+      lat:document.getElementById('m-lat')?.value?.trim()||null,
+      lng:document.getElementById('m-lng')?.value?.trim()||null,
+      info_text:document.getElementById('m-info')?.value?.trim(),
+      in_winterdienst:document.getElementById('m-in-winter')?.checked||false,
+      in_gebaeudereinigung:document.getElementById('m-in-gebaeude')?.checked||false,
+      in_gruenpflege:document.getElementById('m-in-gruen')?.checked||false,
+    };
+    if(!body.name||!body.adresse){toast('Name und Adresse erforderlich','err');return}
+    try{
+      let anlage;
+      if(id){anlage=await apiPut(`/api/anlagen/${id}`,body)}else{anlage=await apiPost('/api/anlagen',body)}
+      for(const [key,sparte] of [['m-bild-winter','winterdienst'],['m-bild-gebaeude','gebaeudereinigung'],['m-bild-gruen','gruenpflege']]){
+        const f=document.getElementById(key)?.files[0];
+        if(f&&anlage.id){const fd=new FormData();fd.append('bild',f);await apiUp(`/api/anlagen/${anlage.id}/bild?sparte=${sparte}`,fd)}
+      }
+      if(!id&&_draftAufg.length){
+        for(const d of _draftAufg){try{await apiPost('/api/aufgaben',{anlage_id:anlage.id,bezeichnung:d.bezeichnung,sparte:d.sparte})}catch(e){}}
+        _draftAufg=[];
+      }
+      closeModal();toast(id?'Gespeichert':'Anlage angelegt','ok');reloadTab();
+    }catch(e){toast(e.message,'err')}
+  });
+  o('btn-save-ma','click',async()=>{
+    const id=document.getElementById('btn-save-ma')?.dataset.id;
+    const body={
+      name:document.getElementById('m-ma-name')?.value?.trim(),
+      pin:document.getElementById('m-ma-pin')?.value?.trim(),
+      ist_admin:document.getElementById('m-ma-admin')?.checked||false,
+      ist_chef:document.getElementById('m-ma-chef')?.checked||false,
+      aktiv:true,
+      zeige_winterdienst:document.getElementById('m-ma-zw')?.checked!==false,
+      zeige_gebaeudereinigung:document.getElementById('m-ma-zg')?.checked!==false,
+      zeige_gruenpflege:document.getElementById('m-ma-zgr')?.checked!==false,
+    };
+    if(!body.name||!body.pin){toast('Name und PIN erforderlich','err');return}
+    try{if(id){await apiPut(`/api/mitarbeiter/${id}`,body)}else{await apiPost('/api/mitarbeiter',body)};closeModal();toast(id?'Gespeichert':'Angelegt','ok');reloadTab()}
+    catch(e){toast(e.message,'err')}
+  });
+  o('btn-add-aufgabe','click',async()=>{
+    const anlageId=document.getElementById('btn-add-aufgabe')?.dataset.anlage;
+    const bez=document.getElementById('neue-aufgabe-input')?.value?.trim();
+    if(!bez)return;
+    try{
+      const a=await apiPost('/api/aufgaben',{anlage_id:anlageId,bezeichnung:bez});
+      document.getElementById('neue-aufgabe-input').value='';
+      const liste=document.getElementById('aufgaben-liste');
+      if(liste)liste.appendChild(aufgabeRowEl(a));
+      toast('Aufgabe hinzugefügt','ok');
+    }catch(e){toast(e.message,'err')}
+  });
+
+  // Sparte-Checkboxen: Aufgaben-Sektionen ein-/ausblenden
+  o('m-in-winter','change',e=>{const s=document.getElementById('aufg-winter-section');if(s)s.style.display=e.target.checked?'':'none'});
+  o('m-in-gebaeude','change',e=>{const s=document.getElementById('aufg-gebaeude-section');if(s)s.style.display=e.target.checked?'':'none'});
+  o('m-in-gruen','change',e=>{const s=document.getElementById('aufg-gruen-section');if(s)s.style.display=e.target.checked?'':'none'});
+
+  // Aufgaben inline in Modal hinzufügen
+  function addAufgabeToModal(sparte){
+    const key=sparte==='gebaeudereinigung'?'gebaeude':sparte==='gruenpflege'?'gruen':'winter';
+    const inp=document.getElementById(`aufg-${key}-input`);
+    const bez=inp?.value?.trim();if(!bez)return;
+    const anlageId=document.getElementById('btn-save-anlage')?.dataset.id;
+    if(anlageId){
+      apiPost('/api/aufgaben',{anlage_id:anlageId,bezeichnung:bez,sparte}).then(a=>{
+        const el=document.getElementById(`aufg-${key}-list`);if(el)el.appendChild(aufgabeModalRow(a));
+        inp.value='';toast('Aufgabe hinzugefügt','ok');
+      }).catch(e=>toast(e.message,'err'));
+    }else{
+      const draftId=++_draftCtr;
+      _draftAufg.push({draftId,sparte,bezeichnung:bez});
+      const el=document.getElementById(`aufg-${key}-list`);if(el)el.appendChild(aufgabeModalRow({draftId,bezeichnung:bez,sparte}));
+      inp.value='';
+    }
+  }
+  o('btn-add-winter-aufg','click',()=>addAufgabeToModal('winterdienst'));
+  o('btn-add-gebaeude-aufg','click',()=>addAufgabeToModal('gebaeudereinigung'));
+  o('btn-add-gruen-aufg','click',()=>addAufgabeToModal('gruenpflege'));
+  o('aufg-winter-input','keydown',e=>{if(e.key==='Enter'){e.preventDefault();addAufgabeToModal('winterdienst')}});
+  o('aufg-gebaeude-input','keydown',e=>{if(e.key==='Enter'){e.preventDefault();addAufgabeToModal('gebaeudereinigung')}});
+  o('aufg-gruen-input','keydown',e=>{if(e.key==='Enter'){e.preventDefault();addAufgabeToModal('gruenpflege')}});
+}
+
+async function reloadTab(){
+  const tab=pageData.adminTab||'anlagen';
+  const c=document.getElementById('admin-tab-content');
+  if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTab(tab);bindAdminEvents();initKarteIfNeeded()}
+}
+
+// ── INIT ──
+function init(){
+  if(!user){go('login');return}
+  if(einsatzAkt){go('einsatz');return}
+  go('home');
+}
+init();
+
+// ── PWA Install Prompt ────────────────────────────────────────────────────
+(function(){
+  const DISMISSED_KEY = 'pwa_banner_dismissed';
+  if(localStorage.getItem(DISMISSED_KEY)) return;
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+
+  if(isInStandaloneMode) return; // bereits installiert
+
+  // iOS: Hint-Banner mit Anleitung
+  if(isIOS){
+    // Kurz warten bis App geladen ist
+    setTimeout(()=>{
+      const hint = document.getElementById('ios-hint');
+      if(!hint) return;
+      hint.classList.add('show');
+      document.getElementById('ios-hint-close').addEventListener('click',()=>{
+        hint.classList.remove('show');
+        localStorage.setItem(DISMISSED_KEY,'1');
+      });
+    }, 2500);
+    return;
+  }
+
+  // Android / Desktop: beforeinstallprompt abfangen
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    setTimeout(()=>{
+      const banner = document.getElementById('pwa-banner');
+      if(!banner) return;
+      banner.classList.add('show');
+    }, 2000);
+  });
+
+  document.addEventListener('click', e => {
+    if(e.target.id === 'pwa-install-btn'){
+      if(!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(choice => {
+        deferredPrompt = null;
+        document.getElementById('pwa-banner')?.classList.remove('show');
+        if(choice.outcome === 'accepted') localStorage.setItem(DISMISSED_KEY,'1');
+      });
+    }
+    if(e.target.id === 'pwa-banner-close'){
+      document.getElementById('pwa-banner')?.classList.remove('show');
+      localStorage.setItem(DISMISSED_KEY,'1');
+    }
+  });
+
+  window.addEventListener('appinstalled', ()=>{
+    document.getElementById('pwa-banner')?.classList.remove('show');
+    localStorage.setItem(DISMISSED_KEY,'1');
+  });
+})();
+</script>
+
+<!-- Android / Desktop Install Banner -->
+<div id="pwa-banner">
+  <img src="/Logo.png" class="pwa-icon" alt="Solano">
+  <div class="pwa-text">
+    <div class="pwa-title">SolanoServices installieren</div>
+    <div class="pwa-sub">Als App auf dem Gerät speichern</div>
+  </div>
+  <button class="pwa-install-btn" id="pwa-install-btn">Installieren</button>
+  <button class="pwa-close" id="pwa-banner-close">✕</button>
+</div>
+
+<!-- iOS Safari Hint -->
+<div id="ios-hint">
+  <button class="ios-close" id="ios-hint-close">✕</button>
+  <div class="ios-title">📲 Als App installieren</div>
+  <div class="ios-steps">
+    1. Tippe auf das <strong>Teilen-Symbol</strong> unten in Safari (das Quadrat mit dem Pfeil)<br>
+    2. Scrolle runter und wähle <strong>„Zum Home-Bildschirm"</strong><br>
+    3. Tippe oben rechts auf <strong>„Hinzufügen"</strong>
+  </div>
+  <div class="ios-arrow">⬇</div>
+</div>
+
+</body>
+</html>
