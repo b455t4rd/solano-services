@@ -1666,6 +1666,9 @@ function init(){
     const b=document.getElementById('btn-mailbox');
     if(b){const badge=window._nachBadge>0?`<span style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:999px;font-size:10px;font-weight:700;min-width:17px;height:17px;display:flex;align-items:center;justify-content:center;padding:0 3px">${window._nachBadge}</span>`:'';b.innerHTML=`📬${badge}`}
   },30000);
+  // URL-Parameter auswerten (z.B. von Push-Klick: /?page=nachrichten)
+  const urlPage=new URLSearchParams(location.search).get('page');
+  if(urlPage){history.replaceState({},'','/');go(urlPage);return}
   if(einsatzAkt){go('einsatz');return}
   go('home');
 }
