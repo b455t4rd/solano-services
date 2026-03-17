@@ -27,25 +27,26 @@ router.get('/auftraggeber', authMiddleware, async (req, res) => {
 });
 
 router.post('/auftraggeber', managerMiddleware, async (req, res) => {
-  const { name, gutschrift_prozent, stundensatz, notiz } = req.body;
+  const { name, gutschrift_prozent, stundensatz, notiz, fahrzeit_bezahlt } = req.body;
   if (!name) return res.status(400).json({ error: 'Name erforderlich' });
   try {
     const r = await pool.query(
-      `INSERT INTO auftraggeber (name, gutschrift_prozent, stundensatz, notiz)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [name, gutschrift_prozent || 0, stundensatz || 0, notiz || null]
+      `INSERT INTO auftraggeber (name, gutschrift_prozent, stundensatz, notiz, fahrzeit_bezahlt)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name, gutschrift_prozent || 0, stundensatz || 0, notiz || null, fahrzeit_bezahlt !== false]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.put('/auftraggeber/:id', managerMiddleware, async (req, res) => {
-  const { name, gutschrift_prozent, stundensatz, notiz, aktiv } = req.body;
+  const { name, gutschrift_prozent, stundensatz, notiz, aktiv, fahrzeit_bezahlt } = req.body;
   try {
     const r = await pool.query(
-      `UPDATE auftraggeber SET name=$1, gutschrift_prozent=$2, stundensatz=$3, notiz=$4, aktiv=$5
-       WHERE id=$6 RETURNING *`,
-      [name, gutschrift_prozent||0, stundensatz||0, notiz||null, aktiv!==false, req.params.id]
+      `UPDATE auftraggeber SET name=$1, gutschrift_prozent=$2, stundensatz=$3, notiz=$4, aktiv=$5,
+       fahrzeit_bezahlt=$6 WHERE id=$7 RETURNING *`,
+      [name, gutschrift_prozent||0, stundensatz||0, notiz||null, aktiv!==false,
+       fahrzeit_bezahlt !== false, req.params.id]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
