@@ -191,13 +191,15 @@ router.put('/:id/phase', authMiddleware, async (req, res) => {
 // ── Gutschrift erfassen ───────────────────────────────────────────────────────
 
 router.put('/:id/gutschrift', managerMiddleware, async (req, res) => {
-  const { montagewert_netto, gutschrift_betrag, gutschrift_datum, gutschrift_nummer } = req.body;
+  const { gutschrift_betrag, gutschrift_datum, gutschrift_nummer, arbeitszeit_manuell_min } = req.body;
   try {
     const r = await pool.query(
       `UPDATE projekt_auftraege
-       SET montagewert_netto=$1, gutschrift_betrag=$2, gutschrift_datum=$3, gutschrift_nummer=$4
+       SET gutschrift_betrag=$1, gutschrift_datum=$2, gutschrift_nummer=$3,
+           arbeitszeit_manuell_min=COALESCE($4, arbeitszeit_manuell_min)
        WHERE id=$5 RETURNING *`,
-      [montagewert_netto||null, gutschrift_betrag||null, gutschrift_datum||null, gutschrift_nummer||null, req.params.id]
+      [gutschrift_betrag||null, gutschrift_datum||null, gutschrift_nummer||null,
+       arbeitszeit_manuell_min||null, req.params.id]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }

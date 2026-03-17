@@ -1522,29 +1522,31 @@ async function renderTabProjekte(){
     const fk=km*kostenProKm;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const gutschrift=parseFloat(p.gutschrift_betrag||0);
-    const arbeitStd=(p.arbeitszeit_min||0)/60;
-    const maStd=arbeitStd*anzahl;
+    const arbMinGesamt=(p.arbeitszeit_min||0)||(p.arbeitszeit_manuell_min||0);
+    const maStd=(arbMinGesamt/60)*anzahl;
     const netto=gutschrift-fk;
-    const eurStd=maStd>0&&gutschrift>0?netto/maStd:null;
-    const nettoZeile=gutschrift-fk;
-    const stundensatzZeile=maStd>0&&gutschrift>0?nettoZeile/maStd:null;
-    return`<tr>
-      <td>${fDate(p.erstellt_am)}</td>
-      <td>${esc(p.auftraggeber_name||'–')}</td>
-      <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
-      <td style="text-align:center;font-weight:700">${anzahl}</td>
-      <td>${statusBadge(p.status)}</td>
-      <td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
-      <td>${km>0?km.toFixed(1)+' km':'–'}</td>
-      <td>${gutschrift>0?`<span style="color:#16a34a;font-weight:700">€${gutschrift.toFixed(2)}</span>`:'<span style="color:#9ca3af">–</span>'}</td>
-      <td>${fk>0?`<span style="color:#dc2626">-€${fk.toFixed(2)}</span>`:'–'}</td>
-      <td>${gutschrift>0?`<span style="color:${nettoZeile>=0?'#16a34a':'#dc2626'};font-weight:700">€${nettoZeile.toFixed(2)}</span>`:'–'}</td>
-      <td>${stundensatzZeile!==null?`<span style="background:#7c3aed;color:white;padding:2px 8px;border-radius:6px;font-weight:700">€${stundensatzZeile.toFixed(2)}/h/MA</span>`:`<span style="color:#9ca3af">kein Wert</span>`}</td>
-      <td><div style="display:flex;gap:4px">
-        <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" title="Gutschrift erfassen">💰</button>
-        ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
-      </div></td>
-    </tr>`;}).join('');
+    const stundensatz=maStd>0&&gutschrift>0?netto/maStd:null;
+    return`<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <span style="font-weight:700;font-size:14px">${esc(p.auftraggeber_name||'–')}</span>
+          ${p.auftragsnummer?`<span style="font-size:12px;color:var(--text-muted);margin-left:6px">Nr. ${esc(p.auftragsnummer)}</span>`:''}
+          <div style="font-size:12px;color:var(--text-muted)">${fDate(p.erstellt_am)} · ${anzahl} MA · ${statusBadge(p.status)}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" data-arbmin="${arbMinGesamt}" data-anzahl="${anzahl}" title="Gutschrift">💰</button>
+          ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:13px">
+        ${arbMinGesamt?`<span>⏱ <b>${fMin(arbMinGesamt)}</b></span>`:'<span style="color:#f59e0b">⏱ Keine Zeit erfasst</span>'}
+        ${km>0?`<span>🚗 <b>${km.toFixed(1)} km</b></span>`:''}
+        ${fk>0?`<span style="color:#dc2626">Fahrt: <b>-€${fk.toFixed(2)}</b></span>`:''}
+        ${gutschrift>0?`<span style="color:#16a34a">Gutschrift: <b>€${gutschrift.toFixed(2)}</b></span>`:'<span style="color:#9ca3af">Keine Gutschrift</span>'}
+        ${gutschrift>0&&fk>0?`<span style="color:${netto>=0?'#16a34a':'#dc2626'}">Netto: <b>€${netto.toFixed(2)}</b></span>`:''}
+        ${stundensatz!==null?`<span style="background:#7c3aed;color:white;padding:2px 8px;border-radius:6px;font-weight:700">€${stundensatz.toFixed(2)}/h/MA</span>`:''}
+      </div>
+    </div>`}).join('');
 
   // Auftraggeber-Verwaltung
   const agRows=agList.map(ag=>`<tr>
@@ -1579,13 +1581,8 @@ async function renderTabProjekte(){
       </div>
     </div></div>
     ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
-    <div class="card" style="overflow:auto;margin-bottom:20px">
-      <table class="tbl"><thead><tr>
-        <th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>MA</th><th>Status</th>
-        <th>Arbeitszeit</th><th>km</th><th>Gutschrift</th><th>Fahrtkosten</th><th>Netto</th><th>€/Std/MA</th><th></th>
-      </tr></thead>
-      <tbody>${rows||`<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</td></tr>`}</tbody>
-      </table>
+    <div style="margin-bottom:20px">
+      ${rows||`<div style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</div>`}
     </div>
     <div style="font-weight:700;margin-bottom:8px">Auftraggeber verwalten</div>
     <button class="btn btn-primary btn-sm" id="btn-new-ag" style="margin-bottom:10px">+ Neuer Auftraggeber</button>
@@ -2911,18 +2908,29 @@ function bindAdminEvents(){
       showModal(`
         <button class="modal-close" id="modal-close">×</button>
         <div class="modal-title">💰 Gutschrift erfassen</div>
-        <div class="form-group"><label class="form-label">Montagewert netto (€)</label><input type="number" class="form-input" id="gs-mw" step="0.01" placeholder="0.00" value="${b.dataset.mw||''}"></div>
         <div class="form-group"><label class="form-label">Gutschrift-Betrag (€) <span style="color:#dc2626">*</span></label><input type="number" class="form-input" id="gs-betrag" step="0.01" placeholder="0.00" value="${b.dataset.gs||''}"></div>
-        <div class="form-group"><label class="form-label">Gutschrift-Datum</label><input type="date" class="form-input" id="gs-datum" value="${b.dataset.gd||''}"></div>
-        <div class="form-group"><label class="form-label">Gutschrift-Nummer</label><input type="text" class="form-input" id="gs-nummer" placeholder="GS-2025-001" value="${b.dataset.gnr||''}"></div>
-        <button class="btn btn-primary" id="btn-gs-save" data-id="${b.dataset.id}">💾 Speichern</button>`);
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">Gutschrift-Datum</label><input type="date" class="form-input" id="gs-datum" value="${b.dataset.gd||''}"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Gutschrift-Nummer</label><input type="text" class="form-input" id="gs-nummer" placeholder="GS-2025-001" value="${b.dataset.gnr||''}"></div>
+        </div>
+        ${!b.dataset.arbmin||b.dataset.arbmin==='0'?`<div class="form-group" style="background:#fef9c3;padding:10px;border-radius:8px;margin-top:4px">
+          <label class="form-label">⏱ Arbeitszeit (Std.) – manuell eingeben</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <input type="number" class="form-input" id="gs-arbstd" step="0.5" min="0" placeholder="z.B. 4.5" style="margin:0">
+            <div style="display:flex;align-items:center;font-size:13px;color:var(--text-muted)">${b.dataset.anzahl||1} Mitarbeiter</div>
+          </div>
+        </div>`:''}
+        <button class="btn btn-primary" id="btn-gs-save" data-id="${b.dataset.id}" data-arbmin="${b.dataset.arbmin||0}" data-anzahl="${b.dataset.anzahl||1}">💾 Speichern</button>`);
       setTimeout(()=>o('btn-gs-save','click',async()=>{
         const id=document.getElementById('btn-gs-save')?.dataset.id;
+        const arbMinAlt=parseInt(document.getElementById('btn-gs-save')?.dataset.arbmin||0);
+        const arbStdManuell=parseFloat(document.getElementById('gs-arbstd')?.value||0);
+        const arbMinManuell=arbStdManuell>0?Math.round(arbStdManuell*60):null;
         try{await apiPut(`/api/projekte/${id}/gutschrift`,{
-          montagewert_netto:document.getElementById('gs-mw')?.value||null,
           gutschrift_betrag:document.getElementById('gs-betrag')?.value||null,
           gutschrift_datum:document.getElementById('gs-datum')?.value||null,
-          gutschrift_nummer:document.getElementById('gs-nummer')?.value||null
+          gutschrift_nummer:document.getElementById('gs-nummer')?.value||null,
+          arbeitszeit_manuell_min:arbMinAlt>0?null:arbMinManuell
         });closeModal();toast('✅ Gutschrift gespeichert','ok');
           const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
         }catch(e){toast(e.message,'err')}
