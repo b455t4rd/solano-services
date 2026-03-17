@@ -1487,10 +1487,11 @@ async function renderTabProjekte(){
     const fk=km*kostenProKm;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const gutschrift=parseFloat(p.gutschrift_betrag||0);
-    const maStd=((p.arbeitszeit_min||0)/60)*anzahl;
+    const arbMin=(p.arbeitszeit_min||0)||(p.arbeitszeit_manuell_min||0);
+    const maStd=(arbMin/60)*anzahl;
     if(!agSummen[ak])agSummen[ak]={name:ak,count:0,arbeit:0,fahrt:0,km:0,fahrtkosten:0,gutschrift:0,maStd:0};
     agSummen[ak].count++;
-    agSummen[ak].arbeit+=parseInt(p.arbeitszeit_min||0);
+    agSummen[ak].arbeit+=arbMin;
     agSummen[ak].fahrt+=parseInt(p.fahrzeit_hin_min||0)+parseInt(p.fahrzeit_zurueck_min||0);
     agSummen[ak].km+=km;
     agSummen[ak].fahrtkosten+=fk;
