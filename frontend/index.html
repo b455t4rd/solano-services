@@ -1427,8 +1427,7 @@ async function pageProjekte(){
       <td>${arbMin?fMin(arbMin)+maStdAnz:'–'}</td>
       <td>${parseFloat(km)>0?km+' km':'–'}</td>
       <td><div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-        ${hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span><button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" style="font-size:11px">✏️</button>`:`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}
-        <button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-ag="${p.auftraggeber_id||''}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${p.anzahl_mitarbeiter||2}" data-arbmin="${arbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-notiz="${esc(p.notiz||'')}" data-bez="${esc(p.besonderheiten||'')}" title="Bearbeiten">✏️</button>
+        ${p.status==='pausiert'?`<button class="tbl-btn" data-action="proj-fortsetzen" data-id="${p.id}" style="background:#f59e0b;color:white">▶️ Fortsetzen</button>`:hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span><button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" style="font-size:11px">✏️</button>`:`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}
         ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
       </div></td>
     </tr>`;
@@ -1519,7 +1518,7 @@ async function renderTabProjekte(){
       </div>
     </div>`;}).join('');
 
-  const statusBadge=s=>({fahrt:'<span class="badge badge-blue">Fahrt</span>',arbeit:'<span class="badge badge-green">Arbeit</span>',rueckfahrt:'<span class="badge" style="background:#fef3c7;color:#92400e">Rückfahrt</span>',abgeschlossen:'<span class="badge badge-gray">Fertig</span>'}[s]||s);
+  const statusBadge=s=>({fahrt:'<span class="badge badge-blue">Fahrt</span>',arbeit:'<span class="badge badge-green">Arbeit</span>',rueckfahrt:'<span class="badge" style="background:#fef3c7;color:#92400e">Rückfahrt</span>',abgeschlossen:'<span class="badge badge-gray">Fertig</span>',pausiert:'<span class="badge" style="background:#fef3c7;color:#92400e">⏸ Pausiert</span>'}[s]||s);
 
   const rows=auswertung.map(p=>{
     const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
@@ -1550,8 +1549,9 @@ async function renderTabProjekte(){
           ${stundensatz!==null?`<div style="background:${accentColor};color:white;padding:4px 10px;border-radius:8px;font-weight:700;font-size:15px;white-space:nowrap">€${stundensatz.toFixed(2)}<span style="font-size:11px;font-weight:400">/h/MA</span></div>`:''}
           ${gutschrift>0?`<div style="font-size:13px;color:#16a34a;font-weight:600">Gutschrift €${gutschrift.toFixed(2)}</div>`:''}
           ${gutschrift>0&&fk>0?`<div style="font-size:12px;color:${netto>=0?'#16a34a':'#dc2626'}">Netto €${netto.toFixed(2)}</div>`:''}
-          <div style="display:flex;gap:4px;margin-top:2px">
+          <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
             <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" data-arbmin="${arbMinGesamt}" data-anzahl="${anzahl}" title="Gutschrift">💰</button>
+            ${isManager()?`<button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${anzahl}" data-arbmin="${arbMinGesamt}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-bez="${esc(p.besonderheiten||'')}" title="Bearbeiten">✏️</button>`:''}
             ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
           </div>
         </div>
@@ -2417,6 +2417,19 @@ function bindEvents(){
     });
   });
 
+  // Projekte: Pausierten Auftrag fortsetzen
+  document.querySelectorAll('[data-action="proj-fortsetzen"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(projektAkt&&projektAkt.status!=='abgeschlossen'){toast('Erst aktiven Auftrag abschließen','err');return;}
+      try{
+        const p=await apiPut(`/api/projekte/${b.dataset.id}/fortsetzen`,{});
+        projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
+        toast('▶️ Auftrag fortgesetzt','ok');go('projekte');
+      }catch(e){toast(e.message,'err')}
+    });
+  });
+
   // Projekte: Auftrag bearbeiten
   document.querySelectorAll('[data-action="proj-edit"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
@@ -3063,6 +3076,45 @@ function bindAdminEvents(){
   })}
 
   // Projekte: Löschen
+  // Admin: Auftrag bearbeiten
+  document.querySelectorAll('[data-action="proj-edit"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      const d=b.dataset;
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">✏️ Auftrag bearbeiten</div>
+        <div class="form-group"><label class="form-label">Auftraggeber</label><input class="form-input" id="pe-agname" value="${esc(d.agname||'')}" placeholder="Auftraggeber"></div>
+        <div class="form-group"><label class="form-label">Auftragsnummer</label><input class="form-input" id="pe-nr" value="${esc(d.nr||'')}" placeholder="optional"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">Anzahl MA</label><input type="number" class="form-input" id="pe-ma" value="${d.ma||2}" min="1" max="10"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit (Min)</label><input type="number" class="form-input" id="pe-arbmin" value="${d.arbmin||0}" min="0" step="15"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">km Hinfahrt</label><input type="number" class="form-input" id="pe-kmhin" value="${d.kmhin||0}" min="0" step="0.1"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">km Rückfahrt</label><input type="number" class="form-input" id="pe-kmzurueck" value="${d.kmzurueck||0}" min="0" step="0.1"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Besonderheiten</label><textarea class="form-input" id="pe-bez" rows="2" style="resize:vertical">${esc(d.bez||'')}</textarea></div>
+        <button class="btn btn-primary" id="btn-pe-save" data-id="${d.id}">💾 Speichern</button>`);
+      setTimeout(()=>o('btn-pe-save','click',async()=>{
+        const id=document.getElementById('btn-pe-save')?.dataset.id;
+        try{
+          await apiPut(`/api/projekte/${id}`,{
+            auftraggeber_name:document.getElementById('pe-agname')?.value||null,
+            auftragsnummer:document.getElementById('pe-nr')?.value||null,
+            anzahl_mitarbeiter:parseInt(document.getElementById('pe-ma')?.value)||2,
+            arbeitszeit_manuell_min:parseInt(document.getElementById('pe-arbmin')?.value)||0,
+            km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
+            km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
+            besonderheiten:document.getElementById('pe-bez')?.value||null,
+          });
+          closeModal();toast('💾 Gespeichert','ok');
+          const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+        }catch(e){toast(e.message,'err')}
+      }),0);
+    });
+  });
+
   document.querySelectorAll('[data-action="proj-delete"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
     b.addEventListener('click',async()=>{

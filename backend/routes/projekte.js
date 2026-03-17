@@ -107,7 +107,7 @@ router.get('/aktiv', authMiddleware, async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT * FROM projekt_auftraege
-       WHERE mitarbeiter_id=$1 AND status != 'abgeschlossen'
+       WHERE mitarbeiter_id=$1 AND status NOT IN ('abgeschlossen','pausiert')
        ORDER BY erstellt_am DESC LIMIT 1`,
       [req.user.id]
     );
@@ -239,12 +239,23 @@ router.put('/:id/neuer-termin', authMiddleware, async (req, res) => {
     const akkKmHin = parseFloat(p.km_hin||0) + parseFloat(req.body.km_rueck||0); // letzte Rückfahrt km addieren
     const r = await pool.query(
       `UPDATE projekt_auftraege
-       SET status='fahrt', arbeitszeit_manuell_min=$1,
+       SET status='pausiert', arbeitszeit_manuell_min=$1,
            fahrt_start=NULL, ankunft=NULL, abfahrt_zeit=NULL, fahrt_ende=NULL,
            arbeitszeit_min=0, fahrzeit_hin_min=0, fahrzeit_zurueck_min=0,
            gps_punkte='[]'
        WHERE id=$2 RETURNING *`,
       [akkArbeit, req.params.id]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Auftrag fortsetzen (pausiert → fahrt) ─────────────────────────────────────
+router.put('/:id/fortsetzen', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE projekt_auftraege SET status='fahrt' WHERE id=$1 RETURNING *`,
+      [req.params.id]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
