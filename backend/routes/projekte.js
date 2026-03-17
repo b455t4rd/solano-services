@@ -231,20 +231,28 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // ── Neuer Termin (Multi-Session) ──────────────────────────────────────────────
 router.put('/:id/neuer-termin', authMiddleware, async (req, res) => {
   try {
-    // Holt aktuelle Werte und akkumuliert Arbeitszeit in arbeitszeit_manuell_min
     const cur = await pool.query('SELECT * FROM projekt_auftraege WHERE id=$1', [req.params.id]);
     if (!cur.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
     const p = cur.rows[0];
-    const akkArbeit = (parseInt(p.arbeitszeit_manuell_min)||0) + (parseInt(p.arbeitszeit_min)||0);
-    const akkKmHin = parseFloat(p.km_hin||0) + parseFloat(req.body.km_rueck||0); // letzte Rückfahrt km addieren
+    // Aktuelle Session in sessions-Array speichern
+    const neueSession = {
+      datum: new Date().toISOString().split('T')[0],
+      arbeitszeit_min: parseInt(p.arbeitszeit_min)||0,
+      anzahl_mitarbeiter: parseInt(p.anzahl_mitarbeiter)||2,
+      km_hin: parseFloat(p.km_hin||0),
+      km_zurueck: parseFloat(p.km_zurueck||0),
+      fahrzeit_hin_min: parseInt(p.fahrzeit_hin_min)||0,
+      fahrzeit_zurueck_min: parseInt(p.fahrzeit_zurueck_min)||0,
+    };
+    const sessions = [...(p.sessions||[]), neueSession];
     const r = await pool.query(
       `UPDATE projekt_auftraege
-       SET status='pausiert', arbeitszeit_manuell_min=$1,
+       SET status='pausiert', sessions=$1,
            fahrt_start=NULL, ankunft=NULL, abfahrt_zeit=NULL, fahrt_ende=NULL,
            arbeitszeit_min=0, fahrzeit_hin_min=0, fahrzeit_zurueck_min=0,
-           gps_punkte='[]'
+           km_hin=0, km_zurueck=0, gps_punkte='[]'
        WHERE id=$2 RETURNING *`,
-      [akkArbeit, req.params.id]
+      [JSON.stringify(sessions), req.params.id]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }

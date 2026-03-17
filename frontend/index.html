@@ -408,7 +408,7 @@ function sidebarHTML(){
     ${showG?`<div class="sidebar-label">GEBÄUDEREINIGUNG</div>${si('nav-gebaeude','🧹','Anlagen',page==='anlagen'&&pageData.sparte==='gebaeudereinigung')}`:''}
     ${showGr?`<div class="sidebar-label">GRÜNPFLEGE</div>${si('nav-gruenpflege','🌿','Anlagen',page==='anlagen'&&pageData.sparte==='gruenpflege')}`:''}
     ${einsatzAkt?`<div class="sidebar-label">AKTIVER EINSATZ</div>${si('nav-einsatz','🟢',esc(einsatzAkt.anlage_name||'Einsatz'),page==='einsatz')}`:''}
-    ${projektAkt&&projektAkt.status!=='abgeschlossen'?`<div class="sidebar-label">AKTIVER AUFTRAG</div>${si('nav-projekte-akt','🔨',esc(projektAkt.auftraggeber_name||'Auftrag'),page==='projekte')}`:''}
+    ${projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'?`<div class="sidebar-label">AKTIVER AUFTRAG</div>${si('nav-projekte-akt','🔨',esc(projektAkt.auftraggeber_name||'Auftrag'),page==='projekte')}`:''}
     ${isManager()?`<div class="sidebar-label">VERWALTUNG</div>${si('nav-admin','⚙️','Admin',page==='admin')}`:''}
     <div class="sidebar-spacer"></div>
     <div class="sidebar-divider"></div>
@@ -484,7 +484,7 @@ async function pageHome(){
   let projektStatusHome='Kein aktiver Auftrag';
   try{
     const pa=await apiGet('/api/projekte/aktiv');
-    if(pa&&pa.status!=='abgeschlossen'){
+    if(pa&&pa.status!=='abgeschlossen'&&pa.status!=='pausiert'){
       projektAkt=pa;localStorage.setItem('solano_projekt',JSON.stringify(pa));
       const phLbl={fahrt:'🚗 Fahrt',arbeit:'🔨 Arbeit',rueckfahrt:'🏠 Rückfahrt'};
       projektStatusHome=`${phLbl[pa.status]||pa.status} · ${esc(pa.auftraggeber_name||'–')}`;
@@ -1358,7 +1358,7 @@ async function pageProjekte(){
   const phaseColors={fahrt:'#2563eb',arbeit:'#16a34a',rueckfahrt:'#d97706',abgeschlossen:'#6b7280'};
   const phaseLabels={fahrt:'🚗 Hinfahrt',arbeit:'🔨 Arbeit',rueckfahrt:'🏠 Rückfahrt',abgeschlossen:'✅ Fertig'};
 
-  if(projektAkt&&projektAkt.status!=='abgeschlossen'){
+  if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'){
     const p=projektAkt,phase=p.status;
     const col=phaseColors[phase];
     const phases=['fahrt','arbeit','rueckfahrt'];
@@ -1416,18 +1416,37 @@ async function pageProjekte(){
     :'<option value="">– Auftraggeber wählen –</option>'+auftraggeber.map(ag=>`<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
   const statusLbl={fahrt:'Fahrt',arbeit:'Arbeit',rueckfahrt:'Rückfahrt',abgeschlossen:'Abgeschlossen'};
   const recentRows=recent.map(p=>{
-    const arbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
-    const km=(parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)).toFixed(1);
+    const sessions=p.sessions||[];
+    const curArbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
+    const curKm=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
+    // Alle Sessions inkl. aktuell
+    const alleSessions=[...sessions];
+    if(curArbMin>0||curKm>0) alleSessions.push({datum:p.abgeschlossen_am||p.erstellt_am,arbeitszeit_min:curArbMin,anzahl_mitarbeiter:p.anzahl_mitarbeiter||2,km_hin:p.km_hin||0,km_zurueck:p.km_zurueck||0});
     const hatGutschrift=!!p.gutschrift_betrag;
-    const maStdAnz=p.anzahl_mitarbeiter>1?` × ${p.anzahl_mitarbeiter} MA`:'';
+    const isPausiert=p.status==='pausiert';
+    // Session-Zeilen
+    const sessionRows=alleSessions.map(s=>{
+      const sArbMin=parseInt(s.arbeitszeit_min)||0;
+      const sKm=parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0);
+      const sMA=parseInt(s.anzahl_mitarbeiter)||2;
+      return`<div style="font-size:12px;color:var(--text-muted);padding:3px 0;border-bottom:1px dashed #e5e7eb">
+        📅 ${fDate(s.datum)} · ⏱ ${sArbMin?fMin(sArbMin):'–'} · 👷 ${sMA} MA · 🚗 ${sKm>0?sKm.toFixed(1)+' km':'–'}
+      </div>`;
+    }).join('');
+    const totalArbMin=alleSessions.reduce((a,s)=>a+(parseInt(s.arbeitszeit_min)||0),0);
+    const totalKm=alleSessions.reduce((a,s)=>a+parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0),0);
     return`<tr>
-      <td>${fDate(p.erstellt_am)}</td>
-      <td>${esc(p.auftraggeber_name||'–')}</td>
-      <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
-      <td>${arbMin?fMin(arbMin)+maStdAnz:'–'}</td>
-      <td>${parseFloat(km)>0?km+' km':'–'}</td>
+      <td><div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
+          ${esc(p.auftragsnummer||'')?`<div style="font-size:11px;color:var(--text-muted)">${esc(p.auftragsnummer)}</div>`:''}
+          ${isPausiert?'<span class="badge" style="background:#fef3c7;color:#92400e;font-size:11px">⏸ Geparkt</span>':''}
+          ${sessions.length>0?`<div style="margin-top:6px">${sessionRows}</div>`:''}
+      </td>
+      <td style="white-space:nowrap">${totalArbMin?fMin(totalArbMin):'–'}</td>
+      <td style="white-space:nowrap">${totalKm>0?totalKm.toFixed(1)+' km':'–'}</td>
       <td><div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-        ${p.status==='pausiert'?`<button class="tbl-btn" data-action="proj-fortsetzen" data-id="${p.id}" style="background:#f59e0b;color:white">▶️ Fortsetzen</button>`:hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span><button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" style="font-size:11px">✏️</button>`:`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}
+        ${isPausiert?`<button class="tbl-btn" data-action="proj-fortsetzen" data-id="${p.id}" style="background:#f59e0b;color:white">▶️ Fortsetzen</button>`
+          :hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span><button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" style="font-size:11px">✏️</button>`
+          :`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}
         ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
       </div></td>
     </tr>`;
@@ -1462,7 +1481,7 @@ async function pageProjekte(){
     ${recent.length>0?`
       <div style="font-weight:700;margin-bottom:8px">Letzte Aufträge</div>
       <div class="card" style="overflow:auto"><table class="tbl"><thead><tr>
-        <th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>Arbeitszeit</th><th>km</th><th>Gutschrift</th>
+        <th>Auftraggeber / Termine</th><th>Arbeitszeit</th><th>km</th><th>Aktionen</th>
       </tr></thead><tbody>${recentRows}</tbody></table></div>`:``}
   </div>`;
 }
@@ -1521,15 +1540,26 @@ async function renderTabProjekte(){
   const statusBadge=s=>({fahrt:'<span class="badge badge-blue">Fahrt</span>',arbeit:'<span class="badge badge-green">Arbeit</span>',rueckfahrt:'<span class="badge" style="background:#fef3c7;color:#92400e">Rückfahrt</span>',abgeschlossen:'<span class="badge badge-gray">Fertig</span>',pausiert:'<span class="badge" style="background:#fef3c7;color:#92400e">⏸ Pausiert</span>'}[s]||s);
 
   const rows=auswertung.map(p=>{
-    const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
-    const fk=km*kostenProKm;
+    const sessions=p.sessions||[];
+    // Alle Sessions inkl. aktuelle summieren
+    const alleSess=[...sessions];
+    const curArbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
+    const curKm=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
+    if(curArbMin>0||curKm>0) alleSess.push({datum:p.abgeschlossen_am||p.erstellt_am,arbeitszeit_min:curArbMin,anzahl_mitarbeiter:p.anzahl_mitarbeiter||2,km_hin:p.km_hin||0,km_zurueck:p.km_zurueck||0});
+    const totArbMin=alleSess.reduce((a,s)=>a+(parseInt(s.arbeitszeit_min)||0),0)||curArbMin;
+    const totKm=alleSess.reduce((a,s)=>a+parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0),0)||curKm;
+    const totFk=totKm*kostenProKm;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const gutschrift=parseFloat(p.gutschrift_betrag||0);
-    const arbMinGesamt=(p.arbeitszeit_min||0)||(p.arbeitszeit_manuell_min||0);
-    const maStd=(arbMinGesamt/60)*anzahl;
-    const netto=gutschrift-fk;
+    const maStd=(totArbMin/60)*anzahl;
+    const netto=gutschrift-totFk;
     const stundensatz=maStd>0&&gutschrift>0?netto/maStd:null;
     const accentColor=stundensatz!==null?(stundensatz>=30?'#16a34a':stundensatz>=15?'#d97706':'#dc2626'):'#e5e7eb';
+    // Session-Details
+    const sessHtml=sessions.length>0?`<div style="margin-top:8px;border-top:1px solid #e5e7eb;padding-top:6px">${alleSess.map(s=>{
+      const sArbMin=parseInt(s.arbeitszeit_min)||0;const sKm=parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0);const sMA=parseInt(s.anzahl_mitarbeiter)||2;
+      return`<div style="font-size:12px;color:#374151;padding:2px 0">📅 ${fDate(s.datum)} · ⏱ ${sArbMin?fMin(sArbMin):'–'} · 👷 ${sMA} MA · 🚗 ${sKm>0?sKm.toFixed(1)+' km':'–'}</div>`;
+    }).join('')}</div>`:'';
     return`<div style="border:1px solid ${accentColor};border-left:4px solid ${accentColor};border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
         <div style="flex:1;min-width:0">
@@ -1540,10 +1570,11 @@ async function renderTabProjekte(){
           </div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:3px">${fDate(p.erstellt_am)} · ${anzahl} Mitarbeiter</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin-top:8px">
-            <span style="display:flex;align-items:center;gap:3px">⏱ ${arbMinGesamt?`<b>${fMin(arbMinGesamt)}</b>`:`<span style="color:#f59e0b">nicht erfasst</span>`}</span>
-            ${km>0?`<span style="display:flex;align-items:center;gap:3px">🚗 <b>${km.toFixed(1)} km</b></span>`:''}
-            ${fk>0?`<span style="color:#dc2626">−€${fk.toFixed(2)} Fahrt</span>`:''}
+            <span style="display:flex;align-items:center;gap:3px">⏱ ${totArbMin?`<b>${fMin(totArbMin)}</b>`:`<span style="color:#f59e0b">nicht erfasst</span>`}</span>
+            ${totKm>0?`<span style="display:flex;align-items:center;gap:3px">🚗 <b>${totKm.toFixed(1)} km</b></span>`:''}
+            ${totFk>0?`<span style="color:#dc2626">−€${totFk.toFixed(2)} Fahrt</span>`:''}
           </div>
+          ${sessHtml}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           ${stundensatz!==null?`<div style="background:${accentColor};color:white;padding:4px 10px;border-radius:8px;font-weight:700;font-size:15px;white-space:nowrap">€${stundensatz.toFixed(2)}<span style="font-size:11px;font-weight:400">/h/MA</span></div>`:''}
@@ -2421,7 +2452,7 @@ function bindEvents(){
   document.querySelectorAll('[data-action="proj-fortsetzen"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
     b.addEventListener('click',async()=>{
-      if(projektAkt&&projektAkt.status!=='abgeschlossen'){toast('Erst aktiven Auftrag abschließen','err');return;}
+      if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'){toast('Erst aktiven Auftrag abschließen','err');return;}
       try{
         const p=await apiPut(`/api/projekte/${b.dataset.id}/fortsetzen`,{});
         projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
@@ -2516,9 +2547,10 @@ function bindEvents(){
             o('btn-proj-weiterer','click',async()=>{
               closeModal();
               try{
-                const neu=await apiPut(`/api/projekte/${p.id}/neuer-termin`,{km_rueck:km||0});
-                projektAkt=neu;localStorage.setItem('solano_projekt',JSON.stringify(neu));
-                toast('📅 Weiterer Termin vorbereitet','ok');go('projekte');
+                await apiPut(`/api/projekte/${p.id}/neuer-termin`,{});
+                stopProjektGPS();stopProjektTimer();projektGpsTrack=[];
+                projektAkt=null;localStorage.removeItem('solano_projekt');
+                toast('📅 Auftrag geparkt – bei nächstem Termin fortsetzen','ok');go('projekte');
               }catch(e){toast(e.message,'err')}
             });
           },0);
