@@ -1641,7 +1641,7 @@ async function renderTabProjekte(){
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           ${stundensatz!==null?`<div style="background:${accentColor};color:white;padding:4px 10px;border-radius:8px;font-weight:700;font-size:15px;white-space:nowrap">€${stundensatz.toFixed(2)}<span style="font-size:11px;font-weight:400">/h/MA</span></div>`:''}
           ${gutschrift>0?`<div style="font-size:13px;color:#16a34a;font-weight:600">Gutschrift €${gutschrift.toFixed(2)}</div>`:''}
-          ${gutschrift>0&&fk>0?`<div style="font-size:12px;color:${netto>=0?'#16a34a':'#dc2626'}">Netto €${netto.toFixed(2)}</div>`:''}
+          ${gutschrift>0&&totFk>0?`<div style="font-size:12px;color:${netto>=0?'#16a34a':'#dc2626'}">Netto €${netto.toFixed(2)}</div>`:''}
           <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
             <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" data-arbmin="${totArbMin}" data-anzahl="${anzahl}" title="Gutschrift">💰</button>
             ${isManager()?`<button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${anzahl}" data-arbmin="${totArbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-bez="${esc(p.besonderheiten||'')}" data-rapport="${p.rapport_erforderlich?'1':''}" data-rapportbez="${esc(p.rapport_beschreibung||'')}" title="Bearbeiten">✏️</button>`:''}
