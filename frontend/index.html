@@ -1399,13 +1399,14 @@ async function pageProjekte(){
   const statusLbl={fahrt:'Fahrt',arbeit:'Arbeit',rueckfahrt:'Rückfahrt',abgeschlossen:'Abgeschlossen'};
   const recentRows=recent.map(p=>{
     const km=(parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)).toFixed(1);
+    const hatGutschrift=!!p.gutschrift_betrag;
     return`<tr>
       <td>${fDate(p.erstellt_am)}</td>
       <td>${esc(p.auftraggeber_name||'–')}</td>
       <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
       <td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
       <td>${parseFloat(km)>0?km+' km':'–'}</td>
-      <td><span class="badge ${p.status==='abgeschlossen'?'badge-green':'badge-blue'}">${statusLbl[p.status]||p.status}</span></td>
+      <td>${hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`:`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}</td>
     </tr>`;
   }).join('');
 
@@ -1438,7 +1439,7 @@ async function pageProjekte(){
     ${recent.length>0?`
       <div style="font-weight:700;margin-bottom:8px">Letzte Aufträge</div>
       <div class="card" style="overflow:auto"><table class="tbl"><thead><tr>
-        <th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>Arbeitszeit</th><th>km</th><th>Status</th>
+        <th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>Arbeitszeit</th><th>km</th><th>Gutschrift</th>
       </tr></thead><tbody>${recentRows}</tbody></table></div>`:``}
   </div>`;
 }
@@ -2345,6 +2346,33 @@ function bindEvents(){
       projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
       toast('🚗 Fahrt gestartet','ok');go('projekte');
     }catch(e){toast(e.message,'err')}
+  });
+
+  // Projekte: Gutschrift (auch auf user-facing Seite)
+  document.querySelectorAll('[data-action="proj-gutschrift"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">💰 Gutschrift erfassen</div>
+        <div class="form-group"><label class="form-label">Gutschrift-Betrag (€) <span style="color:#dc2626">*</span></label><input type="number" class="form-input" id="gs-betrag" step="0.01" placeholder="0.00" value="${b.dataset.gs||''}"></div>
+        <div class="form-group"><label class="form-label">Montagewert netto (€)</label><input type="number" class="form-input" id="gs-mw" step="0.01" placeholder="0.00" value="${b.dataset.mw||''}"></div>
+        <div class="form-group"><label class="form-label">Gutschrift-Datum</label><input type="date" class="form-input" id="gs-datum" value="${b.dataset.gd||''}"></div>
+        <div class="form-group"><label class="form-label">Gutschrift-Nummer</label><input type="text" class="form-input" id="gs-nummer" placeholder="GS-2025-001" value="${b.dataset.gnr||''}"></div>
+        <button class="btn btn-primary" id="btn-gs-save" data-id="${b.dataset.id}">💾 Speichern</button>`);
+      setTimeout(()=>o('btn-gs-save','click',async()=>{
+        const id=document.getElementById('btn-gs-save')?.dataset.id;
+        const betrag=document.getElementById('gs-betrag')?.value;
+        if(!betrag){toast('Gutschrift-Betrag eingeben','err');return}
+        try{await apiPut(`/api/projekte/${id}/gutschrift`,{
+          montagewert_netto:document.getElementById('gs-mw')?.value||null,
+          gutschrift_betrag:betrag,
+          gutschrift_datum:document.getElementById('gs-datum')?.value||null,
+          gutschrift_nummer:document.getElementById('gs-nummer')?.value||null
+        });closeModal();toast('✅ Gutschrift gespeichert','ok');go('projekte');
+        }catch(e){toast(e.message,'err')}
+      }),0);
+    });
   });
 
   // Projekte: Nächste Phase
