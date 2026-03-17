@@ -101,6 +101,74 @@ router.get('/auswertung', managerMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Geplante Aufträge ─────────────────────────────────────────────────────────
+
+router.get('/geplant', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM projekt_auftraege WHERE status='geplant' ORDER BY erstellt_am ASC`
+    );
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Geplanten Auftrag starten ─────────────────────────────────────────────────
+
+router.put('/:id/starten', authMiddleware, async (req, res) => {
+  const { tour_id, tour_position } = req.body;
+  try {
+    const r = await pool.query(
+      `UPDATE projekt_auftraege
+       SET status='fahrt', fahrt_start=NOW(), mitarbeiter_id=$1, mitarbeiter_name=$2,
+           tour_id=COALESCE($3, tour_id), tour_position=COALESCE($4, tour_position)
+       WHERE id=$5 RETURNING *`,
+      [req.user.id, req.user.name, tour_id||null, tour_position||1, req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Zum nächsten Auftrag weiterfahren (rueckfahrt-Ende = Ankunft Nächster) ────
+
+router.put('/:id/weiter', authMiddleware, async (req, res) => {
+  const { km, naechster_id, besonderheiten, notiz } = req.body;
+  const now = new Date();
+  try {
+    const cur = await pool.query('SELECT * FROM projekt_auftraege WHERE id=$1', [req.params.id]);
+    if (!cur.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
+    const p = cur.rows[0];
+    // Aktuellen Auftrag abschließen
+    await pool.query(
+      `UPDATE projekt_auftraege
+       SET status='abgeschlossen', fahrt_ende=$1, abgeschlossen_am=$1,
+           fahrzeit_zurueck_min=ROUND(EXTRACT(EPOCH FROM ($1-abfahrt_zeit))/60),
+           km_verbindung=$2, naechster_auftrag_id=$3,
+           besonderheiten=COALESCE($4,besonderheiten), notiz=COALESCE($5,notiz)
+       WHERE id=$6`,
+      [now, parseFloat(km)||0, naechster_id||null, besonderheiten||null, notiz||null, req.params.id]
+    );
+    // Nächsten Auftrag in Arbeit starten (Verbindungsfahrt war die Anfahrt)
+    const tourId = p.tour_id || require('crypto').randomUUID().split('-')[0];
+    const nextPos = (p.tour_position||1) + 1;
+    const r2 = await pool.query(
+      `UPDATE projekt_auftraege
+       SET status='arbeit', fahrt_start=$1, ankunft=$1, mitarbeiter_id=$2, mitarbeiter_name=$3,
+           tour_id=$4, tour_position=$5,
+           km_hin=$6, fahrzeit_hin_min=ROUND(EXTRACT(EPOCH FROM ($1-$7::timestamptz))/60)
+       WHERE id=$8 RETURNING *`,
+      [now, req.user.id, req.user.name, tourId, nextPos,
+       parseFloat(km)||0, p.abfahrt_zeit||now, naechster_id]
+    );
+    // Tour-ID auch auf Vorgänger setzen wenn noch nicht gesetzt
+    await pool.query(
+      `UPDATE projekt_auftraege SET tour_id=$1, tour_position=$2 WHERE id=$3 AND tour_id IS NULL`,
+      [tourId, p.tour_position||1, req.params.id]
+    );
+    res.json(r2.rows[0] || null);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Aktiver Auftrag des aktuellen Nutzers ─────────────────────────────────────
 
 router.get('/aktiv', authMiddleware, async (req, res) => {
@@ -134,15 +202,17 @@ router.get('/', authMiddleware, async (req, res) => {
 // ── Neuer Auftrag ─────────────────────────────────────────────────────────────
 
 router.post('/', authMiddleware, async (req, res) => {
-  const { auftraggeber_id, auftraggeber_name, auftragsnummer, anzahl_mitarbeiter, notiz } = req.body;
+  const { auftraggeber_id, auftraggeber_name, auftragsnummer, anzahl_mitarbeiter, notiz, geplant, kundenname, adresse } = req.body;
+  const status = geplant ? 'geplant' : 'fahrt';
   try {
     const r = await pool.query(
       `INSERT INTO projekt_auftraege
          (mitarbeiter_id, mitarbeiter_name, auftraggeber_id, auftraggeber_name,
-          auftragsnummer, anzahl_mitarbeiter, notiz, status, fahrt_start)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'fahrt',NOW()) RETURNING *`,
+          auftragsnummer, anzahl_mitarbeiter, notiz, status, fahrt_start, kundenname, adresse)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,${geplant?'NULL':'NOW()'},$9,$10) RETURNING *`,
       [req.user.id, req.user.name, auftraggeber_id||null, auftraggeber_name||null,
-       auftragsnummer||null, anzahl_mitarbeiter||2, notiz||null]
+       auftragsnummer||null, anzahl_mitarbeiter||2, notiz||null, status,
+       kundenname||null, adresse||null]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -208,7 +278,7 @@ router.put('/:id/gutschrift', managerMiddleware, async (req, res) => {
 // ── Allgemeines Update ────────────────────────────────────────────────────────
 
 router.put('/:id', authMiddleware, async (req, res) => {
-  const { notiz, besonderheiten, anzahl_mitarbeiter, auftragsnummer, km_hin, km_zurueck, arbeitszeit_manuell_min, auftraggeber_id, auftraggeber_name } = req.body;
+  const { notiz, besonderheiten, anzahl_mitarbeiter, auftragsnummer, km_hin, km_zurueck, arbeitszeit_manuell_min, auftraggeber_id, auftraggeber_name, kundenname, adresse, rapport_erforderlich, rapport_beschreibung } = req.body;
   try {
     const r = await pool.query(
       `UPDATE projekt_auftraege
@@ -216,12 +286,18 @@ router.put('/:id', authMiddleware, async (req, res) => {
            km_hin=COALESCE($5, km_hin), km_zurueck=COALESCE($6, km_zurueck),
            arbeitszeit_manuell_min=COALESCE($7, arbeitszeit_manuell_min),
            auftraggeber_id=COALESCE($8, auftraggeber_id),
-           auftraggeber_name=COALESCE($9, auftraggeber_name)
-       WHERE id=$10 RETURNING *`,
+           auftraggeber_name=COALESCE($9, auftraggeber_name),
+           kundenname=COALESCE($10, kundenname), adresse=COALESCE($11, adresse),
+           rapport_erforderlich=COALESCE($12, rapport_erforderlich),
+           rapport_beschreibung=COALESCE($13, rapport_beschreibung)
+       WHERE id=$14 RETURNING *`,
       [notiz||null, besonderheiten||null, anzahl_mitarbeiter||2, auftragsnummer||null,
        km_hin!=null?km_hin:null, km_zurueck!=null?km_zurueck:null,
        arbeitszeit_manuell_min!=null?arbeitszeit_manuell_min:null,
        auftraggeber_id||null, auftraggeber_name||null,
+       kundenname||null, adresse||null,
+       rapport_erforderlich!=null?rapport_erforderlich:null,
+       rapport_beschreibung!=null?rapport_beschreibung:null,
        req.params.id]
     );
     res.json(r.rows[0]);

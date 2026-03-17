@@ -1396,13 +1396,12 @@ async function pageProjekte(){
     const phaseStartMap={fahrt:p.fahrt_start,arbeit:p.ankunft,rueckfahrt:p.abfahrt_zeit};
     const phaseStart=phaseStartMap[phase];
 
-    const nextBtnLabels={fahrt:'🔨 Am Ziel – Arbeit beginnen',arbeit:'🏠 Fertig – Rückfahrt starten',rueckfahrt:'✅ Zuhause – Auftrag abschließen'};
+    const nextBtnLabels={fahrt:'🔨 Am Ziel – Arbeit beginnen',arbeit:'🏠 Fertig – Rückfahrt / Weiterfahrt starten',rueckfahrt:'✅ Zuhause – Auftrag abschließen'};
     const nextBtnColors={fahrt:'#16a34a',arbeit:'#d97706',rueckfahrt:'#6b7280'};
-
-    // Km info for display
     const kmHin=parseFloat(p.km_hin||0),kmZurueck=parseFloat(p.km_zurueck||0);
-    const kmInfo=(kmHin||kmZurueck)?`<div style="font-size:13px;color:var(--text-muted);margin-top:4px">Km: ${kmHin>0?'Hin '+kmHin:''}${kmHin>0&&kmZurueck>0?' · ':''}${kmZurueck>0?'Zurück '+kmZurueck:''}</div>`:'';
-
+    const kmInfo=(kmHin||kmZurueck)?`<div style="font-size:13px;color:var(--text-muted);margin-top:4px">🚗 ${kmHin>0?'Hin: '+kmHin+' km':''}${kmHin>0&&kmZurueck>0?' · ':''}${kmZurueck>0?'Zurück: '+kmZurueck+' km':''}</div>`:'';
+    // Tour-Info
+    const tourInfo=p.tour_id?`<div style="font-size:12px;color:#7c3aed;margin-top:4px">🗺️ Tour · Position ${p.tour_position||1}</div>`:'';
     return`<div class="content">
       <div class="card" style="margin-bottom:16px;border:2px solid ${col}">
         <div class="card-body">
@@ -1412,18 +1411,29 @@ async function pageProjekte(){
           ${(phase==='fahrt'||phase==='rueckfahrt')?`<div class="gps-bar" style="margin-top:6px;justify-content:center"><div class="gps-dot" id="proj-gps-dot"></div><span id="proj-gps-text" style="font-size:12px">GPS wird aktiviert…</span></div>`:''}
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
             <div style="font-size:16px;font-weight:700">${esc(p.auftraggeber_name||'–')}</div>
+            ${p.kundenname?`<div style="font-size:13px;font-weight:600">${esc(p.kundenname)}</div>`:''}
+            ${p.adresse?`<div style="font-size:12px;color:var(--text-muted)">${esc(p.adresse)}</div>`:''}
             ${p.auftragsnummer?`<div style="font-size:13px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
             ${p.notiz?`<div style="font-size:13px;color:var(--text-muted);margin-top:2px">${esc(p.notiz)}</div>`:''}
-            ${kmInfo}
+            ${p.rapport_erforderlich?`<div style="font-size:12px;color:#7c3aed;margin-top:4px;font-weight:600">📋 Rapport erforderlich</div>`:''}
+            ${kmInfo}${tourInfo}
           </div>
         </div>
       </div>
       ${phase==='arbeit'?`<div class="card" style="margin-bottom:12px"><div class="card-body">
         <label class="form-label">Besonderheiten / Anmerkungen</label>
         <textarea class="form-input" id="proj-besonderheiten" rows="3" placeholder="z.B. Fassade geöffnet, Stahlträger, Mehraufwand…">${esc(p.besonderheiten||'')}</textarea>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer">
+            <input type="checkbox" id="proj-rapport" ${p.rapport_erforderlich?'checked':''} style="width:18px;height:18px;cursor:pointer;flex-shrink:0">
+            <span style="font-weight:600">📋 Rapport anfertigen</span>
+          </label>
+          <textarea class="form-input" id="proj-rapport-bez" rows="2" placeholder="Rapport-Notizen…" style="margin-top:8px">${esc(p.rapport_beschreibung||'')}</textarea>
+        </div>
         <button class="btn btn-outline" id="btn-proj-save-notiz" style="margin-top:8px;font-size:13px">💾 Speichern</button>
       </div></div>`:''}
       <button id="btn-proj-next-phase" style="width:100%;padding:16px;background:${nextBtnColors[phase]};color:white;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">${nextBtnLabels[phase]}</button>
+      ${phase==='rueckfahrt'?`<button id="btn-proj-weiter-auftrag" style="width:100%;padding:14px;background:#7c3aed;color:white;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">➡️ Weiter zum nächsten Auftrag</button>`:''}
       ${isManager()?`<button id="btn-proj-delete" style="width:100%;padding:12px;background:transparent;color:var(--danger);border:1px solid var(--danger);border-radius:12px;font-size:14px;cursor:pointer">❌ Auftrag abbrechen / löschen</button>`:''}
     </div>`;
   }
@@ -1434,6 +1444,8 @@ async function pageProjekte(){
   try{auftraggeber=await apiGet('/api/projekte/auftraggeber')}catch(e){agFehler=true;}
   let recent=[];
   try{recent=await apiGet('/api/projekte?limit=10')}catch(e){}
+  let geplant=[];
+  try{geplant=(await apiGet('/api/projekte/geplant')).filter(p=>p.status==='geplant')}catch(e){}
 
   const agOpts=agFehler
     ?'<option value="">⚠️ Laden fehlgeschlagen – neu öffnen</option>'
@@ -1496,13 +1508,38 @@ async function pageProjekte(){
           <option value="4">4 Personen</option>
         </select>
       </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Kundenname (optional)</label>
+        <input type="text" class="form-input" id="proj-kundenname" placeholder="z.B. Mustermann GmbH">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Adresse (optional)</label>
+        <input type="text" class="form-input" id="proj-adresse" placeholder="z.B. Hauptstraße 1, 1010 Wien">
+      </div>
       <div class="form-group" style="margin-bottom:16px">
-        <label class="form-label">Notiz / Adresse (optional)</label>
-        <textarea class="form-input" id="proj-notiz" rows="2" placeholder="z.B. Adresse, Ansprechpartner…"></textarea>
+        <label class="form-label">Notiz (optional)</label>
+        <textarea class="form-input" id="proj-notiz" rows="2" placeholder="z.B. Ansprechpartner, Hinweise…"></textarea>
       </div>
       <button class="btn btn-primary" id="btn-proj-starten" style="width:100%;padding:16px;font-size:16px;font-weight:700;background:#7c3aed">🚗 Fahrt starten</button>
+      <button class="btn" id="btn-proj-planen" style="width:100%;padding:13px;font-size:14px;font-weight:600;background:#6b7280;color:white;margin-top:10px">📋 Vorab planen (kein Fahrtstart)</button>
     </div></div>
-    ${recent.length>0?`
+    ${geplant.length>0?`
+      <div style="font-weight:700;margin-bottom:8px">📋 Geplante Aufträge</div>
+      <div class="card" style="margin-bottom:16px">
+        ${geplant.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
+            ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
+            ${p.adresse?`<div style="font-size:12px;color:var(--text-muted)">${esc(p.adresse)}</div>`:''}
+            ${p.auftragsnummer?`<div style="font-size:12px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
+            ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
+          </div>
+        </div>`).join('')}
+      </div>`:''}
+    ${recent.filter(p=>p.status!=='geplant').length>0?`
       <div style="font-weight:700;margin-bottom:8px">Letzte Aufträge</div>
       <div class="card" style="overflow:auto"><table class="tbl"><thead><tr>
         <th>Auftraggeber / Termine</th><th>Arbeitszeit</th><th>km</th><th>Aktionen</th>
@@ -1591,6 +1628,7 @@ async function renderTabProjekte(){
             <span style="font-weight:700;font-size:15px">${esc(p.auftraggeber_name||'–')}</span>
             ${p.auftragsnummer?`<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 7px;border-radius:20px">Nr. ${esc(p.auftragsnummer)}</span>`:''}
             ${statusBadge(p.status)}
+            ${p.rapport_erforderlich?`<span style="font-size:11px;background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:600">📋 Rapport</span>`:''}
           </div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:3px">${fDate(p.erstellt_am)} · ${anzahl} Mitarbeiter</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin-top:8px">
@@ -1605,8 +1643,8 @@ async function renderTabProjekte(){
           ${gutschrift>0?`<div style="font-size:13px;color:#16a34a;font-weight:600">Gutschrift €${gutschrift.toFixed(2)}</div>`:''}
           ${gutschrift>0&&fk>0?`<div style="font-size:12px;color:${netto>=0?'#16a34a':'#dc2626'}">Netto €${netto.toFixed(2)}</div>`:''}
           <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
-            <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" data-arbmin="${arbMinGesamt}" data-anzahl="${anzahl}" title="Gutschrift">💰</button>
-            ${isManager()?`<button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${anzahl}" data-arbmin="${arbMinGesamt}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-bez="${esc(p.besonderheiten||'')}" title="Bearbeiten">✏️</button>`:''}
+            <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" data-arbmin="${totArbMin}" data-anzahl="${anzahl}" title="Gutschrift">💰</button>
+            ${isManager()?`<button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${anzahl}" data-arbmin="${totArbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-bez="${esc(p.besonderheiten||'')}" data-rapport="${p.rapport_erforderlich?'1':''}" data-rapportbez="${esc(p.rapport_beschreibung||'')}" title="Bearbeiten">✏️</button>`:''}
             ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
           </div>
         </div>
@@ -2436,13 +2474,45 @@ function bindEvents(){
     const agName=agSel?.options[agSel.selectedIndex]?.dataset.name||agSel?.options[agSel.selectedIndex]?.text||'';
     const auftragsnr=document.getElementById('proj-auftragsnr')?.value?.trim()||null;
     const anzahl=parseInt(document.getElementById('proj-anzahl')?.value)||2;
+    const kundenname=document.getElementById('proj-kundenname')?.value?.trim()||null;
+    const adresse=document.getElementById('proj-adresse')?.value?.trim()||null;
     const notiz=document.getElementById('proj-notiz')?.value?.trim()||null;
     if(!agId){toast('Auftraggeber wählen','err');return}
     try{
-      const p=await apiPost('/api/projekte',{auftraggeber_id:agId,auftraggeber_name:agName,auftragsnummer:auftragsnr,anzahl_mitarbeiter:anzahl,notiz});
+      const p=await apiPost('/api/projekte',{auftraggeber_id:agId,auftraggeber_name:agName,auftragsnummer:auftragsnr,anzahl_mitarbeiter:anzahl,kundenname,adresse,notiz});
       projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
       toast('🚗 Fahrt gestartet','ok');go('projekte');
     }catch(e){toast(e.message,'err')}
+  });
+
+  // Projekte: Vorab planen
+  o('btn-proj-planen','click',async()=>{
+    const agSel=document.getElementById('proj-ag');
+    const agId=agSel?.value;
+    const agName=agSel?.options[agSel.selectedIndex]?.dataset.name||agSel?.options[agSel.selectedIndex]?.text||'';
+    const auftragsnr=document.getElementById('proj-auftragsnr')?.value?.trim()||null;
+    const anzahl=parseInt(document.getElementById('proj-anzahl')?.value)||2;
+    const kundenname=document.getElementById('proj-kundenname')?.value?.trim()||null;
+    const adresse=document.getElementById('proj-adresse')?.value?.trim()||null;
+    const notiz=document.getElementById('proj-notiz')?.value?.trim()||null;
+    if(!agId){toast('Auftraggeber wählen','err');return}
+    try{
+      await apiPost('/api/projekte',{auftraggeber_id:agId,auftraggeber_name:agName,auftragsnummer:auftragsnr,anzahl_mitarbeiter:anzahl,kundenname,adresse,notiz,geplant:true});
+      toast('📋 Auftrag geplant','ok');go('projekte');
+    }catch(e){toast(e.message,'err')}
+  });
+
+  // Projekte: Geplanten Auftrag starten
+  document.querySelectorAll('[data-action="proj-starten-geplant"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'){toast('Erst aktiven Auftrag abschließen','err');return;}
+      try{
+        const p=await apiPut(`/api/projekte/${b.dataset.id}/starten`,{});
+        projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
+        toast('🚗 Fahrt gestartet','ok');go('projekte');
+      }catch(e){toast(e.message,'err')}
+    });
   });
 
   // Projekte: Gutschrift (auch auf user-facing Seite)
@@ -2504,6 +2574,13 @@ function bindEvents(){
           <div class="form-group" style="margin:0"><label class="form-label">km Rückfahrt</label><input type="number" class="form-input" id="pe-kmzurueck" value="${d.kmzurueck||0}" min="0" step="0.1"></div>
         </div>
         <div class="form-group"><label class="form-label">Besonderheiten</label><textarea class="form-input" id="pe-bez" rows="2" style="resize:vertical">${esc(d.bez||'')}</textarea></div>
+        <div style="margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer">
+            <input type="checkbox" id="pe-rapport" ${d.rapport==='1'?'checked':''} style="width:18px;height:18px;cursor:pointer">
+            <span style="font-weight:600">📋 Rapport anfertigen</span>
+          </label>
+          <textarea class="form-input" id="pe-rapport-bez" rows="2" placeholder="Rapport-Notizen…" style="margin-top:8px">${esc(d.rapportbez||'')}</textarea>
+        </div>
         <button class="btn btn-primary" id="btn-pe-save" data-id="${d.id}">💾 Speichern</button>`);
       setTimeout(()=>o('btn-pe-save','click',async()=>{
         const id=document.getElementById('btn-pe-save')?.dataset.id;
@@ -2517,6 +2594,8 @@ function bindEvents(){
             km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
             km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
             besonderheiten:document.getElementById('pe-bez')?.value||null,
+            rapport_erforderlich:document.getElementById('pe-rapport')?.checked||false,
+            rapport_beschreibung:document.getElementById('pe-rapport-bez')?.value||null,
           });
           closeModal();toast('💾 Gespeichert','ok');go('projekte');
         }catch(e){toast(e.message,'err')}
@@ -2611,8 +2690,10 @@ function bindEvents(){
   o('btn-proj-save-notiz','click',async()=>{
     if(!projektAkt)return;
     const bez=document.getElementById('proj-besonderheiten')?.value||'';
+    const rapport_erforderlich=document.getElementById('proj-rapport')?.checked||false;
+    const rapport_beschreibung=document.getElementById('proj-rapport-bez')?.value||null;
     try{
-      const p=await apiPut(`/api/projekte/${projektAkt.id}`,{notiz:projektAkt.notiz,besonderheiten:bez,anzahl_mitarbeiter:projektAkt.anzahl_mitarbeiter,auftragsnummer:projektAkt.auftragsnummer});
+      const p=await apiPut(`/api/projekte/${projektAkt.id}`,{notiz:projektAkt.notiz,besonderheiten:bez,anzahl_mitarbeiter:projektAkt.anzahl_mitarbeiter,auftragsnummer:projektAkt.auftragsnummer,rapport_erforderlich,rapport_beschreibung});
       projektAkt={...projektAkt,...p};localStorage.setItem('solano_projekt',JSON.stringify(projektAkt));
       toast('💾 Gespeichert','ok');
     }catch(e){toast(e.message,'err')}
@@ -2628,6 +2709,49 @@ function bindEvents(){
       projektAkt=null;localStorage.removeItem('solano_projekt');
       toast('Auftrag gelöscht','ok');go('home');
     }catch(e){toast(e.message,'err')}
+  });
+
+  // Projekte: Weiter zum nächsten Auftrag (Tour-Workflow)
+  o('btn-proj-weiter-auftrag','click',async()=>{
+    if(!projektAkt)return;
+    let geplantListe=[];
+    try{geplantListe=await apiGet('/api/projekte/geplant');}catch(e){}
+    const calcKm=calcProjektKm(projektGpsTrack);
+    const geplantOpts=geplantListe.map(p=>`
+      <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px">
+        <input type="radio" name="naechster-job" value="${p.id}" style="flex-shrink:0;width:18px;height:18px">
+        <div>
+          <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
+          ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
+          ${p.adresse?`<div style="font-size:12px;color:var(--text-muted)">${esc(p.adresse)}</div>`:''}
+        </div>
+      </label>`).join('');
+    showModal(`
+      <button class="modal-close" id="modal-close">×</button>
+      <div class="modal-title">➡️ Weiter zum nächsten Auftrag</div>
+      <div class="form-group">
+        <label class="form-label">Kilometer (Verbindungsfahrt)</label>
+        <input type="number" class="form-input" id="weiter-km" value="${calcKm||''}" step="0.1" min="0" placeholder="z.B. 5.5">
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${calcKm>0?`GPS: ca. ${calcKm} km`:'GPS nicht verfügbar – bitte manuell eingeben'}</div>
+      </div>
+      ${geplantListe.length>0
+        ?`<div style="margin-bottom:8px"><label class="form-label">Nächster Auftrag</label>${geplantOpts}</div>`
+        :`<p style="color:var(--text-muted);font-size:14px;margin-bottom:12px">Keine geplanten Aufträge vorhanden. Erst vorab planen.</p>`}
+      <button class="btn btn-primary" id="btn-weiter-ok" style="background:#7c3aed">➡️ Weiterfahren</button>`);
+    setTimeout(()=>o('btn-weiter-ok','click',async()=>{
+      const km=parseFloat(document.getElementById('weiter-km')?.value)||0;
+      const sel=document.querySelector('input[name="naechster-job"]:checked');
+      if(!sel){toast('Nächsten Auftrag wählen','err');return;}
+      const naechster_id=parseInt(sel.value);
+      try{
+        stopProjektGPS();
+        const p=await apiPut(`/api/projekte/${projektAkt.id}/weiter`,{km,naechster_id,besonderheiten:projektAkt.besonderheiten||null});
+        closeModal();stopProjektTimer();projektGpsTrack=[];
+        projektAkt=p;
+        if(projektAkt)localStorage.setItem('solano_projekt',JSON.stringify(projektAkt));
+        toast('➡️ Weiterfahrt zum nächsten Auftrag','ok');go('projekte');
+      }catch(e){toast(e.message,'err')}
+    }),0);
   });
 
   // Kalender Navigation
@@ -3151,6 +3275,13 @@ function bindAdminEvents(){
           <div class="form-group" style="margin:0"><label class="form-label">km Rückfahrt</label><input type="number" class="form-input" id="pe-kmzurueck" value="${d.kmzurueck||0}" min="0" step="0.1"></div>
         </div>
         <div class="form-group"><label class="form-label">Besonderheiten</label><textarea class="form-input" id="pe-bez" rows="2" style="resize:vertical">${esc(d.bez||'')}</textarea></div>
+        <div style="margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer">
+            <input type="checkbox" id="pe-rapport" ${d.rapport==='1'?'checked':''} style="width:18px;height:18px;cursor:pointer">
+            <span style="font-weight:600">📋 Rapport anfertigen</span>
+          </label>
+          <textarea class="form-input" id="pe-rapport-bez" rows="2" placeholder="Rapport-Notizen…" style="margin-top:8px">${esc(d.rapportbez||'')}</textarea>
+        </div>
         <button class="btn btn-primary" id="btn-pe-save" data-id="${d.id}">💾 Speichern</button>`);
       setTimeout(()=>o('btn-pe-save','click',async()=>{
         const id=document.getElementById('btn-pe-save')?.dataset.id;
@@ -3164,6 +3295,8 @@ function bindAdminEvents(){
             km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
             km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
             besonderheiten:document.getElementById('pe-bez')?.value||null,
+            rapport_erforderlich:document.getElementById('pe-rapport')?.checked||false,
+            rapport_beschreibung:document.getElementById('pe-rapport-bez')?.value||null,
           });
           closeModal();toast('💾 Gespeichert','ok');
           const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
