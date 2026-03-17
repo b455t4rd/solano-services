@@ -273,6 +273,7 @@ function isManager(){return!!(user?.ist_admin||user?.ist_chef)}
 let gpsBatch   = JSON.parse(localStorage.getItem('solano_gps_batch') || '[]');
 let projektAkt = JSON.parse(localStorage.getItem('solano_projekt') || 'null');
 let projektGpsTrack = [], projektGpsWatcher = null, projektTimerIv = null;
+let zeitLiveIv = null;
 let page = 'login', pageData = {}, gpsWatcher = null, timerIv = null;
 window._nachBadge = 0;
 let _draftAufg = [], _draftCtr = 0;
@@ -298,7 +299,7 @@ async function apiDel(p){const r=await fetch(API+p,{method:'DELETE',headers:ah()
 async function apiUp(p,fd){const r=await fetch(API+p,{method:'POST',headers:ah(),body:fd});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Fehler')}return r.json()}
 
 // ── ROUTER ──
-function go(p,data={}){pageData={...data};page=p;if(user){updateNachBadge();checkPauseErinnerung();}renderPage()}
+function go(p,data={}){pageData={...data};page=p;if(p!=='zeit'){clearInterval(zeitLiveIv);zeitLiveIv=null;}if(user){updateNachBadge();checkPauseErinnerung();}renderPage()}
 
 async function renderPage(){
   document.getElementById('modal-container').innerHTML='';
@@ -1276,7 +1277,7 @@ async function pageZeit(){
   if(status==='urlaub')statusText='🏖️ Urlaub';
   else if(status==='gehen')statusText=`Feierabend seit ${fUhr(gehenEintrag?.zeitpunkt)} · ${fMin(Math.round(nettoMinutenHeute))} gearbeitet`;
   else if(status==='pause_start'){const p=heute.filter(e=>e.typ==='pause_start').pop();statusText=`⏸ Pause seit ${fUhr(p?.zeitpunkt)}`;}
-  else if(kommenEintrag)statusText=`✅ Eingestempelt seit ${fUhr(kommenEintrag?.zeitpunkt)}`;
+  else if(kommenEintrag)statusText=`✅ Eingestempelt seit ${fUhr(kommenEintrag?.zeitpunkt)} · <span id="zeit-live-counter" style="font-weight:700;color:var(--primary)">…</span>`;
 
   // Pausen-Übersicht
   let pausenHTML='';
@@ -1291,6 +1292,29 @@ async function pageZeit(){
   }
 
   const btnStyle=(aktiv,farbe)=>`style="flex:1;padding:14px 8px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${aktiv?'pointer':'default'};background:${aktiv?farbe:'#e5e7eb'};color:${aktiv?'white':'#9ca3af'}"`;
+
+  // Live-Counter starten wenn eingestempelt
+  clearInterval(zeitLiveIv); zeitLiveIv=null;
+  if(kommenEintrag&&status!=='gehen'){
+    const kommenTs=new Date(kommenEintrag.zeitpunkt);
+    const berechnePauseMinBisJetzt=()=>{
+      let pm=0,lp=null;
+      for(const x of heute){
+        if(x.typ==='pause_start')lp=new Date(x.zeitpunkt);
+        else if(x.typ==='pause_ende'&&lp){pm+=(new Date(x.zeitpunkt)-lp)/60000;lp=null;}
+      }
+      if(lp)pm+=(Date.now()-lp)/60000; // laufende Pause
+      return pm;
+    };
+    const upd=()=>{
+      const el=document.getElementById('zeit-live-counter');
+      if(!el){clearInterval(zeitLiveIv);return;}
+      const bruttoMin=(Date.now()-kommenTs)/60000;
+      const nettoMin=Math.max(0,bruttoMin-berechnePauseMinBisJetzt());
+      el.textContent=fMin(Math.floor(nettoMin))+' gearbeitet';
+    };
+    setTimeout(()=>{upd();zeitLiveIv=setInterval(upd,30000);},100);
+  }
 
   // Admin-Bereich zeigt auch den Zeiterfassungs-Tab
   const adminHinweis=isManager()?`<button class="btn" id="btn-zeit-admin" style="background:#6b7280;color:white;margin-top:12px;width:100%">📊 Übersicht alle Mitarbeiter</button>`:'';
@@ -2836,7 +2860,7 @@ function bindEvents(){
       pageData.adminTab=btn.dataset.tab;
       document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
       const c=document.getElementById('admin-tab-content');
-      if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTab(btn.dataset.tab);bindAdminEvents();initKarteIfNeeded()}
+      if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;try{c.innerHTML=await renderTab(btn.dataset.tab);}catch(e){c.innerHTML=`<div style="padding:24px;color:#dc2626">Fehler beim Laden: ${e.message}</div>`;}bindAdminEvents();initKarteIfNeeded()}
     });
   });
 
@@ -2968,7 +2992,7 @@ function bindAdminEvents(){
     pageData.projBis=document.getElementById('proj-bis')?.value||'';
     pageData.projAg=document.getElementById('proj-ag-filter')?.value||'';
     const c=document.getElementById('admin-tab-content');
-    if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+    if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;try{c.innerHTML=await renderTabProjekte();}catch(e){c.innerHTML=`<div style="padding:24px;color:#dc2626">Fehler: ${e.message}</div>`;}bindAdminEvents()}
   })}
 
   // Projekte: Neuer Auftraggeber
