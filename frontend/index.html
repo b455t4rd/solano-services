@@ -1667,12 +1667,7 @@ async function renderTabProjekte(){
     const maStd=(totGesamtMin/60)*anzahl; // immer Gesamtzeit (Fahrt+Arbeit) im Nenner
     const netto=(gutschrift+fkp)-totFk;
     const stundensatz=maStd>0&&gutschrift>0&&totGesamtMin>=10?netto/maStd:null;
-    const accentColor=stundensatz!==null?(stundensatz>=warnschwelle?'#16a34a':stundensatz>=(warnschwelle*0.6)?'#d97706':'#dc2626'):'#e5e7eb';
-    // Session-Details
-    const sessHtml=sessions.length>0?`<div style="margin-top:8px;border-top:1px solid #e5e7eb;padding-top:6px">${alleSess.map(s=>{
-      const sArbMin=parseInt(s.arbeitszeit_min)||0;const sKm=parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0);const sMA=parseInt(s.anzahl_mitarbeiter)||2;
-      return`<div style="font-size:12px;color:#374151;padding:2px 0">📅 ${fDate(s.datum)} · ⏱ ${sArbMin?fMin(sArbMin):'–'} · 👷 ${sMA} MA · 🚗 ${sKm>0?sKm.toFixed(1)+' km':'–'}</div>`;
-    }).join('')}</div>`:'';
+    const accentColor=stundensatz!==null?(stundensatz>=warnschwelle?'#16a34a':'#dc2626'):'#e5e7eb';
     return`<tr style="border-bottom:1px solid #f3f4f6;${stundensatz!==null&&stundensatz<warnschwelle?'background:#fff7f7':''}">
       <td style="white-space:nowrap;font-size:12px;color:var(--text-muted)">${fDate(p.erstellt_am)}</td>
       <td style="min-width:120px">
@@ -1682,10 +1677,6 @@ async function renderTabProjekte(){
       </td>
       <td style="white-space:nowrap;font-size:12px">${esc(p.auftragsnummer||'–')}</td>
       <td style="text-align:center;font-size:13px;font-weight:600">${anzahl}</td>
-      <td style="white-space:nowrap;font-size:12px;color:#2563eb">${totFahrtMin>0?`<b>${fMin(totFahrtMin)}</b><div style="font-size:11px;color:#6b7280">${(totFahrtMin/60).toFixed(2)}h${!fzBezRow?'<span style="color:#dc2626"> ✗</span>':''}</div>`:'<span style="color:#9ca3af">–</span>'}</td>
-      <td style="white-space:nowrap;font-size:12px;color:#16a34a">${totArbMin>0?`<b>${fMin(totArbMin)}</b><div style="font-size:11px;color:#6b7280">${(totArbMin/60).toFixed(2)}h</div>`:'<span style="color:#f59e0b;font-weight:600">!</span>'}</td>
-      <td style="white-space:nowrap;font-size:12px;color:#7c3aed">${totGesamtMin>0?`<b>${fMin(totGesamtMin)}</b><div style="font-size:11px;color:#6b7280">${(totGesamtMin/60*anzahl).toFixed(2)}h×${anzahl}</div>`:'–'}</td>
-      <td style="white-space:nowrap;font-size:12px">${totKm>0?`${totKm.toFixed(1)} km`:'–'}</td>
       <td style="white-space:nowrap;font-size:12px;color:#dc2626">${totFk>0?`−€${totFk.toFixed(2)}`:'–'}</td>
       <td style="white-space:nowrap;font-size:12px;color:#16a34a;font-weight:600">${gutschrift>0?`€${gutschrift.toFixed(2)}${fkp>0?`<div style="font-size:10px;color:#16a34a">+€${fkp.toFixed(2)} P.</div>`:''}`:''}</td>
       <td style="white-space:nowrap">
@@ -1742,15 +1733,11 @@ async function renderTabProjekte(){
       ${projSuche&&auswertungFiltered.length===0
         ?`<div style="text-align:center;color:var(--text-muted);padding:24px">Keine Ergebnisse für „${esc(pageData.projSuche||'')}"</div>`
         :rows
-          ?`<table class="tbl" style="min-width:900px;width:100%"><thead><tr>
+          ?`<table class="tbl" style="min-width:520px;width:100%"><thead><tr>
               <th style="white-space:nowrap">Datum</th>
               <th>Auftraggeber</th>
               <th style="white-space:nowrap">Nr.</th>
               <th style="text-align:center">MA</th>
-              <th style="white-space:nowrap">🚗 Fahrzeit</th>
-              <th style="white-space:nowrap">🔨 Arbeitszeit</th>
-              <th style="white-space:nowrap">⏱ Gesamt</th>
-              <th style="white-space:nowrap">km</th>
               <th style="white-space:nowrap">⛽ Fahr-K.</th>
               <th style="white-space:nowrap">💰 Gutschrift</th>
               <th style="white-space:nowrap">€/Std/MA</th>
@@ -2114,25 +2101,35 @@ async function renderTabKalender(){
 
 function exportProjekteCSV(daten, von, bis, fzEinst){
   const kpk=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
-  const hdr=['Datum','Auftraggeber','Auftragsnummer','Anzahl MA','Status','Arbeitszeit (Min)','MA-Stunden','km gesamt','Fahrtkosten (€)','Gutschrift (€)','Netto (€)','€/Std/MA','Besonderheiten'];
-  let sumArbMin=0,sumKm=0,sumFk=0,sumGut=0,sumMaStd=0;
+  const hdr=['Datum','Auftraggeber','Auftragsnummer','Anzahl MA','Status',
+    'Fahrzeit Hin (Min)','Fahrzeit Rück (Min)','Fahrzeit gesamt (Min)',
+    'Arbeitszeit (Min)','Gesamtzeit (Min)','MA-Stunden gesamt',
+    'km gesamt','Fahrtkosten (€)','Gutschrift (€)','Fahrtkostenpauschale (€)','Netto (€)','€/Std/MA','Besonderheiten'];
+  let sumFahrtMin=0,sumArbMin=0,sumKm=0,sumFk=0,sumGut=0,sumMaStd=0;
   const rows=daten.map(p=>{
     const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
     const fk=km*kpk;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const arbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
-    const maStd=(arbMin/60)*anzahl;
+    const fahrtHin=parseInt(p.fahrzeit_hin_min)||0;
+    const fahrtZurueck=parseInt(p.fahrzeit_zurueck_min)||0;
+    const fahrtMin=fahrtHin+fahrtZurueck;
+    const gesamtMin=arbMin+fahrtMin;
+    const maStd=(gesamtMin/60)*anzahl;
     const gut=parseFloat(p.gutschrift_betrag||0);
-    const netto=gut-fk;
+    const fkp=parseFloat(p.fahrtkosten_pauschale||0);
+    const netto=(gut+fkp)-fk;
     const eurStd=maStd>0&&gut>0?(netto/maStd).toFixed(2):'';
-    sumArbMin+=arbMin;sumKm+=km;sumFk+=fk;sumGut+=gut;sumMaStd+=maStd;
+    sumFahrtMin+=fahrtMin;sumArbMin+=arbMin;sumKm+=km;sumFk+=fk;sumGut+=gut;sumMaStd+=maStd;
     return[fDate(p.erstellt_am),p.auftraggeber_name||'',p.auftragsnummer||'',anzahl,p.status||'',
-      arbMin,maStd.toFixed(2),km.toFixed(1),fk.toFixed(2),gut.toFixed(2),netto.toFixed(2),eurStd,p.besonderheiten||''
+      fahrtHin,fahrtZurueck,fahrtMin,arbMin,gesamtMin,maStd.toFixed(2),
+      km.toFixed(1),fk.toFixed(2),gut.toFixed(2),fkp.toFixed(2),netto.toFixed(2),eurStd,p.besonderheiten||''
     ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
   });
   const sumNetto=sumGut-sumFk;
   const sumEurStd=sumMaStd>0&&sumGut>0?(sumNetto/sumMaStd).toFixed(2):'';
-  const sumRow=['GESAMT','','','','',(sumArbMin).toString(),sumMaStd.toFixed(2),sumKm.toFixed(1),sumFk.toFixed(2),sumGut.toFixed(2),sumNetto.toFixed(2),sumEurStd,'']
+  const sumRow=['GESAMT','','','','',sumFahrtMin,'',sumFahrtMin,sumArbMin,sumFahrtMin+sumArbMin,sumMaStd.toFixed(2),
+    sumKm.toFixed(1),sumFk.toFixed(2),sumGut.toFixed(2),'',sumNetto.toFixed(2),sumEurStd,'']
     .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
   const blob=new Blob(['\uFEFF'+hdr.join(',')+'\n'+rows.join('\n')+'\n'+sumRow],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -2141,48 +2138,83 @@ function exportProjekteCSV(daten, von, bis, fzEinst){
 
 function exportProjektePDF(daten, von, bis, fzEinst){
   const kpk=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
-  // Summen
-  const sum={count:0,arbeit:0,km:0,fk:0,gut:0,maStd:0};
+  const sum={count:0,fahrt:0,arbeit:0,km:0,fk:0,gut:0,maStd:0};
   daten.forEach(p=>{
     const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
     const fk=km*kpk;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const arbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
-    sum.count++;sum.arbeit+=arbMin;sum.km+=km;sum.fk+=fk;
-    sum.gut+=parseFloat(p.gutschrift_betrag||0);sum.maStd+=(arbMin/60)*anzahl;
+    const fahrtMin=(parseInt(p.fahrzeit_hin_min)||0)+(parseInt(p.fahrzeit_zurueck_min)||0);
+    const gesamtMin=arbMin+fahrtMin;
+    const fkp=parseFloat(p.fahrtkosten_pauschale||0);
+    sum.count++;sum.fahrt+=fahrtMin;sum.arbeit+=arbMin;sum.km+=km;sum.fk+=fk;
+    sum.gut+=parseFloat(p.gutschrift_betrag||0);sum.maStd+=(gesamtMin/60)*anzahl;
   });
   const rows=daten.map(p=>{
     const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
-    const fk=km*kpk;const anzahl=parseInt(p.anzahl_mitarbeiter||1);
+    const fk=km*kpk;
+    const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const arbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
-    const gut=parseFloat(p.gutschrift_betrag||0);const maStd=(arbMin/60)*anzahl;
-    const eurStd=maStd>0&&gut>0?((gut-fk)/maStd).toFixed(2):'–';
-    return`<tr><td>${fDate(p.erstellt_am)}</td><td>${esc(p.auftraggeber_name||'–')}</td><td>${esc(p.auftragsnummer||'–')}</td>
-      <td style="text-align:center">${anzahl}</td><td>${arbMin?fMin(arbMin)+'<span style="color:#6b7280;font-size:10px">×'+anzahl+'</span>':'–'}</td>
-      <td>${km>0?km.toFixed(1)+' km':'–'}</td><td>${fk>0?'-€'+fk.toFixed(2):'–'}</td>
-      <td>${gut>0?'€'+gut.toFixed(2):'–'}</td><td style="font-weight:700;color:#7c3aed">${eurStd}</td></tr>`;
+    const fahrtMin=(parseInt(p.fahrzeit_hin_min)||0)+(parseInt(p.fahrzeit_zurueck_min)||0);
+    const gesamtMin=arbMin+fahrtMin;
+    const gut=parseFloat(p.gutschrift_betrag||0);
+    const fkp=parseFloat(p.fahrtkosten_pauschale||0);
+    const maStd=(gesamtMin/60)*anzahl;
+    const netto=(gut+fkp)-fk;
+    const eurStd=maStd>0&&gut>0?(netto/maStd).toFixed(2):'–';
+    const eurColor=parseFloat(eurStd)>=(fzEinst.warnschwelle||60)?'#16a34a':'#dc2626';
+    return`<tr>
+      <td>${fDate(p.erstellt_am)}</td>
+      <td>${esc(p.auftraggeber_name||'–')}${p.kundenname?'<br><span style="color:#6b7280;font-size:10px">'+esc(p.kundenname)+'</span>':''}</td>
+      <td>${esc(p.auftragsnummer||'–')}</td>
+      <td style="text-align:center">${anzahl}</td>
+      <td>${fahrtMin>0?fMin(fahrtMin):'–'}</td>
+      <td>${arbMin>0?fMin(arbMin):'–'}</td>
+      <td>${gesamtMin>0?fMin(gesamtMin)+'<span style="color:#6b7280;font-size:10px"> ×'+anzahl+'='+(gesamtMin/60*anzahl).toFixed(1)+'h</span>':'–'}</td>
+      <td>${km>0?km.toFixed(1)+' km':'–'}</td>
+      <td>${fk>0?'−€'+fk.toFixed(2):'–'}</td>
+      <td>${gut>0?'€'+gut.toFixed(2)+(fkp>0?'<br><span style="font-size:10px">+€'+fkp.toFixed(2)+' P.</span>':''):'–'}</td>
+      <td style="font-weight:700;color:${eurColor}">${eurStd!=='–'?'€'+eurStd+'/h':'–'}</td>
+    </tr>`;
   }).join('');
   const netto=sum.gut-sum.fk;
   const eurStdGes=sum.maStd>0&&sum.gut>0?(netto/sum.maStd).toFixed(2):'–';
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Projekte ${von}–${bis}</title>
-  <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}h2{font-size:16px}
-  table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}
-  th{background:#f3f4f6}tfoot td{font-weight:700;background:#f9fafb}
-  .summary{margin-bottom:16px;background:#f9fafb;padding:10px;border-radius:6px}
+  <style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px}h2{font-size:15px}
+  table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:3px 5px;text-align:left}
+  th{background:#1e40af;color:white;font-size:11px}tfoot td{font-weight:700;background:#f0f9ff;border-top:2px solid #1e40af}
+  .summary{margin-bottom:14px;background:#f9fafb;padding:10px;border-radius:6px;font-size:12px}
   @media print{button{display:none}}</style></head><body>
-  <h2>🔨 Projekte-Auswertung: ${von} – ${bis}</h2>
-  <div class="summary">Aufträge: <b>${sum.count}</b> · Arbeitszeit: <b>${fMin(sum.arbeit)}</b> · MA-Stunden: <b>${sum.maStd.toFixed(1)}h</b> · km: <b>${sum.km.toFixed(1)}</b><br>
-  Fahrtkosten: <b style="color:#dc2626">-€${sum.fk.toFixed(2)}</b> · Gutschrift: <b style="color:#16a34a">€${sum.gut.toFixed(2)}</b> · Netto: <b style="color:${netto>=0?'#16a34a':'#dc2626'}">€${netto.toFixed(2)}</b> · €/Std/MA: <b style="color:#7c3aed">${eurStdGes}</b></div>
-  <table><thead><tr><th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>MA</th><th>Arbeit</th><th>km</th><th>Fahrtkosten</th><th>Gutschrift</th><th>€/Std/MA</th></tr></thead>
+  <h2>Projekte-Auswertung: ${von} – ${bis}</h2>
+  <div class="summary">
+    Aufträge: <b>${sum.count}</b> &nbsp;·&nbsp;
+    Fahrzeit: <b>${fMin(sum.fahrt)}</b> &nbsp;·&nbsp;
+    Arbeitszeit: <b>${fMin(sum.arbeit)}</b> &nbsp;·&nbsp;
+    km: <b>${sum.km.toFixed(1)}</b> &nbsp;·&nbsp;
+    Fahrtkosten: <b style="color:#dc2626">−€${sum.fk.toFixed(2)}</b><br>
+    Gutschrift: <b style="color:#16a34a">€${sum.gut.toFixed(2)}</b> &nbsp;·&nbsp;
+    Netto: <b style="color:${netto>=0?'#16a34a':'#dc2626'}">€${netto.toFixed(2)}</b> &nbsp;·&nbsp;
+    Ø €/Std/MA: <b style="color:#7c3aed">${eurStdGes!=='–'?'€'+eurStdGes:eurStdGes}</b>
+  </div>
+  <table><thead><tr>
+    <th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>MA</th>
+    <th>Fahrzeit</th><th>Arbeitszeit</th><th>Gesamtzeit</th>
+    <th>km</th><th>Fahr-K.</th><th>Gutschrift</th><th>€/Std/MA</th>
+  </tr></thead>
   <tbody>${rows}</tbody>
-  <tfoot><tr><td colspan="4"><b>GESAMT (${sum.count} Aufträge)</b></td>
-    <td><b>${fMin(sum.arbeit)}</b></td><td><b>${sum.km.toFixed(1)} km</b></td>
-    <td style="color:#dc2626"><b>-€${sum.fk.toFixed(2)}</b></td>
+  <tfoot><tr>
+    <td colspan="4"><b>GESAMT (${sum.count} Aufträge)</b></td>
+    <td><b>${fMin(sum.fahrt)}</b></td>
+    <td><b>${fMin(sum.arbeit)}</b></td>
+    <td><b>${fMin(sum.fahrt+sum.arbeit)}</b></td>
+    <td><b>${sum.km.toFixed(1)} km</b></td>
+    <td style="color:#dc2626"><b>−€${sum.fk.toFixed(2)}</b></td>
     <td style="color:#16a34a"><b>€${sum.gut.toFixed(2)}</b></td>
-    <td style="color:#7c3aed"><b>${eurStdGes}</b></td></tr></tfoot>
+    <td style="color:#7c3aed"><b>${eurStdGes!=='–'?'€'+eurStdGes+'/h':eurStdGes}</b></td>
+  </tr></tfoot>
   </table>
-  <div style="margin-top:20px;font-size:10px;color:#9ca3af">Fahrtkosten-Basis: €${kpk.toFixed(3)}/km (Diesel+Maut+Abnützung) · Erstellt: ${new Date().toLocaleString('de-AT')}</div>
-  <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Drucken</button>
+  <div style="margin-top:16px;font-size:10px;color:#9ca3af">Fahrtkosten-Basis: €${kpk.toFixed(3)}/km (Diesel+Maut+Abnützung) · Erstellt: ${new Date().toLocaleString('de-AT')}</div>
+  <button onclick="window.print()" style="margin-top:14px;padding:8px 20px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Drucken / Als PDF</button>
   </body></html>`;
   const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();}
 }
