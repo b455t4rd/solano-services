@@ -106,9 +106,48 @@ router.get('/auswertung', managerMiddleware, async (req, res) => {
 router.get('/geplant', authMiddleware, async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT * FROM projekt_auftraege WHERE status='geplant' ORDER BY erstellt_am ASC`
+      `SELECT * FROM projekt_auftraege WHERE status='geplant'
+       ORDER BY sort_order ASC, geplant_datum ASC NULLS LAST, erstellt_am ASC`
     );
     res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Sortierung geplanter Aufträge speichern ────────────────────────────────────
+
+router.post('/geplant/sort', authMiddleware, async (req, res) => {
+  const { reihenfolge } = req.body; // [{id, sort_order}]
+  try {
+    for (const item of (reihenfolge||[])) {
+      await pool.query('UPDATE projekt_auftraege SET sort_order=$1 WHERE id=$2', [item.sort_order, item.id]);
+    }
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Mitarbeiterkosten-Einstellungen ───────────────────────────────────────────
+
+router.get('/ma-kosten', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM ma_kosten_einstellungen WHERE id=1');
+    res.json(r.rows[0] || { stundensatz_fa:55, stundensatz_ha:45, stundensatz_gf:35, warnschwelle:55 });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/ma-kosten', adminMiddleware, async (req, res) => {
+  const { stundensatz_fa, stundensatz_ha, stundensatz_gf, warnschwelle } = req.body;
+  try {
+    const r = await pool.query(
+      `INSERT INTO ma_kosten_einstellungen (id, stundensatz_fa, stundensatz_ha, stundensatz_gf, warnschwelle, aktualisiert_am)
+       VALUES (1,$1,$2,$3,$4,NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         stundensatz_fa=EXCLUDED.stundensatz_fa, stundensatz_ha=EXCLUDED.stundensatz_ha,
+         stundensatz_gf=EXCLUDED.stundensatz_gf, warnschwelle=EXCLUDED.warnschwelle,
+         aktualisiert_am=NOW()
+       RETURNING *`,
+      [stundensatz_fa||55, stundensatz_ha||45, stundensatz_gf||35, warnschwelle||55]
+    );
+    res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -200,17 +239,23 @@ router.get('/', authMiddleware, async (req, res) => {
 // ── Neuer Auftrag ─────────────────────────────────────────────────────────────
 
 router.post('/', authMiddleware, async (req, res) => {
-  const { auftraggeber_id, auftraggeber_name, auftragsnummer, anzahl_mitarbeiter, notiz, geplant, kundenname, adresse } = req.body;
+  const { auftraggeber_id, auftraggeber_name, auftragsnummer, anzahl_mitarbeiter, notiz, geplant,
+          kundenname, adresse, adresse_strasse, adresse_plz, adresse_land,
+          geplant_datum, ma_typen } = req.body;
   const status = geplant ? 'geplant' : 'fahrt';
   try {
     const r = await pool.query(
       `INSERT INTO projekt_auftraege
          (mitarbeiter_id, mitarbeiter_name, auftraggeber_id, auftraggeber_name,
-          auftragsnummer, anzahl_mitarbeiter, notiz, status, fahrt_start, kundenname, adresse)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,${geplant?'NULL':'NOW()'},$9,$10) RETURNING *`,
+          auftragsnummer, anzahl_mitarbeiter, notiz, status, fahrt_start,
+          kundenname, adresse, adresse_strasse, adresse_plz, adresse_land,
+          geplant_datum, ma_typen)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,${geplant?'NULL':'NOW()'},$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [req.user.id, req.user.name, auftraggeber_id||null, auftraggeber_name||null,
        auftragsnummer||null, anzahl_mitarbeiter||2, notiz||null, status,
-       kundenname||null, adresse||null]
+       kundenname||null, adresse||null,
+       adresse_strasse||null, adresse_plz||null, adresse_land||null,
+       geplant_datum||null, JSON.stringify(ma_typen||[])]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -276,7 +321,13 @@ router.put('/:id/gutschrift', managerMiddleware, async (req, res) => {
 // ── Allgemeines Update ────────────────────────────────────────────────────────
 
 router.put('/:id', authMiddleware, async (req, res) => {
-  const { notiz, besonderheiten, anzahl_mitarbeiter, auftragsnummer, km_hin, km_zurueck, arbeitszeit_manuell_min, auftraggeber_id, auftraggeber_name, kundenname, adresse, rapport_erforderlich, rapport_beschreibung } = req.body;
+  const { notiz, besonderheiten, anzahl_mitarbeiter, auftragsnummer,
+          km_hin, km_zurueck, arbeitszeit_manuell_min, arbeitszeit_min,
+          fahrzeit_hin_min, fahrzeit_zurueck_min,
+          auftraggeber_id, auftraggeber_name, kundenname, adresse,
+          adresse_strasse, adresse_plz, adresse_land,
+          rapport_erforderlich, rapport_beschreibung,
+          geplant_datum, ma_typen, sort_order } = req.body;
   try {
     const r = await pool.query(
       `UPDATE projekt_auftraege
@@ -287,8 +338,17 @@ router.put('/:id', authMiddleware, async (req, res) => {
            auftraggeber_name=COALESCE($9, auftraggeber_name),
            kundenname=COALESCE($10, kundenname), adresse=COALESCE($11, adresse),
            rapport_erforderlich=COALESCE($12, rapport_erforderlich),
-           rapport_beschreibung=COALESCE($13, rapport_beschreibung)
-       WHERE id=$14 RETURNING *`,
+           rapport_beschreibung=COALESCE($13, rapport_beschreibung),
+           adresse_strasse=COALESCE($14, adresse_strasse),
+           adresse_plz=COALESCE($15, adresse_plz),
+           adresse_land=COALESCE($16, adresse_land),
+           geplant_datum=COALESCE($17, geplant_datum),
+           ma_typen=COALESCE($18::jsonb, ma_typen),
+           sort_order=COALESCE($19, sort_order),
+           arbeitszeit_min=COALESCE($20, arbeitszeit_min),
+           fahrzeit_hin_min=COALESCE($21, fahrzeit_hin_min),
+           fahrzeit_zurueck_min=COALESCE($22, fahrzeit_zurueck_min)
+       WHERE id=$23 RETURNING *`,
       [notiz||null, besonderheiten||null, anzahl_mitarbeiter||2, auftragsnummer||null,
        km_hin!=null?km_hin:null, km_zurueck!=null?km_zurueck:null,
        arbeitszeit_manuell_min!=null?arbeitszeit_manuell_min:null,
@@ -296,6 +356,13 @@ router.put('/:id', authMiddleware, async (req, res) => {
        kundenname||null, adresse||null,
        rapport_erforderlich!=null?rapport_erforderlich:null,
        rapport_beschreibung!=null?rapport_beschreibung:null,
+       adresse_strasse||null, adresse_plz||null, adresse_land||null,
+       geplant_datum||null,
+       ma_typen!=null?JSON.stringify(ma_typen):null,
+       sort_order!=null?sort_order:null,
+       arbeitszeit_min!=null?arbeitszeit_min:null,
+       fahrzeit_hin_min!=null?fahrzeit_hin_min:null,
+       fahrzeit_zurueck_min!=null?fahrzeit_zurueck_min:null,
        req.params.id]
     );
     res.json(r.rows[0]);

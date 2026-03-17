@@ -533,7 +533,7 @@ async function pageNachrichten(){
           ${isMine&&!n.antwort
             ?`<div style="display:flex;gap:8px">
                 <button class="btn-icon nach-ja" data-id="${n.id}" style="background:var(--success)">✅ Ja, erledige ich</button>
-                <button class="btn-icon nach-nein" data-id="${n.id}" style="background:var(--danger)">❌ Nicht möglich</button>
+                <button class="btn-icon nach-nein" data-id="${n.id}" style="background:var(--danger);color:white">✕ Nicht möglich</button>
               </div>`
             :statusBadge(n)}
           ${n.antwort_am?`<div style="font-size:12px;color:var(--text-muted);margin-top:6px">Geantwortet: ${new Date(n.antwort_am).toLocaleString('de-AT')}</div>`:''}
@@ -678,19 +678,18 @@ async function pageEinsatz(){
 
 async function pageAdmin(){
   const tab=pageData.adminTab||'anlagen';
-  const pushTab=user?.ist_admin?`<button class="tab-btn ${tab==='push'?'active':''}" data-tab="push">🔔 Push</button>`:'';
   return`<div class="tabs" style="overflow-x:auto;flex-wrap:nowrap">
     <button class="tab-btn ${tab==='anlagen'?'active':''}" data-tab="anlagen">Anlagen</button>
-    <button class="tab-btn ${tab==='mitarbeiter'?'active':''}" data-tab="mitarbeiter">Mitarbeiter</button>
+    <button class="tab-btn ${tab==='projekte'?'active':''}" data-tab="projekte">🔨 Projekte</button>
     <button class="tab-btn ${tab==='berichte'?'active':''}" data-tab="berichte">Berichte</button>
-    <button class="tab-btn ${tab==='karte'?'active':''}" data-tab="karte">🗺️ Karte</button>
+    <button class="tab-btn ${tab==='zeitauswertung'?'active':''}" data-tab="zeitauswertung">⏱ Zeit</button>
     <button class="tab-btn ${tab==='todos'?'active':''}" data-tab="todos">📋 TODOs</button>
     <button class="tab-btn ${tab==='nachrichten'?'active':''}" data-tab="nachrichten">💬 Nachrichten</button>
+    ${user?.ist_admin?`<button class="tab-btn ${tab==='push'?'active':''}" data-tab="push">🔔 Push</button>`:''}
+    <button class="tab-btn ${tab==='mitarbeiter'?'active':''}" data-tab="mitarbeiter">Mitarbeiter</button>
     <button class="tab-btn ${tab==='alarm'?'active':''}" data-tab="alarm">🚨 Alarm</button>
-    <button class="tab-btn ${tab==='zeitauswertung'?'active':''}" data-tab="zeitauswertung">⏱️ Zeiterfassung</button>
-    <button class="tab-btn ${tab==='projekte'?'active':''}" data-tab="projekte">🔨 Projekte</button>
     ${user?.ist_admin?`<button class="tab-btn ${tab==='reset'?'active':''}" data-tab="reset">🗑️ Reset</button>`:''}
-    ${pushTab}
+    <button class="tab-btn ${tab==='karte'?'active':''}" data-tab="karte">🗺️ Karte</button>
   </div>
   <div id="admin-tab-content">${await renderTab(tab)}</div>`;
 }
@@ -1412,11 +1411,11 @@ async function pageProjekte(){
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
             <div style="font-size:16px;font-weight:700">${esc(p.auftraggeber_name||'–')}</div>
             ${p.kundenname?`<div style="font-size:13px;font-weight:600">${esc(p.kundenname)}</div>`:''}
-            ${p.adresse?`<div style="font-size:12px;color:var(--text-muted)">${esc(p.adresse)}</div>`:''}
+            ${(()=>{const str=p.adresse_strasse||p.adresse||'';const plz=p.adresse_plz||'';const land=p.adresse_land||'';const full=[str,plz,land].filter(Boolean).join(', ');return full?`<div style="font-size:12px;color:var(--text-muted)">${esc(full)}</div>`:''})()}
             ${p.auftragsnummer?`<div style="font-size:13px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
             ${p.notiz?`<div style="font-size:13px;color:var(--text-muted);margin-top:2px">${esc(p.notiz)}</div>`:''}
             ${p.rapport_erforderlich?`<div style="font-size:12px;color:#7c3aed;margin-top:4px;font-weight:600">📋 Rapport erforderlich</div>`:''}
-            ${p.adresse?`<button onclick="openNav(null,null,'${esc(p.adresse)}')" style="margin-top:8px;background:#3b82f6;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%">🗺️ Navigation öffnen</button>`:''}
+            ${(()=>{const str=p.adresse_strasse||p.adresse||'';const plz=p.adresse_plz||'';const land=p.adresse_land||'';const nav=[str,plz,land].filter(Boolean).join(', ');return nav?`<button onclick="openNav(null,null,'${esc(nav)}')" style="margin-top:8px;background:#3b82f6;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%">🗺️ Navigation öffnen</button>`:''})()}
             ${kmInfo}${tourInfo}
           </div>
         </div>
@@ -1472,17 +1471,19 @@ async function pageProjekte(){
     }).join('');
     const totalArbMin=alleSessions.reduce((a,s)=>a+(parseInt(s.arbeitszeit_min)||0),0);
     const totalKm=alleSessions.reduce((a,s)=>a+parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0),0);
+    const isAbgeschlossen=p.status==='abgeschlossen';
     return`<tr>
-      <td><div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
-          ${esc(p.auftragsnummer||'')?`<div style="font-size:11px;color:var(--text-muted)">${esc(p.auftragsnummer)}</div>`:''}
+      <td style="min-width:140px"><div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
+          ${p.kundenname?`<div style="font-size:11px;color:var(--text-muted)">${esc(p.kundenname)}</div>`:''}
+          ${esc(p.auftragsnummer||'')?`<div style="font-size:11px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
           ${isPausiert?'<span class="badge" style="background:#fef3c7;color:#92400e;font-size:11px">⏸ Geparkt</span>':''}
-          ${sessions.length>0?`<div style="margin-top:6px">${sessionRows}</div>`:''}
+          ${sessions.length>0?`<div style="margin-top:4px">${sessionRows}</div>`:''}
       </td>
-      <td style="white-space:nowrap">${totalArbMin?fMin(totalArbMin):'–'}</td>
-      <td style="white-space:nowrap">${totalKm>0?totalKm.toFixed(1)+' km':'–'}</td>
+      <td style="white-space:nowrap;font-size:13px">${totalArbMin?fMin(totalArbMin):'–'}</td>
+      <td style="white-space:nowrap;font-size:13px">${totalKm>0?totalKm.toFixed(1)+' km':'–'}</td>
       <td><div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
         ${isPausiert?`<button class="tbl-btn" data-action="proj-fortsetzen" data-id="${p.id}" style="background:#f59e0b;color:white">▶️ Fortsetzen</button>`
-          :hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span><button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" style="font-size:11px">✏️</button>`
+          :isAbgeschlossen?`${hatGutschrift?`<span style="color:#16a34a;font-weight:700;font-size:12px">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`:''}<button class="tbl-btn" data-action="proj-edit-recent" data-id="${p.id}" data-arbmin="${totalArbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-anzahl="${p.anzahl_mitarbeiter||2}" data-notiz="${esc(p.notiz||'')}" title="Bearbeiten">✏️</button>`
           :`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}
         ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
       </div></td>
@@ -1501,57 +1502,81 @@ async function pageProjekte(){
         <input type="text" class="form-input" id="proj-auftragsnr" placeholder="z.B. 2025-001">
       </div>
       <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Kundenname (optional)</label>
+        <input type="text" class="form-input" id="proj-kundenname" placeholder="z.B. Mustermann GmbH">
+      </div>
+      <div class="form-group" style="margin-bottom:4px">
+        <label class="form-label">Adresse (für Navigation)</label>
+        <input type="text" class="form-input" id="proj-adresse-strasse" placeholder="Straße und Hausnummer" style="margin-bottom:6px">
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:6px">
+          <input type="text" class="form-input" id="proj-adresse-plz" placeholder="PLZ">
+          <input type="text" class="form-input" id="proj-adresse-land" placeholder="Land" value="Österreich">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
         <label class="form-label">Anzahl Mitarbeiter</label>
         <select class="form-input" id="proj-anzahl">
           <option value="1">1 Person</option>
           <option value="2" selected>2 Personen</option>
           <option value="3">3 Personen</option>
           <option value="4">4 Personen</option>
+          <option value="5">5 Personen</option>
         </select>
       </div>
-      <div class="form-group" style="margin-bottom:12px">
-        <label class="form-label">Kundenname (optional)</label>
-        <input type="text" class="form-input" id="proj-kundenname" placeholder="z.B. Mustermann GmbH">
-      </div>
-      <div class="form-group" style="margin-bottom:12px">
-        <label class="form-label">Adresse (optional)</label>
-        <input type="text" class="form-input" id="proj-adresse" placeholder="z.B. Hauptstraße 1, 1010 Wien">
+      <div id="proj-ma-typen-wrap" style="margin-bottom:12px;display:none">
+        <label class="form-label">MA-Typen (optional)</label>
+        <div id="proj-ma-typen-list"></div>
+        <button type="button" id="btn-proj-add-ma-typ" style="background:none;border:1px dashed #9ca3af;border-radius:8px;padding:6px 12px;font-size:13px;color:#6b7280;cursor:pointer;width:100%;margin-top:4px">+ Typ hinzufügen</button>
       </div>
       <div class="form-group" style="margin-bottom:16px">
         <label class="form-label">Notiz (optional)</label>
         <textarea class="form-input" id="proj-notiz" rows="2" placeholder="z.B. Ansprechpartner, Hinweise…"></textarea>
       </div>
+      <div class="form-group" style="margin-bottom:16px;display:none" id="proj-datum-wrap">
+        <label class="form-label">Geplantes Datum (optional)</label>
+        <input type="date" class="form-input" id="proj-geplant-datum">
+      </div>
       <button class="btn btn-primary" id="btn-proj-starten" style="width:100%;padding:16px;font-size:16px;font-weight:700;background:#7c3aed">🚗 Fahrt starten</button>
       <button class="btn" id="btn-proj-planen" style="width:100%;padding:13px;font-size:14px;font-weight:600;background:#6b7280;color:white;margin-top:10px">📋 Vorab planen (kein Fahrtstart)</button>
     </div></div>
     ${geplant.length>0?`
-      <div style="font-weight:700;margin-bottom:8px">📋 Geplante Aufträge</div>
-      <div class="card" style="margin-bottom:16px">
-        ${geplant.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);gap:10px">
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
-            ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
-            ${p.adresse?`<div style="font-size:12px;color:var(--text-muted)">${esc(p.adresse)}</div>`:''}
-            ${p.auftragsnummer?`<div style="font-size:12px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
-          </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            ${p.adresse?`<button onclick="openNav(null,null,'${esc(p.adresse)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
-            <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
-            ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
-          </div>
-        </div>`).join('')}
+      <div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px">📋 Geplante Aufträge <span style="font-size:12px;color:var(--text-muted);font-weight:400">· Reihenfolge per Drag &amp; Drop ändern</span></div>
+      <div id="geplant-list" style="margin-bottom:16px">
+        ${geplant.map(p=>{
+          const str=p.adresse_strasse||p.adresse||'';
+          const plz=p.adresse_plz||'';const land=p.adresse_land||'';
+          const navStr=[str,plz,land].filter(Boolean).join(', ');
+          return`<div class="geplant-item" data-id="${p.id}" style="display:flex;align-items:center;background:white;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:6px;gap:10px;touch-action:none">
+            <div class="drag-handle-geplant" style="color:#9ca3af;font-size:18px;cursor:grab;flex-shrink:0;padding:0 4px;user-select:none">⠿</div>
+            <div style="flex:1;min-width:0">
+              ${p.geplant_datum?`<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:3px">📅 ${fDate(p.geplant_datum)}</div>`:''}
+              <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
+              ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
+              ${str?`<div style="font-size:12px;color:var(--text-muted)">${esc([str,plz].filter(Boolean).join(', '))}</div>`:''}
+              ${p.auftragsnummer?`<div style="font-size:12px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0">
+              ${navStr?`<button onclick="openNav(null,null,'${esc(navStr)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
+              <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
+              ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
+            </div>
+          </div>`;
+        }).join('')}
       </div>`:''}
     ${recent.filter(p=>p.status!=='geplant').length>0?`
       <div style="font-weight:700;margin-bottom:8px">Letzte Aufträge</div>
-      <div class="card" style="overflow:auto"><table class="tbl"><thead><tr>
-        <th>Auftraggeber / Termine</th><th>Arbeitszeit</th><th>km</th><th>Aktionen</th>
-      </tr></thead><tbody>${recentRows}</tbody></table></div>`:``}
+      <div style="overflow-x:auto;border-radius:12px;background:white;border:1px solid var(--border)">
+        <table class="tbl" style="min-width:480px"><thead><tr>
+          <th>Auftraggeber / Termine</th><th>Arbeitszeit</th><th>km</th><th>Aktionen</th>
+        </tr></thead><tbody>${recentRows}</tbody></table>
+      </div>`:``}
   </div>`;
 }
 
 // ── ADMIN TAB: PROJEKTE ───────────────────────────────────────────────────────
 async function renderTabProjekte(){
   let auswertung=[],agList=[],fzEinst={diesel_preis:1.80,verbrauch_100km:8,maut_pro_km:0,abnuetzung_pro_km:0.15};
+  let maKosten={stundensatz_fa:55,stundensatz_ha:45,stundensatz_gf:35,warnschwelle:55};
   const _h=new Date(),_mo=new Date(_h);_mo.setDate(1);
   const von=pageData.projVon||_mo.toISOString().split('T')[0];
   const bis=pageData.projBis||_h.toISOString().split('T')[0];
@@ -1559,11 +1584,13 @@ async function renderTabProjekte(){
   try{auswertung=await apiGet(`/api/projekte/auswertung?von=${von}&bis=${bis}${projAg?'&auftraggeber_id='+projAg:''}`);}catch(e){}
   try{agList=await apiGet('/api/projekte/auftraggeber');}catch(e){}
   try{fzEinst=await apiGet('/api/projekte/einstellungen');}catch(e){}
+  try{maKosten=await apiGet('/api/projekte/ma-kosten');}catch(e){}
+  const warnschwelle=parseFloat(maKosten.warnschwelle||55);
 
   // Kosten pro km berechnen
   const kostenProKm=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
 
-  // Summen pro Auftraggeber
+  // Summen pro Auftraggeber (Fahrzeit + Arbeitszeit = gesamt MA-Std)
   const agSummen={};
   for(const p of auswertung){
     const ak=p.auftraggeber_name||'Unbekannt';
@@ -1572,31 +1599,29 @@ async function renderTabProjekte(){
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const gutschrift=parseFloat(p.gutschrift_betrag||0);
     const arbMin=(p.arbeitszeit_min||0)||(p.arbeitszeit_manuell_min||0);
-    const maStd=(arbMin/60)*anzahl;
+    const fahrtMin=parseInt(p.fahrzeit_hin_min||0)+parseInt(p.fahrzeit_zurueck_min||0);
+    const gesamtStd=((arbMin+fahrtMin)/60)*anzahl;
     if(!agSummen[ak])agSummen[ak]={name:ak,count:0,arbeit:0,fahrt:0,km:0,fahrtkosten:0,gutschrift:0,maStd:0};
-    agSummen[ak].count++;
-    agSummen[ak].arbeit+=arbMin;
-    agSummen[ak].fahrt+=parseInt(p.fahrzeit_hin_min||0)+parseInt(p.fahrzeit_zurueck_min||0);
-    agSummen[ak].km+=km;
-    agSummen[ak].fahrtkosten+=fk;
-    agSummen[ak].gutschrift+=gutschrift;
-    agSummen[ak].maStd+=maStd;
+    agSummen[ak].count++;agSummen[ak].arbeit+=arbMin;agSummen[ak].fahrt+=fahrtMin;
+    agSummen[ak].km+=km;agSummen[ak].fahrtkosten+=fk;agSummen[ak].gutschrift+=gutschrift;agSummen[ak].maStd+=gesamtStd;
   }
 
   const sumHTML=Object.values(agSummen).map(s=>{
     const netto=s.gutschrift-s.fahrtkosten;
     const eurStd=s.maStd>0&&s.gutschrift>0?netto/s.maStd:null;
+    const stCol=eurStd!==null?(eurStd>=warnschwelle?'#16a34a':'#dc2626'):'#6b7280';
     return`<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px">
       <div style="font-weight:700;font-size:14px">${esc(s.name)}</div>
-      <div style="display:flex;gap:12px;margin-top:4px;font-size:13px;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;margin-top:4px;font-size:13px;flex-wrap:wrap">
         <span>${s.count} Aufträge</span>
-        <span>Arbeit: <b>${fMin(s.arbeit)}</b></span>
+        ${s.fahrt>0?`<span>🚗 <b>${fMin(s.fahrt)}</b></span>`:''}
+        ${s.arbeit>0?`<span>🔨 <b>${fMin(s.arbeit)}</b></span>`:''}
         <span>MA-Std: <b>${s.maStd.toFixed(1)}h</b></span>
         ${s.km>0?`<span>km: <b>${s.km.toFixed(1)}</b></span>`:''}
-        ${s.fahrtkosten>0?`<span style="color:#dc2626">Fahrtk.: <b>-€${s.fahrtkosten.toFixed(2)}</b></span>`:''}
-        ${s.gutschrift>0?`<span style="color:#16a34a">Gutschrift: <b>€${s.gutschrift.toFixed(2)}</b></span>`:''}
-        ${s.gutschrift>0?`<span style="color:${netto>=0?'#16a34a':'#dc2626'}">Netto: <b>€${netto.toFixed(2)}</b></span>`:''}
-        ${eurStd!==null?`<span style="color:#7c3aed;font-weight:700">€/Std/MA: <b>${eurStd.toFixed(2)}</b></span>`:''}
+        ${s.fahrtkosten>0?`<span style="color:#dc2626">−€${s.fahrtkosten.toFixed(2)} Fahrt</span>`:''}
+        ${s.gutschrift>0?`<span style="color:#16a34a">€${s.gutschrift.toFixed(2)} GS</span>`:''}
+        ${s.gutschrift>0?`<span style="color:${netto>=0?'#16a34a':'#dc2626'}">Netto €${netto.toFixed(2)}</span>`:''}
+        ${eurStd!==null?`<span style="color:${stCol};font-weight:700">€${eurStd.toFixed(2)}/h/MA</span>`:''}
       </div>
     </div>`;}).join('');
 
@@ -1610,14 +1635,16 @@ async function renderTabProjekte(){
     const curKm=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
     if(curArbMin>0||curKm>0) alleSess.push({datum:p.abgeschlossen_am||p.erstellt_am,arbeitszeit_min:curArbMin,anzahl_mitarbeiter:p.anzahl_mitarbeiter||2,km_hin:p.km_hin||0,km_zurueck:p.km_zurueck||0});
     const totArbMin=alleSess.reduce((a,s)=>a+(parseInt(s.arbeitszeit_min)||0),0)||curArbMin;
+    const totFahrtMin=(parseInt(p.fahrzeit_hin_min)||0)+(parseInt(p.fahrzeit_zurueck_min)||0);
+    const totGesamtMin=totArbMin+totFahrtMin;
     const totKm=alleSess.reduce((a,s)=>a+parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0),0)||curKm;
     const totFk=totKm*kostenProKm;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const gutschrift=parseFloat(p.gutschrift_betrag||0);
-    const maStd=(totArbMin/60)*anzahl;
+    const maStd=(totGesamtMin/60)*anzahl;
     const netto=gutschrift-totFk;
-    const stundensatz=maStd>0&&gutschrift>0&&totArbMin>=10?netto/maStd:null;
-    const accentColor=stundensatz!==null?(stundensatz>=30?'#16a34a':stundensatz>=15?'#d97706':'#dc2626'):'#e5e7eb';
+    const stundensatz=maStd>0&&gutschrift>0&&totGesamtMin>=10?netto/maStd:null;
+    const accentColor=stundensatz!==null?(stundensatz>=warnschwelle?'#16a34a':stundensatz>=(warnschwelle*0.6)?'#d97706':'#dc2626'):'#e5e7eb';
     // Session-Details
     const sessHtml=sessions.length>0?`<div style="margin-top:8px;border-top:1px solid #e5e7eb;padding-top:6px">${alleSess.map(s=>{
       const sArbMin=parseInt(s.arbeitszeit_min)||0;const sKm=parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0);const sMA=parseInt(s.anzahl_mitarbeiter)||2;
@@ -1633,15 +1660,16 @@ async function renderTabProjekte(){
             ${p.rapport_erforderlich?`<span style="font-size:11px;background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:600">📋 Rapport</span>`:''}
           </div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:3px">${fDate(p.erstellt_am)} · ${anzahl} Mitarbeiter</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin-top:8px">
-            <span style="display:flex;align-items:center;gap:3px">⏱ ${totArbMin?`<b>${fMin(totArbMin)}</b>`:`<span style="color:#f59e0b">nicht erfasst</span>`}</span>
-            ${totKm>0?`<span style="display:flex;align-items:center;gap:3px">🚗 <b>${totKm.toFixed(1)} km</b></span>`:''}
-            ${totFk>0?`<span style="color:#dc2626">−€${totFk.toFixed(2)} Fahrt</span>`:''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;margin-top:6px">
+            ${totFahrtMin>0?`<span>🚗 <b>${fMin(totFahrtMin)}</b>×${anzahl}MA=<b>${(totFahrtMin/60*anzahl).toFixed(1)}h</b></span>`:''}
+            ${totArbMin>0?`<span>🔨 <b>${fMin(totArbMin)}</b>×${anzahl}MA=<b>${(totArbMin/60*anzahl).toFixed(1)}h</b></span>`:`<span style="color:#f59e0b">⏱ nicht erfasst</span>`}
+            ${totKm>0?`<span>📍 <b>${totKm.toFixed(1)} km</b></span>`:''}
+            ${totFk>0?`<span style="color:#dc2626">−€${totFk.toFixed(2)}</span>`:''}
           </div>
           ${sessHtml}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
-          ${stundensatz!==null?`<div style="background:${accentColor};color:white;padding:4px 10px;border-radius:8px;font-weight:700;font-size:15px;white-space:nowrap">€${stundensatz.toFixed(2)}<span style="font-size:11px;font-weight:400">/h/MA</span></div>`:''}
+          ${stundensatz!==null?`<div style="background:${accentColor};color:white;padding:4px 10px;border-radius:8px;font-weight:700;font-size:14px;white-space:nowrap">€${stundensatz.toFixed(2)}<span style="font-size:10px;font-weight:400">/h/MA${stundensatz<warnschwelle?' ⚠️':''}</span></div>`:''}
           ${gutschrift>0?`<div style="font-size:13px;color:#16a34a;font-weight:600">Gutschrift €${gutschrift.toFixed(2)}</div>`:''}
           ${gutschrift>0&&totFk>0?`<div style="font-size:12px;color:${netto>=0?'#16a34a':'#dc2626'}">Netto €${netto.toFixed(2)}</div>`:''}
           <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
@@ -1696,15 +1724,26 @@ async function renderTabProjekte(){
     </tr></thead><tbody>${agRows}</tbody></table></div>
     ${user?.ist_admin?`
     <div style="font-weight:700;margin-bottom:8px">⚙️ Fahrzeugkosten-Einstellungen</div>
-    <div class="card" style="margin-bottom:20px"><div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group" style="margin:0"><label class="form-label">Dieselpreis (€/L)</label><input type="number" class="form-input" id="fz-diesel" step="0.001" value="${parseFloat(fzEinst.diesel_preis||1.80).toFixed(3)}"></div>
         <div class="form-group" style="margin:0"><label class="form-label">Verbrauch (L/100km)</label><input type="number" class="form-input" id="fz-verbrauch" step="0.1" value="${parseFloat(fzEinst.verbrauch_100km||8).toFixed(1)}"></div>
         <div class="form-group" style="margin:0"><label class="form-label">Maut (€/km)</label><input type="number" class="form-input" id="fz-maut" step="0.001" value="${parseFloat(fzEinst.maut_pro_km||0).toFixed(3)}"></div>
         <div class="form-group" style="margin:0"><label class="form-label">Abnützung (€/km)</label><input type="number" class="form-input" id="fz-abnutzung" step="0.001" value="${parseFloat(fzEinst.abnuetzung_pro_km||0.15).toFixed(3)}"></div>
       </div>
-      <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Aktuell: <b>€${kostenProKm.toFixed(3)}/km</b> (Diesel+Maut+Abnützung)</div>
-      <button class="btn btn-primary" id="btn-fz-save" style="margin-top:12px">💾 Einstellungen speichern</button>
+      <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Aktuell: <b>€${kostenProKm.toFixed(3)}/km</b></div>
+      <button class="btn btn-primary" id="btn-fz-save" style="margin-top:10px">💾 Fahrzeugkosten speichern</button>
+    </div></div>
+    <div style="font-weight:700;margin-bottom:8px">👷 Mitarbeiterkosten-Einstellungen</div>
+    <div class="card" style="margin-bottom:20px"><div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group" style="margin:0"><label class="form-label">Facharbeiter (€/h)</label><input type="number" class="form-input" id="ma-fa" step="0.5" value="${parseFloat(maKosten.stundensatz_fa||55).toFixed(2)}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Hilfsarbeiter (€/h)</label><input type="number" class="form-input" id="ma-ha" step="0.5" value="${parseFloat(maKosten.stundensatz_ha||45).toFixed(2)}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Geringfügig (€/h)</label><input type="number" class="form-input" id="ma-gf" step="0.5" value="${parseFloat(maKosten.stundensatz_gf||35).toFixed(2)}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label" title="Stundensatz wird ROT wenn unter dieser Schwelle">Warnschwelle €/h/MA</label><input type="number" class="form-input" id="ma-warn" step="0.5" value="${parseFloat(maKosten.warnschwelle||55).toFixed(2)}"></div>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Stundensatz wird <span style="color:#dc2626;font-weight:700">ROT</span> wenn unter der Warnschwelle</div>
+      <button class="btn btn-primary" id="btn-ma-kosten-save" style="margin-top:10px">💾 Mitarbeiterkosten speichern</button>
     </div></div>`:''}
   </div>`;
 }
@@ -2250,6 +2289,7 @@ function renderTabReset(){
     </div>
     ${btn('btn-reset-alarme','🚨 Alle Alarmierungen löschen','#6b7280','Löscht alle Alarm-Logs und Bestätigungen')}
     ${btn('btn-reset-nachrichten','💬 Alle Nachrichten löschen','#6b7280','Löscht alle gesendeten und empfangenen Nachrichten')}
+    ${btn('btn-reset-push-log','🔔 Push-Protokoll löschen','#6b7280','Löscht alle gesendeten Push-Nachrichten aus dem Protokoll')}
     ${btn('btn-reset-todos','✅ Alle TODOs löschen','#f59e0b','Löscht alle TODOs und Zuweisungen')}
     ${btn('btn-reset-einsaetze','📋 Alle Einsätze & Berichte löschen','#ef4444','Löscht alle Einsätze, Fotos, GPS-Tracks und erledigte Aufgaben')}
     ${btn('btn-reset-projekte','🔨 Alle Projekte/Montagen löschen','#ef4444','Löscht alle Projektaufträge und Auswertungen')}
@@ -2285,10 +2325,13 @@ function bindDragSort(){
     const handle=item.querySelector('.drag-handle');
     if(!handle)return;
 
-    // Mouse drag
+    // Mouse drag – fix: track mousedown on handle for PC compatibility
+    let dragOk=false;
+    handle.addEventListener('mousedown',()=>{dragOk=true});
+    document.addEventListener('mouseup',()=>{dragOk=false},{once:false});
     item.setAttribute('draggable','true');
     item.addEventListener('dragstart',e=>{
-      if(!e.target.closest('.drag-handle')){e.preventDefault();return}
+      if(!dragOk){e.preventDefault();return}
       dragged=item;item.classList.add('dragging');
       e.dataTransfer.effectAllowed='move';
     });
@@ -2352,6 +2395,71 @@ function bindDragSort(){
       if(dragged)dragged.classList.remove('dragging');
       document.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));
       dragged=null;
+    });
+  });
+}
+
+// ── DRAG & DROP SORT: GEPLANTE AUFTRÄGE ──
+function bindGeplantDragSort(){
+  const container=document.getElementById('geplant-list');
+  if(!container)return;
+  const items=()=>[...container.querySelectorAll('.geplant-item[data-id]')];
+  let dragged=null,saveTimer=null;
+
+  function saveOrder(){
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(async()=>{
+      const reihenfolge=items().map((el,i)=>({id:parseInt(el.dataset.id),sort_order:i}));
+      try{await apiPost('/api/projekte/geplant/sort',{reihenfolge})}catch(e){}
+    },600);
+  }
+
+  items().forEach(item=>{
+    const handle=item.querySelector('.drag-handle-geplant');
+    if(!handle)return;
+    let dragOk=false;
+    handle.addEventListener('mousedown',()=>{dragOk=true});
+    document.addEventListener('mouseup',()=>{dragOk=false},{once:false});
+    item.setAttribute('draggable','true');
+    item.addEventListener('dragstart',e=>{
+      if(!dragOk){e.preventDefault();return}
+      dragged=item;item.style.opacity='.5';e.dataTransfer.effectAllowed='move';
+    });
+    item.addEventListener('dragend',()=>{dragged=null;item.style.opacity='';document.querySelectorAll('.geplant-drag-over').forEach(el=>el.classList.remove('geplant-drag-over'))});
+    item.addEventListener('dragover',e=>{e.preventDefault();if(!dragged||dragged===item)return;document.querySelectorAll('.geplant-drag-over').forEach(el=>el.classList.remove('geplant-drag-over'));item.classList.add('geplant-drag-over');item.style.borderColor='#7c3aed';});
+    item.addEventListener('dragleave',()=>{item.classList.remove('geplant-drag-over');item.style.borderColor='';});
+    item.addEventListener('drop',e=>{
+      e.preventDefault();if(!dragged||dragged===item)return;
+      item.classList.remove('geplant-drag-over');item.style.borderColor='';
+      const all=items(),from=all.indexOf(dragged),to=all.indexOf(item);
+      if(from<to)container.insertBefore(dragged,item.nextSibling);else container.insertBefore(dragged,item);
+      saveOrder();
+    });
+    // Touch drag
+    let tTimer=null,tDrag=false,ghost=null,startY=0,offY=0;
+    handle.addEventListener('touchstart',e=>{
+      e.preventDefault();const t=e.touches[0];startY=t.clientY;
+      tTimer=setTimeout(()=>{
+        tDrag=true;dragged=item;item.style.opacity='.5';
+        ghost=item.cloneNode(true);
+        ghost.style.cssText=`position:fixed;left:${item.getBoundingClientRect().left}px;top:${item.getBoundingClientRect().top}px;width:${item.offsetWidth}px;opacity:.85;z-index:999;pointer-events:none;background:white;box-shadow:0 8px 24px rgba(0,0,0,.2);border-radius:12px`;
+        document.body.appendChild(ghost);offY=t.clientY-item.getBoundingClientRect().top;
+      },300);
+    },{passive:false});
+    handle.addEventListener('touchmove',e=>{
+      if(tTimer&&Math.abs(e.touches[0].clientY-startY)>5){clearTimeout(tTimer);tTimer=null}
+      if(!tDrag)return;e.preventDefault();const t=e.touches[0];
+      if(ghost)ghost.style.top=(t.clientY-offY)+'px';
+      const el=document.elementFromPoint(t.clientX,t.clientY)?.closest('.geplant-item[data-id]');
+      if(el&&el!==dragged){document.querySelectorAll('.geplant-drag-over').forEach(x=>{x.classList.remove('geplant-drag-over');x.style.borderColor=''});el.classList.add('geplant-drag-over');el.style.borderColor='#7c3aed';}
+    },{passive:false});
+    handle.addEventListener('touchend',e=>{
+      clearTimeout(tTimer);tTimer=null;if(!tDrag){tDrag=false;dragged=null;return}
+      tDrag=false;if(ghost){ghost.remove();ghost=null}
+      const t=e.changedTouches[0];
+      const target=document.elementFromPoint(t.clientX,t.clientY)?.closest('.geplant-item[data-id]');
+      if(target&&target!==dragged){const all=items(),from=all.indexOf(dragged),to=all.indexOf(target);if(from<to)container.insertBefore(dragged,target.nextSibling);else container.insertBefore(dragged,target);saveOrder();}
+      if(dragged){dragged.style.opacity='';document.querySelectorAll('.geplant-drag-over').forEach(x=>{x.classList.remove('geplant-drag-over');x.style.borderColor=''});}dragged=null;
     });
   });
 }
@@ -2469,37 +2577,53 @@ function bindEvents(){
     if(projektAkt.status==='fahrt'||projektAkt.status==='rueckfahrt')startProjektGPS();
   }
 
+  // Projekte: MA-Typ Zeige/Verberge
+  o('proj-anzahl','change',()=>{
+    const wrap=document.getElementById('proj-ma-typen-wrap');
+    if(wrap)wrap.style.display='block';
+  });
+  o('btn-proj-add-ma-typ','click',()=>{
+    const list=document.getElementById('proj-ma-typen-list');if(!list)return;
+    const row=document.createElement('div');row.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
+    row.innerHTML=`<select class="form-input ma-typ-sel" style="flex:1;padding:8px"><option value="FA">👷 Facharbeiter</option><option value="HA">🔧 Hilfsarbeiter</option><option value="GF">📋 Geringfügig</option></select><input type="number" class="form-input ma-typ-anz" style="width:70px;padding:8px" value="1" min="1"><button type="button" style="background:none;border:none;color:var(--danger);font-size:18px;cursor:pointer;padding:0 4px" onclick="this.parentNode.remove()">×</button>`;
+    list.appendChild(row);
+  });
+  function getMaTypen(){const rows=[...document.querySelectorAll('#proj-ma-typen-list>div')];return rows.map(r=>({typ:r.querySelector('.ma-typ-sel')?.value||'FA',anzahl:parseInt(r.querySelector('.ma-typ-anz')?.value)||1})).filter(r=>r.anzahl>0)}
+  function getProjFormData(){
+    const agSel=document.getElementById('proj-ag');
+    return{
+      auftraggeber_id:agSel?.value||null,
+      auftraggeber_name:agSel?.options[agSel.selectedIndex]?.dataset.name||agSel?.options[agSel.selectedIndex]?.text||'',
+      auftragsnummer:document.getElementById('proj-auftragsnr')?.value?.trim()||null,
+      anzahl_mitarbeiter:parseInt(document.getElementById('proj-anzahl')?.value)||2,
+      kundenname:document.getElementById('proj-kundenname')?.value?.trim()||null,
+      adresse_strasse:document.getElementById('proj-adresse-strasse')?.value?.trim()||null,
+      adresse_plz:document.getElementById('proj-adresse-plz')?.value?.trim()||null,
+      adresse_land:document.getElementById('proj-adresse-land')?.value?.trim()||null,
+      notiz:document.getElementById('proj-notiz')?.value?.trim()||null,
+      geplant_datum:document.getElementById('proj-geplant-datum')?.value||null,
+      ma_typen:getMaTypen()
+    };
+  }
+
   // Projekte: Neuen Auftrag starten
   o('btn-proj-starten','click',async()=>{
-    const agSel=document.getElementById('proj-ag');
-    const agId=agSel?.value;
-    const agName=agSel?.options[agSel.selectedIndex]?.dataset.name||agSel?.options[agSel.selectedIndex]?.text||'';
-    const auftragsnr=document.getElementById('proj-auftragsnr')?.value?.trim()||null;
-    const anzahl=parseInt(document.getElementById('proj-anzahl')?.value)||2;
-    const kundenname=document.getElementById('proj-kundenname')?.value?.trim()||null;
-    const adresse=document.getElementById('proj-adresse')?.value?.trim()||null;
-    const notiz=document.getElementById('proj-notiz')?.value?.trim()||null;
-    if(!agId){toast('Auftraggeber wählen','err');return}
+    const d=getProjFormData();
+    if(!d.auftraggeber_id){toast('Auftraggeber wählen','err');return}
     try{
-      const p=await apiPost('/api/projekte',{auftraggeber_id:agId,auftraggeber_name:agName,auftragsnummer:auftragsnr,anzahl_mitarbeiter:anzahl,kundenname,adresse,notiz});
+      const p=await apiPost('/api/projekte',{...d});
       projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
       toast('🚗 Fahrt gestartet','ok');go('projekte');
     }catch(e){toast(e.message,'err')}
   });
 
-  // Projekte: Vorab planen
+  // Projekte: Vorab planen – Datum-Feld einblenden
+  o('btn-proj-planen','mouseenter',()=>{const w=document.getElementById('proj-datum-wrap');if(w)w.style.display='block';});
   o('btn-proj-planen','click',async()=>{
-    const agSel=document.getElementById('proj-ag');
-    const agId=agSel?.value;
-    const agName=agSel?.options[agSel.selectedIndex]?.dataset.name||agSel?.options[agSel.selectedIndex]?.text||'';
-    const auftragsnr=document.getElementById('proj-auftragsnr')?.value?.trim()||null;
-    const anzahl=parseInt(document.getElementById('proj-anzahl')?.value)||2;
-    const kundenname=document.getElementById('proj-kundenname')?.value?.trim()||null;
-    const adresse=document.getElementById('proj-adresse')?.value?.trim()||null;
-    const notiz=document.getElementById('proj-notiz')?.value?.trim()||null;
-    if(!agId){toast('Auftraggeber wählen','err');return}
+    const d=getProjFormData();
+    if(!d.auftraggeber_id){toast('Auftraggeber wählen','err');return}
     try{
-      await apiPost('/api/projekte',{auftraggeber_id:agId,auftraggeber_name:agName,auftragsnummer:auftragsnr,anzahl_mitarbeiter:anzahl,kundenname,adresse,notiz,geplant:true});
+      await apiPost('/api/projekte',{...d,geplant:true});
       toast('📋 Auftrag geplant','ok');go('projekte');
     }catch(e){toast(e.message,'err')}
   });
@@ -2600,6 +2724,58 @@ function bindEvents(){
             rapport_beschreibung:document.getElementById('pe-rapport-bez')?.value||null,
           });
           closeModal();toast('💾 Gespeichert','ok');go('projekte');
+        }catch(e){toast(e.message,'err')}
+      }),0);
+    });
+  });
+
+  // Projekte: Abgeschlossenen Auftrag bearbeiten (Zeit, km, Notiz)
+  document.querySelectorAll('[data-action="proj-edit-recent"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      const arbMin=parseInt(b.dataset.arbmin)||0;
+      const arbH=Math.floor(arbMin/60),arbM=arbMin%60;
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">✏️ Auftrag nachbearbeiten</div>
+        <div class="form-group">
+          <label class="form-label">Arbeitszeit</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><label style="font-size:12px;color:var(--text-muted)">Stunden</label><input type="number" class="form-input" id="edit-arb-h" value="${arbH}" min="0"></div>
+            <div><label style="font-size:12px;color:var(--text-muted)">Minuten</label><input type="number" class="form-input" id="edit-arb-m" value="${arbM}" min="0" max="59"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">km Hinfahrt</label>
+          <input type="number" class="form-input" id="edit-km-hin" value="${b.dataset.kmhin||0}" step="0.1" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">km Rückfahrt</label>
+          <input type="number" class="form-input" id="edit-km-zurueck" value="${b.dataset.kmzurueck||0}" step="0.1" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Anzahl Mitarbeiter</label>
+          <select class="form-input" id="edit-anzahl">
+            ${[1,2,3,4,5].map(n=>`<option value="${n}" ${parseInt(b.dataset.anzahl||2)===n?'selected':''}>${n} Person${n>1?'en':''}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notiz</label>
+          <textarea class="form-input" id="edit-notiz" rows="2">${b.dataset.notiz||''}</textarea>
+        </div>
+        <button class="btn btn-primary" id="btn-edit-recent-save">💾 Speichern</button>`);
+      setTimeout(()=>o('btn-edit-recent-save','click',async()=>{
+        const h=parseInt(document.getElementById('edit-arb-h')?.value)||0;
+        const m=parseInt(document.getElementById('edit-arb-m')?.value)||0;
+        try{
+          await apiPut(`/api/projekte/${b.dataset.id}`,{
+            arbeitszeit_min:h*60+m,
+            km_hin:parseFloat(document.getElementById('edit-km-hin')?.value)||0,
+            km_zurueck:parseFloat(document.getElementById('edit-km-zurueck')?.value)||0,
+            anzahl_mitarbeiter:parseInt(document.getElementById('edit-anzahl')?.value)||2,
+            notiz:document.getElementById('edit-notiz')?.value?.trim()||null
+          });
+          closeModal();toast('✅ Gespeichert','ok');go('projekte');
         }catch(e){toast(e.message,'err')}
       }),0);
     });
@@ -2905,6 +3081,7 @@ function bindEvents(){
 
   // Drag & Drop Reihenfolge
   bindDragSort();
+  bindGeplantDragSort();
 
   // Anlagen-Karte für Mitarbeiter
   initAnlagenKarteIfNeeded();
@@ -3222,6 +3399,19 @@ function bindAdminEvents(){
     }catch(e){toast(e.message,'err')}
   })}
 
+  // Projekte: Mitarbeiterkosten speichern
+  const maKSave=document.getElementById('btn-ma-kosten-save');
+  if(maKSave&&!maKSave._bound){maKSave._bound=true;maKSave.addEventListener('click',async()=>{
+    try{await apiPut('/api/projekte/ma-kosten',{
+      stundensatz_fa:document.getElementById('ma-fa')?.value||55,
+      stundensatz_ha:document.getElementById('ma-ha')?.value||45,
+      stundensatz_gf:document.getElementById('ma-gf')?.value||35,
+      warnschwelle:document.getElementById('ma-warn')?.value||55
+    });toast('✅ Mitarbeiterkosten gespeichert','ok');
+    const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+    }catch(e){toast(e.message,'err')}
+  })}
+
   // Projekte: CSV Export
   const pCsv=document.getElementById('btn-proj-csv');
   if(pCsv&&!pCsv._bound){pCsv._bound=true;pCsv.addEventListener('click',async()=>{
@@ -3316,6 +3506,7 @@ function bindAdminEvents(){
   const resetActions={
     'btn-reset-alarme':{label:'alle Alarmierungen',endpoint:'/api/admin/reset/alarme'},
     'btn-reset-nachrichten':{label:'alle Nachrichten',endpoint:'/api/admin/reset/nachrichten'},
+    'btn-reset-push-log':{label:'das Push-Protokoll',endpoint:'/api/push/log'},
     'btn-reset-todos':{label:'alle TODOs',endpoint:'/api/admin/reset/todos'},
     'btn-reset-einsaetze':{label:'alle Einsätze & Berichte',endpoint:'/api/admin/reset/einsaetze'},
     'btn-reset-projekte':{label:'alle Projekte/Montagen',endpoint:'/api/admin/reset/projekte'},

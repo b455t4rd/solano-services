@@ -86,6 +86,14 @@ router.get('/log', adminMiddleware, async (req, res) => {
   }
 });
 
+// Push-Log löschen (Admin only)
+router.delete('/log', adminMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM push_log');
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Alle angemeldeten Geräte (Manager+ für Übersicht)
 router.get('/abonnenten', managerMiddleware, async (req, res) => {
   try {
