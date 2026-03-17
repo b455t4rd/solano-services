@@ -1411,11 +1411,11 @@ async function pageProjekte(){
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
             <div style="font-size:16px;font-weight:700">${esc(p.auftraggeber_name||'–')}</div>
             ${p.kundenname?`<div style="font-size:13px;font-weight:600">${esc(p.kundenname)}</div>`:''}
-            ${(()=>{const str=p.adresse_strasse||p.adresse||'';const plz=p.adresse_plz||'';const land=p.adresse_land||'';const full=[str,plz,land].filter(Boolean).join(', ');return full?`<div style="font-size:12px;color:var(--text-muted)">${esc(full)}</div>`:''})()}
+            ${(()=>{const str=p.adresse_strasse||p.adresse||'';const plz=p.adresse_plz||'';const ort=p.adresse_ort||'';const land=p.adresse_land||'';const full=[str,[plz,ort].filter(Boolean).join(' '),land].filter(Boolean).join(', ');return full?`<div style="font-size:12px;color:var(--text-muted)">${esc(full)}</div>`:''})()}
             ${p.auftragsnummer?`<div style="font-size:13px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
             ${p.notiz?`<div style="font-size:13px;color:var(--text-muted);margin-top:2px">${esc(p.notiz)}</div>`:''}
             ${p.rapport_erforderlich?`<div style="font-size:12px;color:#7c3aed;margin-top:4px;font-weight:600">📋 Rapport erforderlich</div>`:''}
-            ${(()=>{const str=p.adresse_strasse||p.adresse||'';const plz=p.adresse_plz||'';const land=p.adresse_land||'';const nav=[str,plz,land].filter(Boolean).join(', ');return nav?`<button onclick="openNav(null,null,'${esc(nav)}')" style="margin-top:8px;background:#3b82f6;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%">🗺️ Navigation öffnen</button>`:''})()}
+            ${(()=>{const str=p.adresse_strasse||p.adresse||'';const plz=p.adresse_plz||'';const ort=p.adresse_ort||'';const land=p.adresse_land||'';const nav=[str,[plz,ort].filter(Boolean).join(' '),land].filter(Boolean).join(', ');return nav?`<button onclick="openNav(null,null,'${esc(nav)}')" style="margin-top:8px;background:#3b82f6;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%">🗺️ Navigation öffnen</button>`:''})()}
             ${kmInfo}${tourInfo}
           </div>
         </div>
@@ -1508,10 +1508,15 @@ async function pageProjekte(){
       <div class="form-group" style="margin-bottom:4px">
         <label class="form-label">Adresse (für Navigation)</label>
         <input type="text" class="form-input" id="proj-adresse-strasse" placeholder="Straße und Hausnummer" style="margin-bottom:6px">
-        <div style="display:grid;grid-template-columns:1fr 2fr;gap:6px">
+        <div style="display:grid;grid-template-columns:100px 1fr;gap:6px;margin-bottom:6px">
           <input type="text" class="form-input" id="proj-adresse-plz" placeholder="PLZ">
-          <input type="text" class="form-input" id="proj-adresse-land" placeholder="Land" value="Österreich">
+          <input type="text" class="form-input" id="proj-adresse-ort" placeholder="Ort / Stadt">
         </div>
+        <input type="text" class="form-input" id="proj-adresse-land" placeholder="Land" value="Österreich">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Geplantes Datum (optional)</label>
+        <input type="date" class="form-input" id="proj-geplant-datum">
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label class="form-label">Anzahl Mitarbeiter</label>
@@ -1532,10 +1537,6 @@ async function pageProjekte(){
         <label class="form-label">Notiz (optional)</label>
         <textarea class="form-input" id="proj-notiz" rows="2" placeholder="z.B. Ansprechpartner, Hinweise…"></textarea>
       </div>
-      <div class="form-group" style="margin-bottom:16px;display:none" id="proj-datum-wrap">
-        <label class="form-label">Geplantes Datum (optional)</label>
-        <input type="date" class="form-input" id="proj-geplant-datum">
-      </div>
       <button class="btn btn-primary" id="btn-proj-starten" style="width:100%;padding:16px;font-size:16px;font-weight:700;background:#7c3aed">🚗 Fahrt starten</button>
       <button class="btn" id="btn-proj-planen" style="width:100%;padding:13px;font-size:14px;font-weight:600;background:#6b7280;color:white;margin-top:10px">📋 Vorab planen (kein Fahrtstart)</button>
     </div></div>
@@ -1544,15 +1545,15 @@ async function pageProjekte(){
       <div id="geplant-list" style="margin-bottom:16px">
         ${geplant.map(p=>{
           const str=p.adresse_strasse||p.adresse||'';
-          const plz=p.adresse_plz||'';const land=p.adresse_land||'';
-          const navStr=[str,plz,land].filter(Boolean).join(', ');
+          const plz=p.adresse_plz||'';const ort=p.adresse_ort||'';const land=p.adresse_land||'';
+          const navStr=[str,[plz,ort].filter(Boolean).join(' '),land].filter(Boolean).join(', ');
           return`<div class="geplant-item" data-id="${p.id}" style="display:flex;align-items:center;background:white;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:6px;gap:10px;touch-action:none">
             <div class="drag-handle-geplant" style="color:#9ca3af;font-size:18px;cursor:grab;flex-shrink:0;padding:0 4px;user-select:none">⠿</div>
             <div style="flex:1;min-width:0">
               ${p.geplant_datum?`<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:3px">📅 ${fDate(p.geplant_datum)}</div>`:''}
               <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
               ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
-              ${str?`<div style="font-size:12px;color:var(--text-muted)">${esc([str,plz].filter(Boolean).join(', '))}</div>`:''}
+              ${str?`<div style="font-size:12px;color:var(--text-muted)">${esc([str,[plz,ort].filter(Boolean).join(' ')].filter(Boolean).join(', '))}</div>`:''}
               ${p.auftragsnummer?`<div style="font-size:12px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0">
@@ -2599,6 +2600,7 @@ function bindEvents(){
       kundenname:document.getElementById('proj-kundenname')?.value?.trim()||null,
       adresse_strasse:document.getElementById('proj-adresse-strasse')?.value?.trim()||null,
       adresse_plz:document.getElementById('proj-adresse-plz')?.value?.trim()||null,
+      adresse_ort:document.getElementById('proj-adresse-ort')?.value?.trim()||null,
       adresse_land:document.getElementById('proj-adresse-land')?.value?.trim()||null,
       notiz:document.getElementById('proj-notiz')?.value?.trim()||null,
       geplant_datum:document.getElementById('proj-geplant-datum')?.value||null,
@@ -2617,8 +2619,7 @@ function bindEvents(){
     }catch(e){toast(e.message,'err')}
   });
 
-  // Projekte: Vorab planen – Datum-Feld einblenden
-  o('btn-proj-planen','mouseenter',()=>{const w=document.getElementById('proj-datum-wrap');if(w)w.style.display='block';});
+  // Projekte: Vorab planen
   o('btn-proj-planen','click',async()=>{
     const d=getProjFormData();
     if(!d.auftraggeber_id){toast('Auftraggeber wählen','err');return}

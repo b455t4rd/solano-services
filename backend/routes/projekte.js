@@ -240,7 +240,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
 router.post('/', authMiddleware, async (req, res) => {
   const { auftraggeber_id, auftraggeber_name, auftragsnummer, anzahl_mitarbeiter, notiz, geplant,
-          kundenname, adresse, adresse_strasse, adresse_plz, adresse_land,
+          kundenname, adresse, adresse_strasse, adresse_plz, adresse_ort, adresse_land,
           geplant_datum, ma_typen } = req.body;
   const status = geplant ? 'geplant' : 'fahrt';
   try {
@@ -248,13 +248,13 @@ router.post('/', authMiddleware, async (req, res) => {
       `INSERT INTO projekt_auftraege
          (mitarbeiter_id, mitarbeiter_name, auftraggeber_id, auftraggeber_name,
           auftragsnummer, anzahl_mitarbeiter, notiz, status, fahrt_start,
-          kundenname, adresse, adresse_strasse, adresse_plz, adresse_land,
+          kundenname, adresse, adresse_strasse, adresse_plz, adresse_ort, adresse_land,
           geplant_datum, ma_typen)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,${geplant?'NULL':'NOW()'},$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,${geplant?'NULL':'NOW()'},$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [req.user.id, req.user.name, auftraggeber_id||null, auftraggeber_name||null,
        auftragsnummer||null, anzahl_mitarbeiter||2, notiz||null, status,
        kundenname||null, adresse||null,
-       adresse_strasse||null, adresse_plz||null, adresse_land||null,
+       adresse_strasse||null, adresse_plz||null, adresse_ort||null, adresse_land||null,
        geplant_datum||null, JSON.stringify(ma_typen||[])]
     );
     res.status(201).json(r.rows[0]);
@@ -325,7 +325,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
           km_hin, km_zurueck, arbeitszeit_manuell_min, arbeitszeit_min,
           fahrzeit_hin_min, fahrzeit_zurueck_min,
           auftraggeber_id, auftraggeber_name, kundenname, adresse,
-          adresse_strasse, adresse_plz, adresse_land,
+          adresse_strasse, adresse_plz, adresse_ort, adresse_land,
           rapport_erforderlich, rapport_beschreibung,
           geplant_datum, ma_typen, sort_order } = req.body;
   try {
@@ -341,14 +341,15 @@ router.put('/:id', authMiddleware, async (req, res) => {
            rapport_beschreibung=COALESCE($13, rapport_beschreibung),
            adresse_strasse=COALESCE($14, adresse_strasse),
            adresse_plz=COALESCE($15, adresse_plz),
-           adresse_land=COALESCE($16, adresse_land),
-           geplant_datum=COALESCE($17, geplant_datum),
-           ma_typen=COALESCE($18::jsonb, ma_typen),
-           sort_order=COALESCE($19, sort_order),
-           arbeitszeit_min=COALESCE($20, arbeitszeit_min),
-           fahrzeit_hin_min=COALESCE($21, fahrzeit_hin_min),
-           fahrzeit_zurueck_min=COALESCE($22, fahrzeit_zurueck_min)
-       WHERE id=$23 RETURNING *`,
+           adresse_ort=COALESCE($16, adresse_ort),
+           adresse_land=COALESCE($17, adresse_land),
+           geplant_datum=COALESCE($18, geplant_datum),
+           ma_typen=COALESCE($19::jsonb, ma_typen),
+           sort_order=COALESCE($20, sort_order),
+           arbeitszeit_min=COALESCE($21, arbeitszeit_min),
+           fahrzeit_hin_min=COALESCE($22, fahrzeit_hin_min),
+           fahrzeit_zurueck_min=COALESCE($23, fahrzeit_zurueck_min)
+       WHERE id=$24 RETURNING *`,
       [notiz||null, besonderheiten||null, anzahl_mitarbeiter||2, auftragsnummer||null,
        km_hin!=null?km_hin:null, km_zurueck!=null?km_zurueck:null,
        arbeitszeit_manuell_min!=null?arbeitszeit_manuell_min:null,
@@ -356,7 +357,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
        kundenname||null, adresse||null,
        rapport_erforderlich!=null?rapport_erforderlich:null,
        rapport_beschreibung!=null?rapport_beschreibung:null,
-       adresse_strasse||null, adresse_plz||null, adresse_land||null,
+       adresse_strasse||null, adresse_plz||null, adresse_ort||null, adresse_land||null,
        geplant_datum||null,
        ma_typen!=null?JSON.stringify(ma_typen):null,
        sort_order!=null?sort_order:null,

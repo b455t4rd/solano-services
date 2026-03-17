@@ -1,4 +1,4 @@
-// SolanoServices Service Worker – Push Notifications
+// SolanoServices Service Worker – Push Notifications – v20260316
 self.addEventListener('push', event => {
   const data = event.data?.json() || { title: 'SolanoServices', body: 'Neue Nachricht' };
   event.waitUntil(
