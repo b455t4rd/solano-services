@@ -305,16 +305,35 @@ router.put('/:id/phase', authMiddleware, async (req, res) => {
 // ── Gutschrift erfassen ───────────────────────────────────────────────────────
 
 router.put('/:id/gutschrift', managerMiddleware, async (req, res) => {
-  const { gutschrift_betrag, gutschrift_datum, gutschrift_nummer, arbeitszeit_manuell_min } = req.body;
+  const { gutschrift_betrag, gutschrift_datum, gutschrift_nummer, arbeitszeit_manuell_min, fahrtkosten_pauschale } = req.body;
   try {
     const r = await pool.query(
       `UPDATE projekt_auftraege
        SET gutschrift_betrag=$1, gutschrift_datum=$2, gutschrift_nummer=$3,
-           arbeitszeit_manuell_min=COALESCE($4, arbeitszeit_manuell_min)
-       WHERE id=$5 RETURNING *`,
+           arbeitszeit_manuell_min=COALESCE($4, arbeitszeit_manuell_min),
+           fahrtkosten_pauschale=$5
+       WHERE id=$6 RETURNING *`,
       [gutschrift_betrag||null, gutschrift_datum||null, gutschrift_nummer||null,
-       arbeitszeit_manuell_min||null, req.params.id]
+       arbeitszeit_manuell_min!=null?arbeitszeit_manuell_min:null,
+       parseFloat(fahrtkosten_pauschale)||0, req.params.id]
     );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Auftrag zurückstellen (→ geplant, kein Löschen) ──────────────────────────
+
+router.put('/:id/zurueckstellen', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE projekt_auftraege
+       SET status='geplant', fahrt_start=NULL, ankunft=NULL, abfahrt_zeit=NULL,
+           fahrt_ende=NULL, abgeschlossen_am=NULL,
+           arbeitszeit_min=NULL, fahrzeit_hin_min=NULL, fahrzeit_zurueck_min=NULL
+       WHERE id=$1 RETURNING *`,
+      [req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -328,7 +347,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
           auftraggeber_id, auftraggeber_name, kundenname, adresse,
           adresse_strasse, adresse_plz, adresse_ort, adresse_land,
           rapport_erforderlich, rapport_beschreibung,
-          geplant_datum, ma_typen, sort_order } = req.body;
+          geplant_datum, ma_typen, sort_order, fahrtkosten_pauschale } = req.body;
   try {
     const r = await pool.query(
       `UPDATE projekt_auftraege
@@ -349,8 +368,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
            sort_order=COALESCE($20, sort_order),
            arbeitszeit_min=COALESCE($21, arbeitszeit_min),
            fahrzeit_hin_min=COALESCE($22, fahrzeit_hin_min),
-           fahrzeit_zurueck_min=COALESCE($23, fahrzeit_zurueck_min)
-       WHERE id=$24 RETURNING *`,
+           fahrzeit_zurueck_min=COALESCE($23, fahrzeit_zurueck_min),
+           fahrtkosten_pauschale=COALESCE($24, fahrtkosten_pauschale)
+       WHERE id=$25 RETURNING *`,
       [notiz||null, besonderheiten||null, anzahl_mitarbeiter||2, auftragsnummer||null,
        km_hin!=null?km_hin:null, km_zurueck!=null?km_zurueck:null,
        arbeitszeit_manuell_min!=null?arbeitszeit_manuell_min:null,
@@ -365,6 +385,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
        arbeitszeit_min!=null?arbeitszeit_min:null,
        fahrzeit_hin_min!=null?fahrzeit_hin_min:null,
        fahrzeit_zurueck_min!=null?fahrzeit_zurueck_min:null,
+       fahrtkosten_pauschale!=null?parseFloat(fahrtkosten_pauschale):null,
        req.params.id]
     );
     res.json(r.rows[0]);

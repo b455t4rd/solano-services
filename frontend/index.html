@@ -1442,7 +1442,7 @@ async function pageProjekte(){
       </div></div>`:''}
       <button id="btn-proj-next-phase" style="width:100%;padding:16px;background:${nextBtnColors[phase]};color:white;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">${nextBtnLabels[phase]}</button>
       ${phase==='rueckfahrt'?`<button id="btn-proj-weiter-auftrag" style="width:100%;padding:14px;background:#7c3aed;color:white;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">➡️ Weiter zum nächsten Auftrag</button>`:''}
-      ${isManager()?`<button id="btn-proj-delete" style="width:100%;padding:12px;background:transparent;color:var(--danger);border:1px solid var(--danger);border-radius:12px;font-size:14px;cursor:pointer">❌ Auftrag abbrechen / löschen</button>`:''}
+      ${isManager()?`<button id="btn-proj-delete" style="width:100%;padding:12px;background:transparent;color:#d97706;border:1px solid #d97706;border-radius:12px;font-size:14px;cursor:pointer">↩️ Auftrag abbrechen & zurückstellen</button>`:''}
     </div>`;
   }
 
@@ -1666,10 +1666,11 @@ async function renderTabProjekte(){
     const totFk=totKm*kostenProKm;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
     const gutschrift=parseFloat(p.gutschrift_betrag||0);
+    const fkp=parseFloat(p.fahrtkosten_pauschale||0);
     const fzBezRow=agFahrtBezahlt[p.auftraggeber_id]!==false;
     const maStdBase=fzBezRow?totGesamtMin:totArbMin; // Fahrzeit nur wenn bezahlt
     const maStd=(maStdBase/60)*anzahl;
-    const netto=gutschrift-totFk;
+    const netto=(gutschrift+fkp)-totFk;
     const stundensatz=maStd>0&&gutschrift>0&&maStdBase>=10?netto/maStd:null;
     const accentColor=stundensatz!==null?(stundensatz>=warnschwelle?'#16a34a':stundensatz>=(warnschwelle*0.6)?'#d97706':'#dc2626'):'#e5e7eb';
     // Session-Details
@@ -1682,30 +1683,47 @@ async function renderTabProjekte(){
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span style="font-weight:700;font-size:15px">${esc(p.auftraggeber_name||'–')}</span>
+            ${p.kundenname?`<span style="font-size:12px;color:#374151;font-weight:600">${esc(p.kundenname)}</span>`:''}
             ${p.auftragsnummer?`<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 7px;border-radius:20px">Nr. ${esc(p.auftragsnummer)}</span>`:''}
             ${statusBadge(p.status)}
             ${p.rapport_erforderlich?`<span style="font-size:11px;background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:600">📋 Rapport</span>`:''}
           </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:3px">${fDate(p.erstellt_am)} · ${anzahl} Mitarbeiter</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;margin-top:6px">
-            ${totFahrtMin>0?`<span>🚗 <b>${fMin(totFahrtMin)}</b>×${anzahl}MA=<b>${(totFahrtMin/60*anzahl).toFixed(1)}h</b>${!fzBezRow?'<span style="color:#dc2626;font-size:10px"> unbez.</span>':''}</span>`:''}
-            ${totArbMin>0?`<span>🔨 <b>${fMin(totArbMin)}</b>×${anzahl}MA=<b>${(totArbMin/60*anzahl).toFixed(1)}h</b></span>`:`<span style="color:#f59e0b">⏱ nicht erfasst</span>`}
-            ${totKm>0?`<span>📍 <b>${totKm.toFixed(1)} km</b></span>`:''}
-            ${totFk>0?`<span style="color:#dc2626">−€${totFk.toFixed(2)}</span>`:''}
-          </div>
-          ${sessHtml}
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fDate(p.erstellt_am)} · ${anzahl} Mitarbeiter</div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
-          ${stundensatz!==null?`<div style="background:${accentColor};color:white;padding:4px 10px;border-radius:8px;font-weight:700;font-size:14px;white-space:nowrap">€${stundensatz.toFixed(2)}<span style="font-size:10px;font-weight:400">/h/MA${stundensatz<warnschwelle?' ⚠️':''}</span></div>`:''}
-          ${gutschrift>0?`<div style="font-size:13px;color:#16a34a;font-weight:600">Gutschrift €${gutschrift.toFixed(2)}</div>`:''}
-          ${gutschrift>0&&totFk>0?`<div style="font-size:12px;color:${netto>=0?'#16a34a':'#dc2626'}">Netto €${netto.toFixed(2)}</div>`:''}
-          <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
-            <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" data-arbmin="${totArbMin}" data-anzahl="${anzahl}" title="Gutschrift">💰</button>
-            ${isManager()?`<button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${anzahl}" data-arbmin="${totArbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-bez="${esc(p.besonderheiten||'')}" data-rapport="${p.rapport_erforderlich?'1':''}" data-rapportbez="${esc(p.rapport_beschreibung||'')}" title="Bearbeiten">✏️</button>`:''}
-            ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
-          </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start">
+          <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-fkp="${p.fahrtkosten_pauschale||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" data-arbmin="${totArbMin}" data-anzahl="${anzahl}" title="Gutschrift">💰</button>
+          ${isManager()?`<button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${anzahl}" data-arbmin="${totArbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-bez="${esc(p.besonderheiten||'')}" data-rapport="${p.rapport_erforderlich?'1':''}" data-rapportbez="${esc(p.rapport_beschreibung||'')}" title="Bearbeiten">✏️</button>`:''}
+          ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
         </div>
       </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:6px;margin-top:10px">
+        ${totFahrtMin>0?`<div style="background:#eff6ff;border-radius:8px;padding:6px 8px">
+          <div style="font-size:10px;color:#6b7280;font-weight:500">🚗 Fahrzeit</div>
+          <div style="font-size:12px;font-weight:700;white-space:nowrap">${fMin(totFahrtMin)}×${anzahl}MA</div>
+          <div style="font-size:11px;color:#2563eb;font-weight:600">${(totFahrtMin/60*anzahl).toFixed(1)}h${!fzBezRow?'<span style="color:#dc2626"> ✗</span>':''}</div>
+        </div>`:''}
+        <div style="background:#f0fdf4;border-radius:8px;padding:6px 8px">
+          <div style="font-size:10px;color:#6b7280;font-weight:500">🔨 Arbeitszeit</div>
+          ${totArbMin>0?`<div style="font-size:12px;font-weight:700;white-space:nowrap">${fMin(totArbMin)}×${anzahl}MA</div>
+          <div style="font-size:11px;color:#16a34a;font-weight:600">${(totArbMin/60*anzahl).toFixed(1)}h</div>`:`<div style="font-size:11px;color:#f59e0b;font-weight:600">nicht erfasst</div>`}
+        </div>
+        ${gutschrift>0?`<div style="background:#f0fdf4;border-radius:8px;padding:6px 8px">
+          <div style="font-size:10px;color:#6b7280;font-weight:500">💰 Gutschrift</div>
+          <div style="font-size:12px;font-weight:700">€${gutschrift.toFixed(2)}</div>
+          ${fkp>0?`<div style="font-size:11px;color:#16a34a;font-weight:600">+€${fkp.toFixed(2)} Paus.</div>`:''}
+        </div>`:''}
+        ${totFk>0?`<div style="background:#fef2f2;border-radius:8px;padding:6px 8px">
+          <div style="font-size:10px;color:#6b7280;font-weight:500">⛽ Fahrtkosten</div>
+          <div style="font-size:12px;font-weight:700;color:#dc2626">−€${totFk.toFixed(2)}</div>
+          <div style="font-size:11px;color:#9ca3af">${totKm.toFixed(1)} km</div>
+        </div>`:''}
+        ${stundensatz!==null?`<div style="background:${accentColor};border-radius:8px;padding:6px 8px">
+          <div style="font-size:10px;color:rgba(255,255,255,0.8);font-weight:500">💶 Stundensatz</div>
+          <div style="font-size:15px;font-weight:700;color:white">€${stundensatz.toFixed(2)}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.8)">/h/MA${stundensatz<warnschwelle?' ⚠️':''}</div>
+        </div>`:''}
+      </div>
+      ${sessHtml}
     </div>`}).join('');
 
   // Auftraggeber-Verwaltung
@@ -2681,6 +2699,7 @@ function bindEvents(){
         <button class="modal-close" id="modal-close">×</button>
         <div class="modal-title">💰 Gutschrift erfassen</div>
         <div class="form-group"><label class="form-label">Gutschrift-Betrag (€) <span style="color:#dc2626">*</span></label><input type="number" class="form-input" id="gs-betrag" step="0.01" placeholder="0.00" value="${b.dataset.gs||''}"></div>
+        <div class="form-group"><label class="form-label">Fahrtkostenpauschale (€) <span style="font-size:11px;color:var(--text-muted)">optional – wird zur Gutschrift addiert</span></label><input type="number" class="form-input" id="gs-fkp" step="0.01" placeholder="0.00" value="${b.dataset.fkp||''}"></div>
         <div class="form-group"><label class="form-label">Montagewert netto (€)</label><input type="number" class="form-input" id="gs-mw" step="0.01" placeholder="0.00" value="${b.dataset.mw||''}"></div>
         <div class="form-group"><label class="form-label">Gutschrift-Datum</label><input type="date" class="form-input" id="gs-datum" value="${b.dataset.gd||''}"></div>
         <div class="form-group"><label class="form-label">Gutschrift-Nummer</label><input type="text" class="form-input" id="gs-nummer" placeholder="GS-2025-001" value="${b.dataset.gnr||''}"></div>
@@ -2689,9 +2708,11 @@ function bindEvents(){
         const id=document.getElementById('btn-gs-save')?.dataset.id;
         const betrag=document.getElementById('gs-betrag')?.value;
         if(!betrag){toast('Gutschrift-Betrag eingeben','err');return}
+        const fkpVal=parseFloat(document.getElementById('gs-fkp')?.value)||0;
         try{await apiPut(`/api/projekte/${id}/gutschrift`,{
           montagewert_netto:document.getElementById('gs-mw')?.value||null,
           gutschrift_betrag:betrag,
+          fahrtkosten_pauschale:fkpVal,
           gutschrift_datum:document.getElementById('gs-datum')?.value||null,
           gutschrift_nummer:document.getElementById('gs-nummer')?.value||null
         });closeModal();toast('✅ Gutschrift gespeichert','ok');go('projekte');
@@ -2748,7 +2769,8 @@ function bindEvents(){
             auftraggeber_name:document.getElementById('pe-agname')?.value||null,
             auftragsnummer:document.getElementById('pe-nr')?.value||null,
             anzahl_mitarbeiter:parseInt(document.getElementById('pe-ma')?.value)||2,
-            arbeitszeit_manuell_min:arbMin,
+            arbeitszeit_min:arbMin,
+            arbeitszeit_manuell_min:0,
             km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
             km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
             besonderheiten:document.getElementById('pe-bez')?.value||null,
@@ -2766,16 +2788,14 @@ function bindEvents(){
     if(b._bound)return;b._bound=true;
     b.addEventListener('click',()=>{
       const arbMin=parseInt(b.dataset.arbmin)||0;
-      const arbH=Math.floor(arbMin/60),arbM=arbMin%60;
+      const arbStd=(arbMin/60).toFixed(2);
       showModal(`
         <button class="modal-close" id="modal-close">×</button>
         <div class="modal-title">✏️ Auftrag nachbearbeiten</div>
         <div class="form-group">
-          <label class="form-label">Arbeitszeit</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div><label style="font-size:12px;color:var(--text-muted)">Stunden</label><input type="number" class="form-input" id="edit-arb-h" value="${arbH}" min="0"></div>
-            <div><label style="font-size:12px;color:var(--text-muted)">Minuten</label><input type="number" class="form-input" id="edit-arb-m" value="${arbM}" min="0" max="59"></div>
-          </div>
+          <label class="form-label">Arbeitszeit (Stunden)</label>
+          <input type="number" class="form-input" id="edit-arb-std" value="${arbStd}" min="0" step="0.25" placeholder="z.B. 2.5">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Dezimal: 2.5 = 2h 30min · × ${b.dataset.anzahl||2} MA = MA-Std gesamt</div>
         </div>
         <div class="form-group">
           <label class="form-label">km Hinfahrt</label>
@@ -2797,11 +2817,11 @@ function bindEvents(){
         </div>
         <button class="btn btn-primary" id="btn-edit-recent-save">💾 Speichern</button>`);
       setTimeout(()=>o('btn-edit-recent-save','click',async()=>{
-        const h=parseInt(document.getElementById('edit-arb-h')?.value)||0;
-        const m=parseInt(document.getElementById('edit-arb-m')?.value)||0;
+        const arbMinNew=Math.round((parseFloat(document.getElementById('edit-arb-std')?.value)||0)*60);
         try{
           await apiPut(`/api/projekte/${b.dataset.id}`,{
-            arbeitszeit_min:h*60+m,
+            arbeitszeit_min:arbMinNew,
+            arbeitszeit_manuell_min:0,
             km_hin:parseFloat(document.getElementById('edit-km-hin')?.value)||0,
             km_zurueck:parseFloat(document.getElementById('edit-km-zurueck')?.value)||0,
             anzahl_mitarbeiter:parseInt(document.getElementById('edit-anzahl')?.value)||2,
@@ -2912,12 +2932,12 @@ function bindEvents(){
   // Projekte: Abbrechen/Löschen
   o('btn-proj-delete','click',async()=>{
     if(!projektAkt)return;
-    if(!confirm('Auftrag wirklich abbrechen und löschen?'))return;
+    if(!confirm('Auftrag abbrechen und in geplante Liste zurückstellen?\n\nDer Auftrag bleibt erhalten und kann später neu gestartet werden.'))return;
     try{
-      await apiDelete(`/api/projekte/${projektAkt.id}`);
+      await apiPut(`/api/projekte/${projektAkt.id}/zurueckstellen`,{});
       stopProjektGPS();stopProjektTimer();projektGpsTrack=[];
       projektAkt=null;localStorage.removeItem('solano_projekt');
-      toast('Auftrag gelöscht','ok');go('home');
+      toast('↩️ Auftrag zurückgestellt','ok');go('projekte');
     }catch(e){toast(e.message,'err')}
   });
 
@@ -3413,6 +3433,7 @@ function bindAdminEvents(){
         <button class="modal-close" id="modal-close">×</button>
         <div class="modal-title">💰 Gutschrift erfassen</div>
         <div class="form-group"><label class="form-label">Gutschrift-Betrag (€) <span style="color:#dc2626">*</span></label><input type="number" class="form-input" id="gs-betrag" step="0.01" placeholder="0.00" value="${b.dataset.gs||''}"></div>
+        <div class="form-group"><label class="form-label">Fahrtkostenpauschale (€) <span style="font-size:11px;color:var(--text-muted)">optional – wird zur Gutschrift addiert</span></label><input type="number" class="form-input" id="gs-fkp" step="0.01" placeholder="0.00" value="${b.dataset.fkp||''}"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">Gutschrift-Datum</label><input type="date" class="form-input" id="gs-datum" value="${b.dataset.gd||''}"></div>
           <div class="form-group" style="margin:0"><label class="form-label">Gutschrift-Nummer</label><input type="text" class="form-input" id="gs-nummer" placeholder="GS-2025-001" value="${b.dataset.gnr||''}"></div>
@@ -3420,7 +3441,7 @@ function bindAdminEvents(){
         ${!b.dataset.arbmin||b.dataset.arbmin==='0'?`<div class="form-group" style="background:#fef9c3;padding:10px;border-radius:8px;margin-top:4px">
           <label class="form-label">⏱ Arbeitszeit (Std.) – manuell eingeben</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <input type="number" class="form-input" id="gs-arbstd" step="0.5" min="0" placeholder="z.B. 4.5" style="margin:0">
+            <input type="number" class="form-input" id="gs-arbstd" step="0.25" min="0" placeholder="z.B. 4.5" style="margin:0">
             <div style="display:flex;align-items:center;font-size:13px;color:var(--text-muted)">${b.dataset.anzahl||1} Mitarbeiter</div>
           </div>
         </div>`:''}
@@ -3430,10 +3451,12 @@ function bindAdminEvents(){
         const arbMinAlt=parseInt(document.getElementById('btn-gs-save')?.dataset.arbmin||0);
         const arbStdManuell=parseFloat(document.getElementById('gs-arbstd')?.value||0);
         const arbMinManuell=arbStdManuell>0?Math.round(arbStdManuell*60):null;
+        const fkpVal=parseFloat(document.getElementById('gs-fkp')?.value)||0;
         try{await apiPut(`/api/projekte/${id}/gutschrift`,{
           gutschrift_betrag:document.getElementById('gs-betrag')?.value||null,
           gutschrift_datum:document.getElementById('gs-datum')?.value||null,
           gutschrift_nummer:document.getElementById('gs-nummer')?.value||null,
+          fahrtkosten_pauschale:fkpVal,
           arbeitszeit_manuell_min:arbMinAlt>0?null:arbMinManuell
         });closeModal();toast('✅ Gutschrift gespeichert','ok');
           const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
@@ -3534,7 +3557,8 @@ function bindAdminEvents(){
             auftraggeber_name:document.getElementById('pe-agname')?.value||null,
             auftragsnummer:document.getElementById('pe-nr')?.value||null,
             anzahl_mitarbeiter:parseInt(document.getElementById('pe-ma')?.value)||2,
-            arbeitszeit_manuell_min:arbMin,
+            arbeitszeit_min:arbMin,
+            arbeitszeit_manuell_min:0,
             km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
             km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
             besonderheiten:document.getElementById('pe-bez')?.value||null,
