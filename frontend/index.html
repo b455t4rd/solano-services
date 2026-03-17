@@ -1416,16 +1416,19 @@ async function pageProjekte(){
     :'<option value="">– Auftraggeber wählen –</option>'+auftraggeber.map(ag=>`<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
   const statusLbl={fahrt:'Fahrt',arbeit:'Arbeit',rueckfahrt:'Rückfahrt',abgeschlossen:'Abgeschlossen'};
   const recentRows=recent.map(p=>{
+    const arbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
     const km=(parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)).toFixed(1);
     const hatGutschrift=!!p.gutschrift_betrag;
+    const maStdAnz=p.anzahl_mitarbeiter>1?` × ${p.anzahl_mitarbeiter} MA`:'';
     return`<tr>
       <td>${fDate(p.erstellt_am)}</td>
       <td>${esc(p.auftraggeber_name||'–')}</td>
       <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
-      <td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
+      <td>${arbMin?fMin(arbMin)+maStdAnz:'–'}</td>
       <td>${parseFloat(km)>0?km+' km':'–'}</td>
       <td><div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
         ${hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span><button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" style="font-size:11px">✏️</button>`:`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}
+        <button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-ag="${p.auftraggeber_id||''}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${p.anzahl_mitarbeiter||2}" data-arbmin="${arbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-notiz="${esc(p.notiz||'')}" data-bez="${esc(p.besonderheiten||'')}" title="Bearbeiten">✏️</button>
         ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
       </div></td>
     </tr>`;
@@ -1935,22 +1938,27 @@ async function renderTabKalender(){
 
 function exportProjekteCSV(daten, von, bis, fzEinst){
   const kpk=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
-  const hdr=['Datum','Auftraggeber','Auftragsnummer','Anzahl MA','Status','Arbeitszeit (Min)','MA-Stunden','Fahrzeit (Min)','km gesamt','Fahrtkosten (€)','Gutschrift (€)','Netto (€)','€/Std/MA','Besonderheiten'];
+  const hdr=['Datum','Auftraggeber','Auftragsnummer','Anzahl MA','Status','Arbeitszeit (Min)','MA-Stunden','km gesamt','Fahrtkosten (€)','Gutschrift (€)','Netto (€)','€/Std/MA','Besonderheiten'];
+  let sumArbMin=0,sumKm=0,sumFk=0,sumGut=0,sumMaStd=0;
   const rows=daten.map(p=>{
     const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
     const fk=km*kpk;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
-    const arbeitStd=(p.arbeitszeit_min||0)/60;
-    const maStd=arbeitStd*anzahl;
+    const arbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
+    const maStd=(arbMin/60)*anzahl;
     const gut=parseFloat(p.gutschrift_betrag||0);
     const netto=gut-fk;
     const eurStd=maStd>0&&gut>0?(netto/maStd).toFixed(2):'';
+    sumArbMin+=arbMin;sumKm+=km;sumFk+=fk;sumGut+=gut;sumMaStd+=maStd;
     return[fDate(p.erstellt_am),p.auftraggeber_name||'',p.auftragsnummer||'',anzahl,p.status||'',
-      p.arbeitszeit_min||0,maStd.toFixed(2),(p.fahrzeit_hin_min||0)+(p.fahrzeit_zurueck_min||0),
-      km.toFixed(1),fk.toFixed(2),gut.toFixed(2),netto.toFixed(2),eurStd,p.besonderheiten||''
+      arbMin,maStd.toFixed(2),km.toFixed(1),fk.toFixed(2),gut.toFixed(2),netto.toFixed(2),eurStd,p.besonderheiten||''
     ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
   });
-  const blob=new Blob(['\uFEFF'+hdr.join(',')+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  const sumNetto=sumGut-sumFk;
+  const sumEurStd=sumMaStd>0&&sumGut>0?(sumNetto/sumMaStd).toFixed(2):'';
+  const sumRow=['GESAMT','','','','',(sumArbMin).toString(),sumMaStd.toFixed(2),sumKm.toFixed(1),sumFk.toFixed(2),sumGut.toFixed(2),sumNetto.toFixed(2),sumEurStd,'']
+    .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
+  const blob=new Blob(['\uFEFF'+hdr.join(',')+'\n'+rows.join('\n')+'\n'+sumRow],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download=`Projekte_${von}_${bis}.csv`;a.click();
 }
@@ -1963,18 +1971,20 @@ function exportProjektePDF(daten, von, bis, fzEinst){
     const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
     const fk=km*kpk;
     const anzahl=parseInt(p.anzahl_mitarbeiter||1);
-    sum.count++;sum.arbeit+=parseInt(p.arbeitszeit_min||0);sum.km+=km;sum.fk+=fk;
-    sum.gut+=parseFloat(p.gutschrift_betrag||0);sum.maStd+=(p.arbeitszeit_min||0)/60*anzahl;
+    const arbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
+    sum.count++;sum.arbeit+=arbMin;sum.km+=km;sum.fk+=fk;
+    sum.gut+=parseFloat(p.gutschrift_betrag||0);sum.maStd+=(arbMin/60)*anzahl;
   });
   const rows=daten.map(p=>{
     const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
     const fk=km*kpk;const anzahl=parseInt(p.anzahl_mitarbeiter||1);
-    const gut=parseFloat(p.gutschrift_betrag||0);const maStd=(p.arbeitszeit_min||0)/60*anzahl;
+    const arbMin=(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0);
+    const gut=parseFloat(p.gutschrift_betrag||0);const maStd=(arbMin/60)*anzahl;
     const eurStd=maStd>0&&gut>0?((gut-fk)/maStd).toFixed(2):'–';
     return`<tr><td>${fDate(p.erstellt_am)}</td><td>${esc(p.auftraggeber_name||'–')}</td><td>${esc(p.auftragsnummer||'–')}</td>
-      <td style="text-align:center">${anzahl}</td><td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
+      <td style="text-align:center">${anzahl}</td><td>${arbMin?fMin(arbMin)+'<span style="color:#6b7280;font-size:10px">×'+anzahl+'</span>':'–'}</td>
       <td>${km>0?km.toFixed(1)+' km':'–'}</td><td>${fk>0?'-€'+fk.toFixed(2):'–'}</td>
-      <td>${gut>0?'€'+gut.toFixed(2):'–'}</td><td>${eurStd}</td></tr>`;
+      <td>${gut>0?'€'+gut.toFixed(2):'–'}</td><td style="font-weight:700;color:#7c3aed">${eurStd}</td></tr>`;
   }).join('');
   const netto=sum.gut-sum.fk;
   const eurStdGes=sum.maStd>0&&sum.gut>0?(netto/sum.maStd).toFixed(2):'–';
@@ -1988,7 +1998,13 @@ function exportProjektePDF(daten, von, bis, fzEinst){
   <div class="summary">Aufträge: <b>${sum.count}</b> · Arbeitszeit: <b>${fMin(sum.arbeit)}</b> · MA-Stunden: <b>${sum.maStd.toFixed(1)}h</b> · km: <b>${sum.km.toFixed(1)}</b><br>
   Fahrtkosten: <b style="color:#dc2626">-€${sum.fk.toFixed(2)}</b> · Gutschrift: <b style="color:#16a34a">€${sum.gut.toFixed(2)}</b> · Netto: <b style="color:${netto>=0?'#16a34a':'#dc2626'}">€${netto.toFixed(2)}</b> · €/Std/MA: <b style="color:#7c3aed">${eurStdGes}</b></div>
   <table><thead><tr><th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>MA</th><th>Arbeit</th><th>km</th><th>Fahrtkosten</th><th>Gutschrift</th><th>€/Std/MA</th></tr></thead>
-  <tbody>${rows}</tbody></table>
+  <tbody>${rows}</tbody>
+  <tfoot><tr><td colspan="4"><b>GESAMT (${sum.count} Aufträge)</b></td>
+    <td><b>${fMin(sum.arbeit)}</b></td><td><b>${sum.km.toFixed(1)} km</b></td>
+    <td style="color:#dc2626"><b>-€${sum.fk.toFixed(2)}</b></td>
+    <td style="color:#16a34a"><b>€${sum.gut.toFixed(2)}</b></td>
+    <td style="color:#7c3aed"><b>${eurStdGes}</b></td></tr></tfoot>
+  </table>
   <div style="margin-top:20px;font-size:10px;color:#9ca3af">Fahrtkosten-Basis: €${kpk.toFixed(3)}/km (Diesel+Maut+Abnützung) · Erstellt: ${new Date().toLocaleString('de-AT')}</div>
   <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Drucken</button>
   </body></html>`;
@@ -2401,6 +2417,45 @@ function bindEvents(){
     });
   });
 
+  // Projekte: Auftrag bearbeiten
+  document.querySelectorAll('[data-action="proj-edit"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      const d=b.dataset;
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">✏️ Auftrag bearbeiten</div>
+        <div class="form-group"><label class="form-label">Auftraggeber</label><input class="form-input" id="pe-agname" value="${esc(d.agname||'')}" placeholder="Auftraggeber"></div>
+        <div class="form-group"><label class="form-label">Auftragsnummer</label><input class="form-input" id="pe-nr" value="${esc(d.nr||'')}" placeholder="optional"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">Anzahl MA</label><input type="number" class="form-input" id="pe-ma" value="${d.ma||2}" min="1" max="10"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit (Min)</label><input type="number" class="form-input" id="pe-arbmin" value="${d.arbmin||0}" min="0" step="15"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">km Hinfahrt</label><input type="number" class="form-input" id="pe-kmhin" value="${d.kmhin||0}" min="0" step="0.1"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">km Rückfahrt</label><input type="number" class="form-input" id="pe-kmzurueck" value="${d.kmzurueck||0}" min="0" step="0.1"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Besonderheiten</label><textarea class="form-input" id="pe-bez" rows="2" style="resize:vertical">${esc(d.bez||'')}</textarea></div>
+        <button class="btn btn-primary" id="btn-pe-save" data-id="${d.id}">💾 Speichern</button>`);
+      setTimeout(()=>o('btn-pe-save','click',async()=>{
+        const id=document.getElementById('btn-pe-save')?.dataset.id;
+        const arbMin=parseInt(document.getElementById('pe-arbmin')?.value)||0;
+        try{
+          await apiPut(`/api/projekte/${id}`,{
+            auftraggeber_name:document.getElementById('pe-agname')?.value||null,
+            auftragsnummer:document.getElementById('pe-nr')?.value||null,
+            anzahl_mitarbeiter:parseInt(document.getElementById('pe-ma')?.value)||2,
+            arbeitszeit_manuell_min:arbMin,
+            km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
+            km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
+            besonderheiten:document.getElementById('pe-bez')?.value||null,
+          });
+          closeModal();toast('💾 Gespeichert','ok');go('projekte');
+        }catch(e){toast(e.message,'err')}
+      }),0);
+    });
+  });
+
   // Projekte: Letzten Auftrag löschen
   document.querySelectorAll('[data-action="proj-delete-recent"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
@@ -2434,7 +2489,26 @@ function bindEvents(){
         stopProjektTimer();
         projektGpsTrack=[];
         if(p.status==='abgeschlossen'){
-          toast('✅ Auftrag abgeschlossen!','ok');go('home');
+          // Fragen ob wirklich fertig oder weiterer Termin folgt
+          showModal(`
+            <button class="modal-close" id="modal-close">×</button>
+            <div class="modal-title">✅ Auftrag abgeschlossen?</div>
+            <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px">Ist dieser Auftrag vollständig fertig, oder gibt es noch weitere Termine (z.B. nächste Woche)?</p>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <button class="btn btn-primary" id="btn-proj-fertig">✅ Ja, Auftrag abschließen</button>
+              <button class="btn" id="btn-proj-weiterer" style="background:#f59e0b;color:white">📅 Weiterer Termin folgt</button>
+            </div>`);
+          setTimeout(()=>{
+            o('btn-proj-fertig','click',()=>{closeModal();toast('✅ Auftrag abgeschlossen!','ok');go('home');});
+            o('btn-proj-weiterer','click',async()=>{
+              closeModal();
+              try{
+                const neu=await apiPut(`/api/projekte/${p.id}/neuer-termin`,{km_rueck:km||0});
+                projektAkt=neu;localStorage.setItem('solano_projekt',JSON.stringify(neu));
+                toast('📅 Weiterer Termin vorbereitet','ok');go('projekte');
+              }catch(e){toast(e.message,'err')}
+            });
+          },0);
         }else{
           toast(phase==='fahrt'?'🔨 Arbeit gestartet':'🏠 Rückfahrt gestartet','ok');
           go('projekte');

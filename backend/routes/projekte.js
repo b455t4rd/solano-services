@@ -208,13 +208,43 @@ router.put('/:id/gutschrift', managerMiddleware, async (req, res) => {
 // ── Allgemeines Update ────────────────────────────────────────────────────────
 
 router.put('/:id', authMiddleware, async (req, res) => {
-  const { notiz, besonderheiten, anzahl_mitarbeiter, auftragsnummer } = req.body;
+  const { notiz, besonderheiten, anzahl_mitarbeiter, auftragsnummer, km_hin, km_zurueck, arbeitszeit_manuell_min, auftraggeber_id, auftraggeber_name } = req.body;
   try {
     const r = await pool.query(
       `UPDATE projekt_auftraege
-       SET notiz=$1, besonderheiten=$2, anzahl_mitarbeiter=$3, auftragsnummer=$4
-       WHERE id=$5 RETURNING *`,
-      [notiz||null, besonderheiten||null, anzahl_mitarbeiter||2, auftragsnummer||null, req.params.id]
+       SET notiz=$1, besonderheiten=$2, anzahl_mitarbeiter=$3, auftragsnummer=$4,
+           km_hin=COALESCE($5, km_hin), km_zurueck=COALESCE($6, km_zurueck),
+           arbeitszeit_manuell_min=COALESCE($7, arbeitszeit_manuell_min),
+           auftraggeber_id=COALESCE($8, auftraggeber_id),
+           auftraggeber_name=COALESCE($9, auftraggeber_name)
+       WHERE id=$10 RETURNING *`,
+      [notiz||null, besonderheiten||null, anzahl_mitarbeiter||2, auftragsnummer||null,
+       km_hin!=null?km_hin:null, km_zurueck!=null?km_zurueck:null,
+       arbeitszeit_manuell_min!=null?arbeitszeit_manuell_min:null,
+       auftraggeber_id||null, auftraggeber_name||null,
+       req.params.id]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Neuer Termin (Multi-Session) ──────────────────────────────────────────────
+router.put('/:id/neuer-termin', authMiddleware, async (req, res) => {
+  try {
+    // Holt aktuelle Werte und akkumuliert Arbeitszeit in arbeitszeit_manuell_min
+    const cur = await pool.query('SELECT * FROM projekt_auftraege WHERE id=$1', [req.params.id]);
+    if (!cur.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
+    const p = cur.rows[0];
+    const akkArbeit = (parseInt(p.arbeitszeit_manuell_min)||0) + (parseInt(p.arbeitszeit_min)||0);
+    const akkKmHin = parseFloat(p.km_hin||0) + parseFloat(req.body.km_rueck||0); // letzte Rückfahrt km addieren
+    const r = await pool.query(
+      `UPDATE projekt_auftraege
+       SET status='fahrt', arbeitszeit_manuell_min=$1,
+           fahrt_start=NULL, ankunft=NULL, abfahrt_zeit=NULL, fahrt_ende=NULL,
+           arbeitszeit_min=0, fahrzeit_hin_min=0, fahrzeit_zurueck_min=0,
+           gps_punkte='[]'
+       WHERE id=$2 RETURNING *`,
+      [akkArbeit, req.params.id]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
