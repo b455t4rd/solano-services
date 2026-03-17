@@ -30,6 +30,7 @@ app.use('/api/alarm',      require('./routes/alarm'));
 app.use('/api/admin',      require('./routes/admin'));
 app.use('/api/zeit',       require('./routes/zeit'));
 app.use('/api/kalender',   require('./routes/kalender'));
+app.use('/api/projekte',   require('./routes/projekte'));
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -44,8 +45,19 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(frontendDir, 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`SolanoServices Backend läuft auf Port ${PORT}`);
   console.log(`Frontend: http://localhost:${PORT}`);
   console.log(`API:      http://localhost:${PORT}/api/health`);
+  // Sequences beim Start korrigieren (nach DB-Import können sie falsch sein)
+  try {
+    const pool = require('./db');
+    await pool.query(`SELECT setval('aufgaben_id_seq', COALESCE((SELECT MAX(id) FROM aufgaben), 1))`);
+    await pool.query(`SELECT setval('mitarbeiter_id_seq', COALESCE((SELECT MAX(id) FROM mitarbeiter), 1))`);
+    await pool.query(`SELECT setval('anlagen_id_seq', COALESCE((SELECT MAX(id) FROM anlagen), 1))`);
+    await pool.query(`SELECT setval('einsaetze_id_seq', COALESCE((SELECT MAX(id) FROM einsaetze), 1))`);
+    await pool.query(`SELECT setval('auftraggeber_id_seq', COALESCE((SELECT MAX(id) FROM auftraggeber), 1))`);
+    await pool.query(`SELECT setval('projekt_auftraege_id_seq', COALESCE((SELECT MAX(id) FROM projekt_auftraege), 1))`);
+    console.log('Sequences korrigiert ✓');
+  } catch(e) { console.warn('Sequence-Fix Fehler:', e.message); }
 });

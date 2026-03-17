@@ -271,6 +271,8 @@ let user       = JSON.parse(localStorage.getItem('solano_user') || 'null');
 let einsatzAkt = JSON.parse(localStorage.getItem('solano_einsatz') || 'null');
 function isManager(){return!!(user?.ist_admin||user?.ist_chef)}
 let gpsBatch   = JSON.parse(localStorage.getItem('solano_gps_batch') || '[]');
+let projektAkt = JSON.parse(localStorage.getItem('solano_projekt') || 'null');
+let projektGpsTrack = [], projektGpsWatcher = null, projektTimerIv = null;
 let page = 'login', pageData = {}, gpsWatcher = null, timerIv = null;
 window._nachBadge = 0;
 let _draftAufg = [], _draftCtr = 0;
@@ -400,11 +402,12 @@ function sidebarHTML(){
     ${si('nav-home','🏠','Übersicht',page==='home')}
     ${si('nav-nachrichten','📬','Nachrichten'+(window._nachBadge>0?` (${window._nachBadge})`:''),page==='nachrichten')}
     ${si('nav-zeit','⏱️','Zeiterfassung',page==='zeit')}
-    ${si('nav-kalender','📅','Kalender',page==='kalender')}
+    ${si('nav-projekte','🔨','Projekte',page==='projekte')}
     ${showW?`<div class="sidebar-label">WINTERDIENST</div>${si('nav-winter','❄️','Anlagen',page==='anlagen'&&pageData.sparte==='winterdienst')}`:''}
     ${showG?`<div class="sidebar-label">GEBÄUDEREINIGUNG</div>${si('nav-gebaeude','🧹','Anlagen',page==='anlagen'&&pageData.sparte==='gebaeudereinigung')}`:''}
     ${showGr?`<div class="sidebar-label">GRÜNPFLEGE</div>${si('nav-gruenpflege','🌿','Anlagen',page==='anlagen'&&pageData.sparte==='gruenpflege')}`:''}
     ${einsatzAkt?`<div class="sidebar-label">AKTIVER EINSATZ</div>${si('nav-einsatz','🟢',esc(einsatzAkt.anlage_name||'Einsatz'),page==='einsatz')}`:''}
+    ${projektAkt&&projektAkt.status!=='abgeschlossen'?`<div class="sidebar-label">AKTIVER AUFTRAG</div>${si('nav-projekte-akt','🔨',esc(projektAkt.auftraggeber_name||'Auftrag'),page==='projekte')}`:''}
     ${isManager()?`<div class="sidebar-label">VERWALTUNG</div>${si('nav-admin','⚙️','Admin',page==='admin')}`:''}
     <div class="sidebar-spacer"></div>
     <div class="sidebar-divider"></div>
@@ -421,6 +424,7 @@ async function getPageContent(){
     case'nachrichten':return pageNachrichten();
     case'alarm':return pageAlarm();
     case'zeit':return pageZeit();
+    case'projekte':return pageProjekte();
     case'kalender':return pageKalender();
     default:return`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Seite nicht gefunden</div></div>`;
   }
@@ -474,7 +478,18 @@ async function pageHome(){
     else zeitStatusHome='Noch nicht eingestempelt';
   }catch(e){}
   const zeitBtn=`<button class="nav-btn" id="card-zeit" style="margin-top:12px;justify-content:space-between"><span>⏱️ Zeiterfassung</span><span style="font-size:12px;opacity:.7;font-weight:400">${zeitStatusHome}</span></button>`;
-  const kalBtn=`<button class="nav-btn" id="card-kalender" style="margin-top:8px">📅 Kalender</button>`;
+  const kalBtn=``; // Kalender ausgeblendet bis CalDAV funktioniert
+  // Projekte-Status für Startseite
+  let projektStatusHome='Kein aktiver Auftrag';
+  try{
+    const pa=await apiGet('/api/projekte/aktiv');
+    if(pa&&pa.status!=='abgeschlossen'){
+      projektAkt=pa;localStorage.setItem('solano_projekt',JSON.stringify(pa));
+      const phLbl={fahrt:'🚗 Fahrt',arbeit:'🔨 Arbeit',rueckfahrt:'🏠 Rückfahrt'};
+      projektStatusHome=`${phLbl[pa.status]||pa.status} · ${esc(pa.auftraggeber_name||'–')}`;
+    }else{projektAkt=null;localStorage.removeItem('solano_projekt');}
+  }catch(e){}
+  const projektBtn=`<button class="nav-btn" id="card-projekte" style="margin-top:8px;justify-content:space-between"><span>🔨 Projekte</span><span style="font-size:12px;opacity:.7;font-weight:400">${projektStatusHome}</span></button>`;
   const showW=user?.zeige_winterdienst!==false;
   const showG=user?.zeige_gebaeudereinigung!==false;
   const showGr=user?.zeige_gruenpflege!==false;
@@ -485,7 +500,7 @@ async function pageHome(){
   ].join('');
   const _gr=['Schön, dass du da bist.','Was steht heute an?','Schon Kaffee gehabt?','Willkommen zurück.','Wie läuft\'s heute?','Bereit für den Tag?','Gut, dich zu sehen.','Was liegt heute an?','Alles klar bei dir?','Auf geht\'s?','Schön, dass du wieder da bist.','Was ist heute geplant?','Alles fit?','Bereit?','Wie startet dein Tag?','Was gibt\'s heute?','Na, alles gut?','Wie schaut\'s aus?','Los geht\'s.','Was machen wir heute?','Willkommen.','Da bist du ja.','Was geht heute?','Alles im Griff?','Gut drauf heute?','Was kommt als Nächstes?','Wie ist die Lage?','Kann losgehen?','Was hast du vor?','Bereit für heute?','Was ist der Plan?','Schön, dich zu sehen.','Wie läuft der Tag?','Alles bereit?','Was wartet heute?','Hallo, schön dass du da bist.','Was nehmen wir heute in Angriff?','Na, bereit?','Alles entspannt?','Wie sieht\'s heute aus?','Was ist heute wichtig?','Wieder am Start?','Wie geht\'s dir heute?','Schön, dass du reinschaust.','Kaffee schon drin?','Was hast du heute auf dem Zettel?','Kann\'s losgehen?','Alles gut heute?','Hallo zurück.','Was darf\'s heute sein?','Gut, dass du da bist.','Wie läuft dein Morgen?','Was steht als Erstes an?','Alles auf Kurs?','Bereit zum Loslegen?','Was läuft heute?','Was ist heute los?','Willkommen, legen wir los.','Wie startet\'s?','Was packen wir an?','Schön, dass du vorbeischaust.','Wie sieht dein Tag aus?','Alles startklar?','Was steht bei dir an?','Schon wach?','Bereit für Runde zwei?','Wie läuft dein Vormittag?','Alles gut soweit?','Was geht ab?','Startklar?','Na, wie ist\'s?','Was darf heute passieren?','Alles unter Kontrolle?','Gut geschlafen?','Schon im Flow?','Was geht zuerst?','Was kommt heute auf dich zu?','Willkommen zurück im Alltag.','Wie fühlt sich der Tag an?','Heute viel vor?','Was gibt der Tag her?','Wie schaut dein Plan aus?','Alles locker?','Bist du bereit?','Was läuft als Nächstes?','Wieder da?','Schön, dich wiederzusehen.','Wie geht der Tag los?','Schon gestartet?','Was wollen wir heute schaffen?','Wie ist die Stimmung?','Was ist heute dran?','Schon unterwegs?','Gut in den Tag gekommen?','Was liegt zuerst an?','Alles bereit für heute?','Na dann, los.','Schön, dass du reinsiehst.','Heute motiviert?','Was steht vorne an?','Alles gut bei dir?','Was darf heute nicht vergessen werden?','Was ist heute dein Fokus?','Los?','Wieder bereit?','Na, schon angekommen?','Wie läuft dein Start?','Was soll heute klappen?','Schön, dass du wieder hier bist.','Wie sieht\'s aus bei dir?','Kaffee oder Chaos?','Was ist heute dein Thema?','Na, wie startet\'s?','Alles ruhig?','Bereit für das Nächste?','Wie war dein Morgen?'];
   const _grText=_gr[Math.floor(Math.random()*_gr.length)];
-  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${kalBtn}${adminBtn}</div>`;
+  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${projektBtn}${kalBtn}${adminBtn}</div>`;
 }
 
 async function pageNachrichten(){
@@ -669,7 +684,7 @@ async function pageAdmin(){
     <button class="tab-btn ${tab==='nachrichten'?'active':''}" data-tab="nachrichten">💬 Nachrichten</button>
     <button class="tab-btn ${tab==='alarm'?'active':''}" data-tab="alarm">🚨 Alarm</button>
     <button class="tab-btn ${tab==='zeitauswertung'?'active':''}" data-tab="zeitauswertung">⏱️ Zeiterfassung</button>
-    ${isManager()?`<button class="tab-btn ${tab==='kalender'?'active':''}" data-tab="kalender">📅 Kalender</button>`:''}
+    <button class="tab-btn ${tab==='projekte'?'active':''}" data-tab="projekte">🔨 Projekte</button>
     ${user?.ist_admin?`<button class="tab-btn ${tab==='reset'?'active':''}" data-tab="reset">🗑️ Reset</button>`:''}
     ${pushTab}
   </div>
@@ -686,6 +701,7 @@ async function renderTab(tab){
   if(tab==='nachrichten')return renderTabNachrichten();
   if(tab==='alarm')return renderTabAlarm();
   if(tab==='zeitauswertung')return renderTabZeit();
+  if(tab==='projekte')return renderTabProjekte();
   if(tab==='kalender'&&isManager())return renderTabKalender();
   if(tab==='reset'&&user?.ist_admin)return renderTabReset();
   return'';
@@ -703,7 +719,8 @@ async function renderTabMitarbeiter(){
     const sparteIcons=[m.zeige_winterdienst!==false?'❄️':'',m.zeige_gebaeudereinigung!==false?'🧹':'',m.zeige_gruenpflege!==false?'🌿':''].filter(Boolean).join(' ')||'–';
     const roleBadge=m.ist_admin?'<span class="badge badge-red">👑 Admin</span>':m.ist_chef?'<span class="badge badge-blue">⭐ Chef</span>':'<span class="badge badge-gray">Mitarbeiter</span>';
     const alarmBadge=m.winterdienst_alarm?'<span class="badge badge-red">🚨 Alarm</span>':'';
-    return`<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge} ${alarmBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef||false}" data-zw="${m.zeige_winterdienst!==false}" data-zg="${m.zeige_gebaeudereinigung!==false}" data-zgr="${m.zeige_gruenpflege!==false}" data-alarm="${m.winterdienst_alarm||false}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
+    const beschBadge=m.beschaeftigung&&m.beschaeftigung!=='vollzeit'?`<span class="badge badge-gray">${m.beschaeftigung==='teilzeit'?'Teilzeit':'Geringfügig'} ${m.soll_stunden||38.5}h/W</span>`:'';
+    return`<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge} ${alarmBadge} ${beschBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef||false}" data-zw="${m.zeige_winterdienst!==false}" data-zg="${m.zeige_gebaeudereinigung!==false}" data-zgr="${m.zeige_gruenpflege!==false}" data-alarm="${m.winterdienst_alarm||false}" data-soll="${m.soll_stunden||38.5}" data-beschaeftigung="${m.beschaeftigung||'vollzeit'}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
   }).join('');
   return`<div class="admin-wrap"><button class="btn btn-primary btn-sm" id="btn-new-ma" style="margin-bottom:12px">+ Neuer Mitarbeiter</button><div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Name</th><th>PIN</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
@@ -1028,6 +1045,20 @@ function modalMitarbeiter(m=null){
         <input type="checkbox" id="m-ma-alarm" ${m?.winterdienst_alarm?'checked':''} style="width:18px;height:18px"> 🚨 Winterdienst-Alarmierung
       </label>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Beschäftigung</label>
+        <select class="form-input" id="m-ma-beschaeftigung">
+          <option value="vollzeit" ${!m||m.beschaeftigung==='vollzeit'||!m.beschaeftigung?'selected':''}>Vollzeit</option>
+          <option value="teilzeit" ${m?.beschaeftigung==='teilzeit'?'selected':''}>Teilzeit</option>
+          <option value="geringfuegig" ${m?.beschaeftigung==='geringfuegig'?'selected':''}>Geringfügig</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Soll-Std./Woche</label>
+        <input class="form-input" id="m-ma-soll" type="number" step="0.5" min="1" max="60" value="${m?.soll_stunden||38.5}">
+      </div>
+    </div>
     <button class="btn btn-primary" id="btn-save-ma" data-id="${m?.id||''}">${m?'Speichern':'Anlegen'}</button>`);
 }
 
@@ -1271,54 +1302,316 @@ async function pageZeit(){
       <button id="btn-z-pause"  ${btnStyle(kannPause,'#d97706')}>⏸ PAUSE START</button>
       <button id="btn-z-pauseende" ${btnStyle(kannPauseEnde,'#2563eb')}>▶️ PAUSE ENDE</button>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:16px">
-      <button id="btn-z-urlaub" ${btnStyle(kannUrlaub,'#7c3aed')} style="flex:1;padding:14px 8px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${kannUrlaub?'pointer':'default'};background:${kannUrlaub?'#7c3aed':'#e5e7eb'};color:${kannUrlaub?'white':'#9ca3af'}">🏖️ URLAUB</button>
-      <button id="btn-z-nachtrag" style="flex:1;padding:14px 8px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;background:#0891b2;color:white">⏱ Pause nachtragen</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+      <button id="btn-z-urlaub"   ${btnStyle(kannUrlaub,'#7c3aed')}>🏖️ URLAUB</button>
+      <button id="btn-z-krank"    ${btnStyle(status==='frei'||status==='gehen','#ef4444')}>🤒 KRANKENSTAND</button>
+      <button id="btn-z-nachtrag" ${btnStyle(true,'#0891b2')}>⏱ Pause nachtragen</button>
     </div>
     ${adminHinweis}
     ${heute.length>0?`<div style="font-weight:700;margin:16px 0 8px">Heutige Einträge</div>
     <div class="card"><div class="card-body" style="padding:0">${heute.map(e=>`
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border)">
-        <div><span style="font-weight:600">${{kommen:'🟢 Kommen',gehen:'🔴 Gehen',pause_start:'⏸ Pause Start',pause_ende:'▶️ Pause Ende',urlaub:'🏖️ Urlaub'}[e.typ]||e.typ}</span></div>
+        <div><span style="font-weight:600">${{kommen:'🟢 Kommen',gehen:'🔴 Gehen',pause_start:'⏸ Pause Start',pause_ende:'▶️ Pause Ende',urlaub:'🏖️ Urlaub',krankenstand:'🤒 Krankenstand'}[e.typ]||e.typ}</span></div>
         <div style="color:var(--text-muted);font-size:13px">${fUhr(e.zeitpunkt)}</div>
       </div>`).join('')}</div></div>`:''}
   </div>`;
 }
 
+// ── PROJEKTE GPS / TIMER HELPERS ─────────────────────────────────────────────
+function startProjektTimer(startZeit){
+  clearInterval(projektTimerIv);
+  const upd=()=>{const el=document.getElementById('proj-timer');if(el)el.textContent=formatDur(startZeit,new Date())};
+  upd();projektTimerIv=setInterval(upd,1000);
+}
+function stopProjektTimer(){clearInterval(projektTimerIv);projektTimerIv=null}
+function startProjektGPS(){
+  projektGpsTrack=[];
+  if(!navigator.geolocation)return;
+  projektGpsWatcher=navigator.geolocation.watchPosition(pos=>{
+    projektGpsTrack.push({lat:pos.coords.latitude,lng:pos.coords.longitude,ts:new Date().toISOString()});
+  },null,{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
+}
+function stopProjektGPS(){if(projektGpsWatcher!==null){navigator.geolocation.clearWatch(projektGpsWatcher);projektGpsWatcher=null}}
+function calcProjektKm(track){
+  let km=0;
+  for(let i=1;i<track.length;i++){km+=haversineDist(track[i-1].lat,track[i-1].lng,track[i].lat,track[i].lng)/1000}
+  return Math.round(km*10)/10;
+}
+
+// ── PROJEKTE PAGE ─────────────────────────────────────────────────────────────
+async function pageProjekte(){
+  const phaseColors={fahrt:'#2563eb',arbeit:'#16a34a',rueckfahrt:'#d97706',abgeschlossen:'#6b7280'};
+  const phaseLabels={fahrt:'🚗 Hinfahrt',arbeit:'🔨 Arbeit',rueckfahrt:'🏠 Rückfahrt',abgeschlossen:'✅ Fertig'};
+
+  if(projektAkt&&projektAkt.status!=='abgeschlossen'){
+    const p=projektAkt,phase=p.status;
+    const col=phaseColors[phase];
+    const phases=['fahrt','arbeit','rueckfahrt'];
+    const phaseIdx=phases.indexOf(phase);
+
+    const phaseBar=phases.map((ph,i)=>{
+      const active=i===phaseIdx,done=i<phaseIdx;
+      return`<div style="flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:12px;font-weight:${active?'700':'400'};background:${active?phaseColors[ph]:done?'#d1fae5':'#f3f4f6'};color:${active?'white':done?'#065f46':'#9ca3af'}">${phaseLabels[ph]}</div>`;
+    }).join('');
+
+    const phaseStartMap={fahrt:p.fahrt_start,arbeit:p.ankunft,rueckfahrt:p.abfahrt_zeit};
+    const phaseStart=phaseStartMap[phase];
+
+    const nextBtnLabels={fahrt:'🔨 Am Ziel – Arbeit beginnen',arbeit:'🏠 Fertig – Rückfahrt starten',rueckfahrt:'✅ Zuhause – Auftrag abschließen'};
+    const nextBtnColors={fahrt:'#16a34a',arbeit:'#d97706',rueckfahrt:'#6b7280'};
+
+    // Km info for display
+    const kmHin=parseFloat(p.km_hin||0),kmZurueck=parseFloat(p.km_zurueck||0);
+    const kmInfo=(kmHin||kmZurueck)?`<div style="font-size:13px;color:var(--text-muted);margin-top:4px">Km: ${kmHin>0?'Hin '+kmHin:''}${kmHin>0&&kmZurueck>0?' · ':''}${kmZurueck>0?'Zurück '+kmZurueck:''}</div>`:'';
+
+    return`<div class="content">
+      <div class="card" style="margin-bottom:16px;border:2px solid ${col}">
+        <div class="card-body">
+          <div style="display:flex;gap:6px;margin-bottom:14px">${phaseBar}</div>
+          <div style="text-align:center;font-size:44px;font-weight:800;letter-spacing:2px;font-variant-numeric:tabular-nums;color:${col}" id="proj-timer">--:--</div>
+          <div style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:4px">${phaseLabels[phase]} seit ${fUhr(phaseStart)}</div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:16px;font-weight:700">${esc(p.auftraggeber_name||'–')}</div>
+            ${p.auftragsnummer?`<div style="font-size:13px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
+            ${p.notiz?`<div style="font-size:13px;color:var(--text-muted);margin-top:2px">${esc(p.notiz)}</div>`:''}
+            ${kmInfo}
+          </div>
+        </div>
+      </div>
+      ${phase==='arbeit'?`<div class="card" style="margin-bottom:12px"><div class="card-body">
+        <label class="form-label">Besonderheiten / Anmerkungen</label>
+        <textarea class="form-input" id="proj-besonderheiten" rows="3" placeholder="z.B. Fassade geöffnet, Stahlträger, Mehraufwand…">${esc(p.besonderheiten||'')}</textarea>
+        <button class="btn btn-outline" id="btn-proj-save-notiz" style="margin-top:8px;font-size:13px">💾 Speichern</button>
+      </div></div>`:''}
+      <button id="btn-proj-next-phase" style="width:100%;padding:16px;background:${nextBtnColors[phase]};color:white;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">${nextBtnLabels[phase]}</button>
+      ${isManager()?`<button id="btn-proj-delete" style="width:100%;padding:12px;background:transparent;color:var(--danger);border:1px solid var(--danger);border-radius:12px;font-size:14px;cursor:pointer">❌ Auftrag abbrechen / löschen</button>`:''}
+    </div>`;
+  }
+
+  // Kein aktiver Auftrag – Neuen starten
+  let auftraggeber=[];
+  try{auftraggeber=await apiGet('/api/projekte/auftraggeber')}catch(e){}
+  let recent=[];
+  try{recent=await apiGet('/api/projekte?limit=10')}catch(e){}
+
+  const agOpts=auftraggeber.map(ag=>`<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
+  const statusLbl={fahrt:'Fahrt',arbeit:'Arbeit',rueckfahrt:'Rückfahrt',abgeschlossen:'Abgeschlossen'};
+  const recentRows=recent.map(p=>{
+    const km=(parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)).toFixed(1);
+    return`<tr>
+      <td>${fDate(p.erstellt_am)}</td>
+      <td>${esc(p.auftraggeber_name||'–')}</td>
+      <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
+      <td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
+      <td>${parseFloat(km)>0?km+' km':'–'}</td>
+      <td><span class="badge ${p.status==='abgeschlossen'?'badge-green':'badge-blue'}">${statusLbl[p.status]||p.status}</span></td>
+    </tr>`;
+  }).join('');
+
+  return`<div class="content">
+    <div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="font-size:18px;font-weight:700;margin-bottom:16px">🔨 Neuer Auftrag</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Auftraggeber</label>
+        <select class="form-input" id="proj-ag">${agOpts}</select>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Auftragsnummer (optional)</label>
+        <input type="text" class="form-input" id="proj-auftragsnr" placeholder="z.B. 2025-001">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Anzahl Mitarbeiter</label>
+        <select class="form-input" id="proj-anzahl">
+          <option value="1">1 Person</option>
+          <option value="2" selected>2 Personen</option>
+          <option value="3">3 Personen</option>
+          <option value="4">4 Personen</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Notiz / Adresse (optional)</label>
+        <textarea class="form-input" id="proj-notiz" rows="2" placeholder="z.B. Adresse, Ansprechpartner…"></textarea>
+      </div>
+      <button class="btn btn-primary" id="btn-proj-starten" style="width:100%;padding:16px;font-size:16px;font-weight:700;background:#7c3aed">🚗 Fahrt starten</button>
+    </div></div>
+    ${recent.length>0?`
+      <div style="font-weight:700;margin-bottom:8px">Letzte Aufträge</div>
+      <div class="card" style="overflow:auto"><table class="tbl"><thead><tr>
+        <th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>Arbeitszeit</th><th>km</th><th>Status</th>
+      </tr></thead><tbody>${recentRows}</tbody></table></div>`:``}
+  </div>`;
+}
+
+// ── ADMIN TAB: PROJEKTE ───────────────────────────────────────────────────────
+async function renderTabProjekte(){
+  let auswertung=[],agList=[],maList=[];
+  const _h=new Date(),_mo=new Date(_h);_mo.setDate(1);
+  const von=pageData.projVon||_mo.toISOString().split('T')[0];
+  const bis=pageData.projBis||_h.toISOString().split('T')[0];
+  const projAg=pageData.projAg||'';
+  try{[auswertung,agList,maList]=await Promise.all([
+    apiGet(`/api/projekte/auswertung?von=${von}&bis=${bis}${projAg?'&auftraggeber_id='+projAg:''}`),
+    apiGet('/api/projekte/auftraggeber'),
+    apiGet('/api/mitarbeiter')
+  ]);}catch(e){}
+
+  // Summen pro Auftraggeber
+  const agSummen={};
+  for(const p of auswertung){
+    const ak=p.auftraggeber_name||'Unbekannt';
+    if(!agSummen[ak])agSummen[ak]={name:ak,count:0,arbeit:0,fahrt:0,km:0,mwNetto:0,gutschrift:0};
+    agSummen[ak].count++;
+    agSummen[ak].arbeit+=parseInt(p.arbeitszeit_min||0);
+    agSummen[ak].fahrt+=parseInt((p.fahrzeit_hin_min||0))+(parseInt(p.fahrzeit_zurueck_min||0));
+    agSummen[ak].km+=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
+    agSummen[ak].mwNetto+=parseFloat(p.montagewert_netto||0);
+    agSummen[ak].gutschrift+=parseFloat(p.gutschrift_betrag||0);
+  }
+
+  const sumHTML=Object.values(agSummen).map(s=>`
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px">
+      <div style="font-weight:700;font-size:14px">${esc(s.name)}</div>
+      <div style="display:flex;gap:12px;margin-top:4px;font-size:13px;flex-wrap:wrap">
+        <span>${s.count} Aufträge</span>
+        <span>Arbeit: <b>${fMin(s.arbeit)}</b></span>
+        <span>Fahrt: <b>${fMin(s.fahrt)}</b></span>
+        ${s.km>0?`<span>km: <b>${s.km.toFixed(1)}</b></span>`:''}
+        ${s.mwNetto>0?`<span>Montagewert: <b>€${s.mwNetto.toFixed(2)}</b></span>`:''}
+        ${s.gutschrift>0?`<span style="color:#16a34a;font-weight:700">Gutschrift: €${s.gutschrift.toFixed(2)}</span>`:''}
+      </div>
+    </div>`).join('');
+
+  const statusBadge=s=>({fahrt:'<span class="badge badge-blue">Fahrt</span>',arbeit:'<span class="badge badge-green">Arbeit</span>',rueckfahrt:'<span class="badge" style="background:#fef3c7;color:#92400e">Rückfahrt</span>',abgeschlossen:'<span class="badge badge-gray">Fertig</span>'}[s]||s);
+
+  const rows=auswertung.map(p=>`<tr>
+    <td>${fDate(p.erstellt_am)}</td>
+    <td style="font-size:13px">${esc(p.mitarbeiter_name||'–')}</td>
+    <td>${esc(p.auftraggeber_name||'–')}</td>
+    <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
+    <td>${statusBadge(p.status)}</td>
+    <td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
+    <td>${p.fahrzeit_hin_min||p.fahrzeit_zurueck_min?fMin((p.fahrzeit_hin_min||0)+(p.fahrzeit_zurueck_min||0)):'–'}</td>
+    <td>${parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)>0?(parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)).toFixed(1)+' km':'–'}</td>
+    <td>${p.montagewert_netto?`€${parseFloat(p.montagewert_netto).toFixed(2)}`:'–'}</td>
+    <td>${p.gutschrift_betrag?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`:'–'}</td>
+    <td><div style="display:flex;gap:4px">
+      <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" title="Gutschrift erfassen">💰</button>
+      ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
+    </div></td>
+  </tr>`).join('');
+
+  // Auftraggeber-Verwaltung
+  const agRows=agList.map(ag=>`<tr>
+    <td>${esc(ag.name)}</td>
+    <td>${ag.gutschrift_prozent?ag.gutschrift_prozent+'%':'–'}</td>
+    <td>${ag.stundensatz?`€${parseFloat(ag.stundensatz).toFixed(2)}/h`:'–'}</td>
+    <td>${ag.notiz?esc(ag.notiz):'–'}</td>
+    <td><div style="display:flex;gap:4px">
+      <button class="tbl-btn" data-action="edit-ag" data-id="${ag.id}" data-name="${esc(ag.name)}" data-gp="${ag.gutschrift_prozent||0}" data-sh="${ag.stundensatz||0}" data-notiz="${esc(ag.notiz||'')}">Bearbeiten</button>
+      ${user?.ist_admin?`<button class="tbl-btn danger" data-action="del-ag" data-id="${ag.id}">Löschen</button>`:''}
+    </div></td>
+  </tr>`).join('');
+
+  const agOpts=agList.map(ag=>`<option value="${ag.id}" ${projAg==ag.id?'selected':''}>${esc(ag.name)}</option>`).join('');
+
+  return`<div class="admin-wrap">
+    <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="proj-von" value="${von}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Bis</label><input type="date" class="form-input" id="proj-bis" value="${bis}"></div>
+      </div>
+      <div class="form-group" style="margin:0"><label class="form-label">Auftraggeber</label>
+        <select class="form-input" id="proj-ag-filter">
+          <option value="">Alle Auftraggeber</option>${agOpts}
+        </select>
+      </div>
+      <button id="btn-proj-laden" style="background:#1e40af;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer">🔍 Laden</button>
+    </div></div>
+    ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
+    <div class="card" style="overflow:auto;margin-bottom:20px">
+      <table class="tbl"><thead><tr>
+        <th>Datum</th><th>MA</th><th>Auftraggeber</th><th>Nr.</th><th>Status</th>
+        <th>Arbeitszeit</th><th>Fahrzeit</th><th>km</th><th>Montagewert</th><th>Gutschrift</th><th></th>
+      </tr></thead>
+      <tbody>${rows||`<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</td></tr>`}</tbody>
+      </table>
+    </div>
+    <div style="font-weight:700;margin-bottom:8px">Auftraggeber verwalten</div>
+    <button class="btn btn-primary btn-sm" id="btn-new-ag" style="margin-bottom:10px">+ Neuer Auftraggeber</button>
+    <div class="card" style="overflow:auto"><table class="tbl"><thead><tr>
+      <th>Name</th><th>Gutschrift %</th><th>Stundensatz</th><th>Notiz</th><th></th>
+    </tr></thead><tbody>${agRows}</tbody></table></div>
+  </div>`;
+}
+
 async function renderTabZeit(){
-  let auswertung=[];
-  let maList=[];
+  let auswertung=[],maList=[];
   const _h=new Date(),_mo=new Date(_h);
-  _mo.setDate(_h.getDate()-(_h.getDay()===0?6:_h.getDay()-1)); // Montag dieser Woche
+  _mo.setDate(_h.getDate()-(_h.getDay()===0?6:_h.getDay()-1));
   const von=pageData.zeitVon||_mo.toISOString().split('T')[0];
   const bis=pageData.zeitBis||_h.toISOString().split('T')[0];
   const maId=pageData.zeitMa||'';
-  try{
-    [auswertung,maList]=await Promise.all([
-      apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`),
-      apiGet('/api/mitarbeiter')
-    ]);
-  }catch(e){}
+  try{[auswertung,maList]=await Promise.all([
+    apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`),
+    apiGet('/api/mitarbeiter')
+  ]);}catch(e){}
 
-  // Summen pro Mitarbeiter
+  const typLabel=r=>{
+    if(r.ist_feiertag)return'🎉 Feiertag';
+    if(r.ist_wochenende)return'📅 Wochenende';
+    if(r.urlaub)return'🏖️ Urlaub';
+    if(r.krankenstand)return'🤒 Krankenstand';
+    return fUhr(r.kommen)||'–';
+  };
+
+  // Saldo pro Mitarbeiter
   const summen={};
   for(const r of auswertung){
-    if(!summen[r.mitarbeiter_id])summen[r.mitarbeiter_id]={name:r.name,min:0,urlaub:0};
+    if(!summen[r.mitarbeiter_id])summen[r.mitarbeiter_id]={name:r.name,ist:0,soll:0,urlaub:0,ks:0};
+    summen[r.mitarbeiter_id].ist+=r.netto_minuten;
+    summen[r.mitarbeiter_id].soll+=r.soll_minuten;
     if(r.urlaub)summen[r.mitarbeiter_id].urlaub++;
-    else summen[r.mitarbeiter_id].min+=r.netto_minuten;
+    if(r.krankenstand)summen[r.mitarbeiter_id].ks++;
   }
 
-  const rows=auswertung.map(r=>`<tr>
-    <td>${esc(r.name)}</td>
-    <td>${fDate(r.datum)}</td>
-    <td>${r.urlaub?'🏖️ Urlaub':fUhr(r.kommen)}</td>
-    <td>${r.urlaub?'–':r.gehen?fUhr(r.gehen):'<span style="color:var(--success)">läuft</span>'}</td>
-    <td>${r.pause_minuten>0?r.pause_minuten+' min':'–'}</td>
-    <td style="font-weight:700">${r.urlaub?'8:00':fMin(r.netto_minuten)}</td>
-    ${isManager()?`<td><button class="tbl-btn danger" data-action="del-zeit-tag" data-mid="${r.mitarbeiter_id}" data-datum="${r.datum}" title="Alle Einträge dieses Tages löschen">🗑️ Löschen</button></td>`:''}
-  </tr>`).join('');
+  const rows=auswertung.map(r=>{
+    const sal=r.saldo_minuten;
+    const salCol=sal>5?'#16a34a':sal<-5?'#dc2626':'#374151';
+    const salTxt=(sal>=0?'+':'-')+fMin(Math.abs(sal));
+    return`<tr style="${r.ist_feiertag||r.ist_wochenende?'background:#f9fafb;color:#9ca3af':''}">
+      <td>${esc(r.name)}</td>
+      <td>${fDate(r.datum)}</td>
+      <td>${typLabel(r)}</td>
+      <td>${r.urlaub||r.krankenstand||r.ist_feiertag||r.ist_wochenende?'–':r.gehen?fUhr(r.gehen):'<span style="color:#16a34a;font-weight:700">läuft</span>'}</td>
+      <td>${r.pause_minuten>0?r.pause_minuten+' min':'–'}</td>
+      <td style="font-weight:700">${fMin(r.netto_minuten)}</td>
+      <td>${fMin(r.soll_minuten)}</td>
+      <td style="font-weight:700;color:${salCol}">${salTxt}</td>
+      ${isManager()?`<td><div style="display:flex;gap:4px">
+        <button class="tbl-btn" data-action="korrigier-zeit" data-mid="${r.mitarbeiter_id}" data-name="${esc(r.name)}" data-datum="${r.datum}" title="Korrigieren">✏️</button>
+        <button class="tbl-btn danger" data-action="del-zeit-tag" data-mid="${r.mitarbeiter_id}" data-datum="${r.datum}" title="Tag löschen">🗑️</button>
+      </div></td>`:''}
+    </tr>`;
+  }).join('');
 
-  const sumHTML=Object.values(summen).map(s=>`<span class="badge badge-blue">${esc(s.name)}: ${fMin(s.min)}${s.urlaub>0?' + '+s.urlaub+'× Urlaub':''}</span> `).join('');
+  const sumHTML=Object.values(summen).map(s=>{
+    const sal=s.ist-s.soll;
+    const col=sal>0?'#16a34a':sal<-15?'#dc2626':'#374151';
+    const extras=[s.urlaub>0?`${s.urlaub}× Urlaub`:'',s.ks>0?`${s.ks}× KS`:''].filter(Boolean).join(' · ');
+    return`<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px">
+      <div style="font-weight:700;font-size:14px">${esc(s.name)}</div>
+      <div style="display:flex;gap:12px;margin-top:4px;font-size:13px;flex-wrap:wrap">
+        <span>Ist: <b>${fMin(s.ist)}</b></span>
+        <span>Soll: <b>${fMin(s.soll)}</b></span>
+        <span style="color:${col};font-weight:700">Saldo: ${sal>=0?'+':''}${fMin(Math.abs(sal))}</span>
+        ${extras?`<span style="color:#6b7280">${extras}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const btnSt=(bg,dis)=>dis
+    ?`style="background:#e5e7eb;color:#9ca3af;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:default;padding:0 8px"`
+    :`style="background:${bg};color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 8px"`;
 
   return`<div class="admin-wrap">
     <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
@@ -1326,24 +1619,155 @@ async function renderTabZeit(){
         <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="zeit-von" value="${von}"></div>
         <div class="form-group" style="margin:0"><label class="form-label">Bis</label><input type="date" class="form-input" id="zeit-bis" value="${bis}"></div>
       </div>
-      <div class="form-group" style="margin:0"><label class="form-label">Mitarbeiter</label>
-        <select class="form-input" id="zeit-ma">
-          <option value="">Alle Mitarbeiter</option>
-          ${maList.map(m=>`<option value="${m.id}" ${maId==m.id?'selected':''}>${esc(m.name)}</option>`).join('')}
-        </select>
+      <div style="display:grid;grid-template-columns:${isManager()?'1fr auto':'1fr'};gap:10px;align-items:end">
+        <div class="form-group" style="margin:0"><label class="form-label">Mitarbeiter</label>
+          <select class="form-input" id="zeit-ma">
+            <option value="">Alle Mitarbeiter</option>
+            ${maList.map(m=>`<option value="${m.id}" ${maId==m.id?'selected':''}>${esc(m.name)}</option>`).join('')}
+          </select>
+        </div>
+        ${isManager()?`<button id="btn-zeit-manuell" style="background:#7c3aed;color:white;border:none;border-radius:10px;padding:0 14px;height:42px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Manuell</button>`:''}
       </div>
-      <div style="display:grid;grid-template-columns:${auswertung.length>0?'1fr 1fr 1fr':'1fr'};gap:8px;align-items:stretch">
-        <button id="btn-zeit-laden" style="background:#1e40af;color:white;height:42px;white-space:nowrap;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 12px">🔍 Laden</button>
-        ${auswertung.length>0?`<button id="btn-zeit-pdf" style="background:#6b7280;color:white;height:42px;white-space:nowrap;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 12px">🖨️ PDF</button>
-        <button id="btn-zeit-csv" style="background:#16a34a;color:white;height:42px;white-space:nowrap;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 12px">📥 Excel</button>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:stretch">
+        <button id="btn-zeit-laden" ${btnSt('#1e40af',false)}>🔍 Laden</button>
+        <button id="btn-zeit-pdf"   ${btnSt('#6b7280',!auswertung.length)} ${!auswertung.length?'disabled':''}>🖨️ PDF</button>
+        <button id="btn-zeit-csv"   ${btnSt('#16a34a',!auswertung.length)} ${!auswertung.length?'disabled':''}>📥 Excel</button>
       </div>
     </div></div>
     ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
     <div class="card" style="overflow:auto">
-      <table class="tbl"><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Kommen</th><th>Gehen</th><th>Pause</th><th>Stunden</th>${isManager()?'<th></th>':''}</tr></thead>
-      <tbody>${rows||`<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Keine Einträge im Zeitraum</td></tr>`}</tbody></table>
+      <table class="tbl"><thead><tr>
+        <th>Mitarbeiter</th><th>Datum</th><th>Kommen</th><th>Gehen</th>
+        <th>Pause</th><th>Ist</th><th>Soll</th><th>Saldo</th>
+        ${isManager()?'<th></th>':''}
+      </tr></thead>
+      <tbody>${rows||`<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</td></tr>`}</tbody>
+      </table>
     </div>
   </div>`;
+}
+
+// ── ZEITERFASSUNG KORREKTUR MODAL ────────────────────────────────────────────
+async function modalZeitKorrektur(maId,name,datum){
+  let eintraege=[];
+  try{const r=await apiGet(`/api/zeit/auswertung?von=${datum}&bis=${datum}&mitarbeiter_id=${maId}`);
+    if(r.length>0)eintraege=r[0].eintraege||[];}catch(e){}
+
+  const tL={kommen:'🟢 Kommen',gehen:'🔴 Gehen',pause_start:'⏸ Pause Start',
+    pause_ende:'▶️ Pause Ende',urlaub:'🏖️ Urlaub',krankenstand:'🤒 Krankenstand'};
+
+  const renderListe=()=>eintraege.length===0
+    ?'<p style="color:#6b7280;text-align:center;padding:16px">Noch keine Einträge für diesen Tag</p>'
+    :eintraege.map(e=>{
+      const d=new Date(e.zeitpunkt);
+      const hhmm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      const auditInfo=e.geaendert_von_name?`<div style="font-size:11px;color:#d97706">✏️ korrigiert von ${esc(e.geaendert_von_name)}${e.original_zeitpunkt?' (orig. '+fUhr(e.original_zeitpunkt)+')':''}</div>`:'';
+      return`<div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:10px;border-bottom:1px solid #f3f4f6">
+        <div>
+          <div style="font-weight:600;font-size:14px">${tL[e.typ]||e.typ}</div>
+          ${auditInfo}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="time" id="zt-edit-${e.id}" value="${hhmm}" style="width:86px;padding:6px;border:1px solid #d1d5db;border-radius:8px;font-size:14px">
+          <button class="tbl-btn" data-action="zt-save" data-id="${e.id}" data-datum="${datum}" title="Speichern">✅</button>
+          <button class="tbl-btn danger" data-action="zt-del" data-id="${e.id}" title="Löschen">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+
+  const typOpts=Object.entries(tL).map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+
+  showModal(`
+    <button class="modal-close" id="modal-close">×</button>
+    <div class="modal-title">✏️ Korrektur</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:12px">${esc(name)} · ${fDate(datum)}</div>
+    <div id="zt-liste">${renderListe()}</div>
+    <div style="margin-top:14px;padding-top:14px;border-top:2px solid #e5e7eb">
+      <div style="font-weight:700;margin-bottom:10px">+ Neuer Eintrag</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px">
+        <select id="zt-neu-typ" class="form-input" style="padding:8px">${typOpts}</select>
+        <input type="time" id="zt-neu-zeit" value="08:00" class="form-input" style="padding:8px">
+        <button id="btn-zt-neu" style="background:#7c3aed;color:white;border:none;border-radius:10px;padding:0 14px;font-weight:700;cursor:pointer;white-space:nowrap">Eintragen</button>
+      </div>
+    </div>`);
+
+  const reload=async()=>{
+    try{const r=await apiGet(`/api/zeit/auswertung?von=${datum}&bis=${datum}&mitarbeiter_id=${maId}`);
+      eintraege=r.length>0?r[0].eintraege||[]:[];
+      const el=document.getElementById('zt-liste');
+      if(el){el.innerHTML=renderListe();bindZt();}
+    }catch(e){}
+  };
+
+  const bindZt=()=>{
+    document.querySelectorAll('[data-action="zt-save"]').forEach(btn=>{
+      btn.addEventListener('click',async()=>{
+        const id=btn.dataset.id,d=btn.dataset.datum;
+        const t=document.getElementById('zt-edit-'+id)?.value;
+        if(!t)return;
+        const[h,m]=t.split(':');
+        const zp=new Date(`${d}T${h.padStart(2,'0')}:${m.padStart(2,'0')}:00`);
+        try{await apiPut(`/api/zeit/korrigieren/${id}`,{zeitpunkt:zp.toISOString()});toast('✅ Gespeichert','ok');await reload();}
+        catch(e){toast(e.message,'err');}
+      });
+    });
+    document.querySelectorAll('[data-action="zt-del"]').forEach(btn=>{
+      btn.addEventListener('click',async()=>{
+        if(!confirm('Eintrag löschen?'))return;
+        try{await apiDel(`/api/zeit/${btn.dataset.id}`);toast('Gelöscht','ok');await reload();}
+        catch(e){toast(e.message,'err');}
+      });
+    });
+  };
+  bindZt();
+
+  o('btn-zt-neu','click',async()=>{
+    const typ=document.getElementById('zt-neu-typ')?.value;
+    const zt=document.getElementById('zt-neu-zeit')?.value;
+    if(!typ||!zt)return;
+    const[h,m]=zt.split(':');
+    const zp=new Date(`${datum}T${h.padStart(2,'0')}:${m.padStart(2,'0')}:00`);
+    try{await apiPost('/api/zeit/eintragen',{mitarbeiter_id:maId,typ,zeitpunkt:zp.toISOString()});
+      toast('✅ Eingetragen','ok');await reload();}
+    catch(e){toast(e.message,'err');}
+  });
+}
+
+// Manuell-Eintrag Modal (Manager: MA + Datum frei wählbar)
+async function modalZeitManuell(maList){
+  const typOpts=['kommen','gehen','pause_start','pause_ende','urlaub','krankenstand']
+    .map(v=>`<option value="${v}">${{kommen:'🟢 Kommen',gehen:'🔴 Gehen',pause_start:'⏸ Pause Start',pause_ende:'▶️ Pause Ende',urlaub:'🏖️ Urlaub',krankenstand:'🤒 Krankenstand'}[v]}</option>`).join('');
+  const maOpts=maList.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  const today=new Date().toISOString().split('T')[0];
+  showModal(`
+    <button class="modal-close" id="modal-close">×</button>
+    <div class="modal-title">➕ Manuell eintragen</div>
+    <div class="form-group"><label class="form-label">Mitarbeiter</label>
+      <select class="form-input" id="zm-ma">${maOpts}</select></div>
+    <div class="form-group"><label class="form-label">Datum</label>
+      <input type="date" class="form-input" id="zm-datum" value="${today}"></div>
+    <div class="form-group"><label class="form-label">Typ</label>
+      <select class="form-input" id="zm-typ">${typOpts}</select></div>
+    <div class="form-group"><label class="form-label">Uhrzeit</label>
+      <input type="time" class="form-input" id="zm-zeit" value="08:00"></div>
+    <div class="form-group"><label class="form-label">Notiz (optional)</label>
+      <input class="form-input" id="zm-notiz" placeholder="Grund der Nacherfassung"></div>
+    <button class="btn btn-primary" id="btn-zm-save">Eintragen</button>`);
+  o('btn-zm-save','click',async()=>{
+    const maId=document.getElementById('zm-ma')?.value;
+    const datum=document.getElementById('zm-datum')?.value;
+    const typ=document.getElementById('zm-typ')?.value;
+    const zt=document.getElementById('zm-zeit')?.value;
+    const notiz=document.getElementById('zm-notiz')?.value;
+    if(!maId||!datum||!zt)return toast('Alle Felder ausfüllen','err');
+    const[h,m]=zt.split(':');
+    const zp=new Date(`${datum}T${h.padStart(2,'0')}:${m.padStart(2,'0')}:00`);
+    try{await apiPost('/api/zeit/eintragen',{mitarbeiter_id:parseInt(maId),typ,zeitpunkt:zp.toISOString(),notiz});
+      toast('✅ Eingetragen','ok');closeModal();
+      const c=document.getElementById('admin-tab-content');
+      if(c){c.innerHTML=await renderTabZeit();bindAdminEvents();}
+    }catch(e){toast(e.message,'err');}
+  });
 }
 
 // ── KALENDER ─────────────────────────────────────────────────────────────────
@@ -1422,11 +1846,11 @@ async function renderTabKalender(){
 
   return`<div class="admin-wrap">
     <div class="card" style="margin-bottom:16px"><div class="card-body">
-      <div style="font-weight:700;font-size:15px;margin-bottom:14px">📅 CalDAV / WebDAV Kalender – Einstellungen</div>
-      <div class="form-group"><label class="form-label">CalDAV URL</label>
-        <input class="form-input" id="kal-url" value="${esc(settings.exchange_url||'')}" placeholder="https://webdav.firma.at/calendars/benutzer/calendar/"></div>
-      <div class="form-group"><label class="form-label">Benutzername</label>
-        <input class="form-input" id="kal-user" value="${esc(settings.exchange_user||'')}" placeholder="benutzer@firma.at oder benutzer"></div>
+      <div style="font-weight:700;font-size:15px;margin-bottom:14px">📅 Exchange Kalender (EWS + Active Directory)</div>
+      <div class="form-group"><label class="form-label">Exchange Server URL</label>
+        <input class="form-input" id="kal-url" value="${esc(settings.exchange_url||'')}" placeholder="http://mail.solano.co.at"></div>
+      <div class="form-group"><label class="form-label">Benutzername (Windows-Login)</label>
+        <input class="form-input" id="kal-user" value="${esc(settings.exchange_user||'')}" placeholder="vorname.nachname oder SOLANO\\benutzer"></div>
       <div class="form-group"><label class="form-label">Passwort ${settings.exchange_user?'(leer = unverändert)':''}</label>
         <input class="form-input" id="kal-pass" type="password" placeholder="${settings.exchange_user?'••••••••':'Passwort eingeben'}"></div>
       <div class="form-group"><label class="form-label">Auto-Sync Intervall (Minuten)</label>
@@ -1443,15 +1867,19 @@ async function renderTabKalender(){
 }
 
 function exportZeitCSV(daten, von, bis){
-  const header='Mitarbeiter;Datum;Kommen;Gehen;Pause (min);Netto-Stunden\n';
-  const rows=daten.map(r=>[
-    r.name,
-    fDate(r.datum),
-    r.urlaub?'Urlaub':fUhr(r.kommen),
-    r.urlaub?'':r.gehen?fUhr(r.gehen):'läuft',
-    r.urlaub?'':r.pause_minuten,
-    r.urlaub?'8:00':fMin(r.netto_minuten)
-  ].join(';')).join('\n');
+  const header='Mitarbeiter;Datum;Typ;Kommen;Gehen;Pause (min);Ist-Stunden;Soll-Stunden;Saldo\n';
+  const rows=daten.map(r=>{
+    const typ=r.ist_feiertag?'Feiertag':r.ist_wochenende?'Wochenende':r.urlaub?'Urlaub':r.krankenstand?'Krankenstand':'Arbeitstag';
+    const sal=r.saldo_minuten||0;
+    return[
+      r.name, fDate(r.datum), typ,
+      r.urlaub||r.krankenstand||r.ist_feiertag?'':fUhr(r.kommen),
+      r.urlaub||r.krankenstand||r.ist_feiertag?'':r.gehen?fUhr(r.gehen):'läuft',
+      r.pause_minuten||0,
+      fMin(r.netto_minuten), fMin(r.soll_minuten),
+      (sal>=0?'+':'')+fMin(Math.abs(sal))
+    ].join(';');
+  }).join('\n');
   const blob=new Blob(['\ufeff'+header+rows],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1699,6 +2127,8 @@ function bindEvents(){
   o('nav-admin','click',()=>go('admin',{adminTab:'anlagen'}));
   o('nav-nachrichten','click',()=>go('nachrichten'));
   o('nav-zeit','click',()=>go('zeit'));
+  o('nav-projekte','click',()=>go('projekte'));
+  o('nav-projekte-akt','click',()=>go('projekte'));
   o('nav-kalender','click',()=>{_kalMonth=null;go('kalender');});
 
   // Zeiterfassung Stempel-Buttons
@@ -1741,6 +2171,31 @@ function bindEvents(){
     }),0);
   });
 
+  // Krankenstand
+  o('btn-z-krank','click',()=>{
+    const today=new Date().toISOString().split('T')[0];
+    showModal(`
+      <button class="modal-close" id="modal-close">×</button>
+      <div class="modal-title">🤒 Krankenstand eintragen</div>
+      <div class="form-group"><label class="form-label">Von</label><input type="date" class="form-input" id="krank-von" value="${today}"></div>
+      <div class="form-group"><label class="form-label">Bis</label><input type="date" class="form-input" id="krank-bis" value="${today}"></div>
+      <button class="btn btn-primary" style="background:#ef4444" id="btn-krank-save">Eintragen</button>`);
+    setTimeout(()=>o('btn-krank-save','click',async()=>{
+      const von=document.getElementById('krank-von')?.value;
+      const bis=document.getElementById('krank-bis')?.value;
+      if(!von||!bis){toast('Von und Bis angeben','err');return}
+      if(von>bis){toast('Von muss vor Bis liegen','err');return}
+      try{
+        const d=new Date(von+'T12:00:00');const end=new Date(bis+'T12:00:00');let count=0;
+        while(d<=end){
+          await apiPost('/api/zeit/stempeln',{typ:'krankenstand',zeitpunkt:d.toISOString().split('T')[0]+'T08:00:00'});
+          count++;d.setDate(d.getDate()+1);
+        }
+        closeModal();toast(`✅ ${count} Krankenstandstag${count===1?'':'e'} eingetragen`,'ok');go('zeit');
+      }catch(e){toast(e.message,'err')}
+    }),0);
+  });
+
   // Pause nachtragen
   o('btn-z-nachtrag','click',()=>{
     showModal(`
@@ -1764,6 +2219,106 @@ function bindEvents(){
 
   // Admin: zur Zeitauswertung springen
   o('btn-zeit-admin','click',()=>go('admin',{adminTab:'zeitauswertung'}));
+
+  // Projekte: Timer + GPS starten wenn aktiver Auftrag
+  if(page==='projekte'&&projektAkt&&projektAkt.status!=='abgeschlossen'){
+    const phaseStartMap={fahrt:projektAkt.fahrt_start,arbeit:projektAkt.ankunft,rueckfahrt:projektAkt.abfahrt_zeit};
+    const ts=phaseStartMap[projektAkt.status];
+    if(ts)startProjektTimer(ts);
+    if(projektAkt.status==='fahrt'||projektAkt.status==='rueckfahrt')startProjektGPS();
+  }
+
+  // Projekte: Neuen Auftrag starten
+  o('btn-proj-starten','click',async()=>{
+    const agSel=document.getElementById('proj-ag');
+    const agId=agSel?.value;
+    const agName=agSel?.options[agSel.selectedIndex]?.dataset.name||agSel?.options[agSel.selectedIndex]?.text||'';
+    const auftragsnr=document.getElementById('proj-auftragsnr')?.value?.trim()||null;
+    const anzahl=parseInt(document.getElementById('proj-anzahl')?.value)||2;
+    const notiz=document.getElementById('proj-notiz')?.value?.trim()||null;
+    if(!agId){toast('Auftraggeber wählen','err');return}
+    try{
+      const p=await apiPost('/api/projekte',{auftraggeber_id:agId,auftraggeber_name:agName,auftragsnummer:auftragsnr,anzahl_mitarbeiter:anzahl,notiz});
+      projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
+      toast('🚗 Fahrt gestartet','ok');go('projekte');
+    }catch(e){toast(e.message,'err')}
+  });
+
+  // Projekte: Nächste Phase
+  o('btn-proj-next-phase','click',async()=>{
+    if(!projektAkt)return;
+    const phase=projektAkt.status;
+
+    // Km berechnen für Fahrphasen
+    const needsKm=phase==='fahrt'||phase==='rueckfahrt';
+    const calcKm=calcProjektKm(projektGpsTrack);
+
+    const doAdvance=async(km,besonderheiten)=>{
+      try{
+        stopProjektGPS();
+        const body={};
+        if(km!==undefined)body.km=km;
+        if(besonderheiten)body.besonderheiten=besonderheiten;
+        if(projektGpsTrack.length>0)body.gps_punkte=projektGpsTrack;
+        const p=await apiPut(`/api/projekte/${projektAkt.id}/phase`,body);
+        projektAkt=p.status==='abgeschlossen'?null:p;
+        if(projektAkt)localStorage.setItem('solano_projekt',JSON.stringify(projektAkt));
+        else localStorage.removeItem('solano_projekt');
+        stopProjektTimer();
+        projektGpsTrack=[];
+        if(p.status==='abgeschlossen'){
+          toast('✅ Auftrag abgeschlossen!','ok');go('home');
+        }else{
+          toast(phase==='fahrt'?'🔨 Arbeit gestartet':'🏠 Rückfahrt gestartet','ok');
+          go('projekte');
+        }
+      }catch(e){toast(e.message,'err')}
+    };
+
+    if(phase==='arbeit'){
+      // Arbeit → Rückfahrt: Besonderheiten abfragen
+      const bez=document.getElementById('proj-besonderheiten')?.value||'';
+      await doAdvance(undefined,bez);
+    } else if(needsKm){
+      // Fahrphase → km-Eingabe Modal
+      const phLabel=phase==='fahrt'?'Hinfahrt':'Rückfahrt';
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">📍 ${phLabel} beenden</div>
+        <div class="form-group"><label class="form-label">Kilometer (${phLabel})</label>
+          <input type="number" class="form-input" id="proj-km-input" value="${calcKm||''}" step="0.1" min="0" placeholder="z.B. 15.5">
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${calcKm>0?`GPS: ca. ${calcKm} km`:'GPS nicht verfügbar – bitte manuell eingeben'}</div>
+        </div>
+        <button class="btn btn-primary" id="btn-proj-km-ok">${phase==='fahrt'?'🔨 Arbeit beginnen':'✅ Abschließen'}</button>`);
+      setTimeout(()=>o('btn-proj-km-ok','click',async()=>{
+        const km=parseFloat(document.getElementById('proj-km-input')?.value)||0;
+        closeModal();await doAdvance(km);
+      }),0);
+    }
+  });
+
+  // Projekte: Notiz/Besonderheiten speichern (während Arbeit)
+  o('btn-proj-save-notiz','click',async()=>{
+    if(!projektAkt)return;
+    const bez=document.getElementById('proj-besonderheiten')?.value||'';
+    try{
+      const p=await apiPut(`/api/projekte/${projektAkt.id}`,{notiz:projektAkt.notiz,besonderheiten:bez,anzahl_mitarbeiter:projektAkt.anzahl_mitarbeiter,auftragsnummer:projektAkt.auftragsnummer});
+      projektAkt={...projektAkt,...p};localStorage.setItem('solano_projekt',JSON.stringify(projektAkt));
+      toast('💾 Gespeichert','ok');
+    }catch(e){toast(e.message,'err')}
+  });
+
+  // Projekte: Abbrechen/Löschen
+  o('btn-proj-delete','click',async()=>{
+    if(!projektAkt)return;
+    if(!confirm('Auftrag wirklich abbrechen und löschen?'))return;
+    try{
+      await apiDelete(`/api/projekte/${projektAkt.id}`);
+      stopProjektGPS();stopProjektTimer();projektGpsTrack=[];
+      projektAkt=null;localStorage.removeItem('solano_projekt');
+      toast('Auftrag gelöscht','ok');go('home');
+    }catch(e){toast(e.message,'err')}
+  });
 
   // Kalender Navigation
   o('btn-kal-prev','click',()=>{
@@ -1884,6 +2439,7 @@ function bindEvents(){
   o('btn-logout','click',doLogout);
   o('btn-resume','click',()=>go('einsatz'));
   o('card-zeit','click',()=>go('zeit'));
+  o('card-projekte','click',()=>go('projekte'));
   o('card-kalender','click',()=>{_kalMonth=null;go('kalender');});
   o('card-winter','click',()=>go('anlagen',{sparte:'winterdienst'}));
   o('card-gebaeude','click',()=>go('anlagen',{sparte:'gebaeudereinigung'}));
@@ -2104,11 +2660,123 @@ function bindAdminEvents(){
       }catch(e){toast(e.message,'err')}
     });
   });
+  document.querySelectorAll('[data-action="korrigier-zeit"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>modalZeitKorrektur(b.dataset.mid,b.dataset.name,b.dataset.datum));
+  });
+  const zbtn=document.getElementById('btn-zeit-manuell');
+  if(zbtn&&!zbtn._bound){zbtn._bound=true;zbtn.addEventListener('click',async()=>{
+    try{const ml=await apiGet('/api/mitarbeiter');modalZeitManuell(ml);}
+    catch(e){toast(e.message,'err');}
+  });}
   const zcsv=document.getElementById('btn-zeit-csv');
   if(zcsv&&!zcsv._bound){zcsv._bound=true;zcsv.addEventListener('click',async()=>{
     const von=pageData.zeitVon||'',bis=pageData.zeitBis||'',maId=pageData.zeitMa||'';
     try{const d=await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`);exportZeitCSV(d,von,bis)}catch(e){toast('Fehler','err')}
   })}
+
+  // Projekte Admin-Tab: Laden
+  const prl=document.getElementById('btn-proj-laden');
+  if(prl&&!prl._bound){prl._bound=true;prl.addEventListener('click',async()=>{
+    pageData.projVon=document.getElementById('proj-von')?.value||'';
+    pageData.projBis=document.getElementById('proj-bis')?.value||'';
+    pageData.projAg=document.getElementById('proj-ag-filter')?.value||'';
+    const c=document.getElementById('admin-tab-content');
+    if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+  })}
+
+  // Projekte: Neuer Auftraggeber
+  const nag=document.getElementById('btn-new-ag');
+  if(nag&&!nag._bound){nag._bound=true;nag.addEventListener('click',()=>{
+    showModal(`
+      <button class="modal-close" id="modal-close">×</button>
+      <div class="modal-title">Neuer Auftraggeber</div>
+      <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="ag-name-inp"></div>
+      <div class="form-group"><label class="form-label">Gutschrift % (optional)</label><input type="number" class="form-input" id="ag-gp-inp" step="0.01" value="0"></div>
+      <div class="form-group"><label class="form-label">Stundensatz €/h (optional)</label><input type="number" class="form-input" id="ag-sh-inp" step="0.01" value="0"></div>
+      <div class="form-group"><label class="form-label">Notiz (optional)</label><input type="text" class="form-input" id="ag-notiz-inp"></div>
+      <button class="btn btn-primary" id="btn-ag-save">Speichern</button>`);
+    setTimeout(()=>o('btn-ag-save','click',async()=>{
+      const name=document.getElementById('ag-name-inp')?.value?.trim();
+      if(!name){toast('Name erforderlich','err');return}
+      try{await apiPost('/api/projekte/auftraggeber',{name,gutschrift_prozent:document.getElementById('ag-gp-inp')?.value||0,stundensatz:document.getElementById('ag-sh-inp')?.value||0,notiz:document.getElementById('ag-notiz-inp')?.value||null});
+        closeModal();toast('✅ Auftraggeber gespeichert','ok');
+        const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+      }catch(e){toast(e.message,'err')}
+    }),0);
+  })}
+
+  // Projekte: Auftraggeber bearbeiten
+  document.querySelectorAll('[data-action="edit-ag"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">Auftraggeber bearbeiten</div>
+        <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="ag-name-inp" value="${b.dataset.name||''}"></div>
+        <div class="form-group"><label class="form-label">Gutschrift %</label><input type="number" class="form-input" id="ag-gp-inp" step="0.01" value="${b.dataset.gp||0}"></div>
+        <div class="form-group"><label class="form-label">Stundensatz €/h</label><input type="number" class="form-input" id="ag-sh-inp" step="0.01" value="${b.dataset.sh||0}"></div>
+        <div class="form-group"><label class="form-label">Notiz</label><input type="text" class="form-input" id="ag-notiz-inp" value="${b.dataset.notiz||''}"></div>
+        <button class="btn btn-primary" id="btn-ag-save" data-id="${b.dataset.id}">Speichern</button>`);
+      setTimeout(()=>o('btn-ag-save','click',async()=>{
+        const id=document.getElementById('btn-ag-save')?.dataset.id;
+        const name=document.getElementById('ag-name-inp')?.value?.trim();
+        if(!name){toast('Name erforderlich','err');return}
+        try{await apiPut(`/api/projekte/auftraggeber/${id}`,{name,gutschrift_prozent:document.getElementById('ag-gp-inp')?.value||0,stundensatz:document.getElementById('ag-sh-inp')?.value||0,notiz:document.getElementById('ag-notiz-inp')?.value||null});
+          closeModal();toast('✅ Gespeichert','ok');
+          const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+        }catch(e){toast(e.message,'err')}
+      }),0);
+    });
+  });
+
+  // Projekte: Auftraggeber löschen
+  document.querySelectorAll('[data-action="del-ag"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(!confirm('Auftraggeber deaktivieren?'))return;
+      try{await apiDelete(`/api/projekte/auftraggeber/${b.dataset.id}`);toast('Deaktiviert','ok');
+        const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+      }catch(e){toast(e.message,'err')}
+    });
+  });
+
+  // Projekte: Gutschrift erfassen
+  document.querySelectorAll('[data-action="proj-gutschrift"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">💰 Gutschrift erfassen</div>
+        <div class="form-group"><label class="form-label">Montagewert netto (€)</label><input type="number" class="form-input" id="gs-mw" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label class="form-label">Gutschrift-Betrag (€)</label><input type="number" class="form-input" id="gs-betrag" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label class="form-label">Gutschrift-Datum</label><input type="date" class="form-input" id="gs-datum"></div>
+        <div class="form-group"><label class="form-label">Gutschrift-Nummer</label><input type="text" class="form-input" id="gs-nummer" placeholder="GS-2025-001"></div>
+        <button class="btn btn-primary" id="btn-gs-save" data-id="${b.dataset.id}">Speichern</button>`);
+      setTimeout(()=>o('btn-gs-save','click',async()=>{
+        const id=document.getElementById('btn-gs-save')?.dataset.id;
+        try{await apiPut(`/api/projekte/${id}/gutschrift`,{
+          montagewert_netto:document.getElementById('gs-mw')?.value||null,
+          gutschrift_betrag:document.getElementById('gs-betrag')?.value||null,
+          gutschrift_datum:document.getElementById('gs-datum')?.value||null,
+          gutschrift_nummer:document.getElementById('gs-nummer')?.value||null
+        });closeModal();toast('✅ Gutschrift gespeichert','ok');
+          const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+        }catch(e){toast(e.message,'err')}
+      }),0);
+    });
+  });
+
+  // Projekte: Löschen
+  document.querySelectorAll('[data-action="proj-delete"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(!confirm('Auftrag unwiderruflich löschen?'))return;
+      try{await apiDelete(`/api/projekte/${b.dataset.id}`);toast('Gelöscht','ok');
+        const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+      }catch(e){toast(e.message,'err')}
+    });
+  });
 
   // Reset-Buttons
   const resetActions={
@@ -2236,7 +2904,7 @@ function bindAdminEvents(){
         if(!confirm('Mitarbeiter löschen?'))return;
         try{await apiDel(`/api/mitarbeiter/${id}`);toast('Gelöscht','ok');reloadTab()}catch(e){toast(e.message,'err')}
       }else if(action==='edit-ma'){
-        modalMitarbeiter({id,name,pin,ist_admin:btn.dataset.admin==='true',ist_chef:btn.dataset.chef==='true',zeige_winterdienst:btn.dataset.zw!=='false',zeige_gebaeudereinigung:btn.dataset.zg!=='false',zeige_gruenpflege:btn.dataset.zgr!=='false',winterdienst_alarm:btn.dataset.alarm==='true'});
+        modalMitarbeiter({id,name,pin,ist_admin:btn.dataset.admin==='true',ist_chef:btn.dataset.chef==='true',zeige_winterdienst:btn.dataset.zw!=='false',zeige_gebaeudereinigung:btn.dataset.zg!=='false',zeige_gruenpflege:btn.dataset.zgr!=='false',winterdienst_alarm:btn.dataset.alarm==='true',soll_stunden:parseFloat(btn.dataset.soll)||38.5,beschaeftigung:btn.dataset.beschaeftigung||'vollzeit'});
       }else if(action==='toggle-todo'){
         try{
           await apiPut(`/api/todos/${id}`,{});
@@ -2331,6 +2999,8 @@ function bindModalEvents(){
       zeige_gebaeudereinigung:document.getElementById('m-ma-zg')?.checked!==false,
       zeige_gruenpflege:document.getElementById('m-ma-zgr')?.checked!==false,
       winterdienst_alarm:document.getElementById('m-ma-alarm')?.checked||false,
+      soll_stunden:parseFloat(document.getElementById('m-ma-soll')?.value)||38.5,
+      beschaeftigung:document.getElementById('m-ma-beschaeftigung')?.value||'vollzeit',
     };
     if(!body.name||!body.pin){toast('Name und PIN erforderlich','err');return}
     try{if(id){await apiPut(`/api/mitarbeiter/${id}`,body)}else{await apiPost('/api/mitarbeiter',body)};closeModal();toast(id?'Gespeichert':'Angelegt','ok');reloadTab()}
