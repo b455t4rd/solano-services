@@ -213,7 +213,7 @@ router.get('/aktiv', authMiddleware, async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT * FROM projekt_auftraege
-       WHERE mitarbeiter_id=$1 AND status NOT IN ('abgeschlossen','pausiert')
+       WHERE mitarbeiter_id=$1 AND status NOT IN ('abgeschlossen','pausiert','geplant')
        ORDER BY erstellt_am DESC LIMIT 1`,
       [req.user.id]
     );

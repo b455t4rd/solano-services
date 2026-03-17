@@ -485,7 +485,7 @@ async function pageHome(){
   let projektStatusHome='Kein aktiver Auftrag';
   try{
     const pa=await apiGet('/api/projekte/aktiv');
-    if(pa&&pa.status!=='abgeschlossen'&&pa.status!=='pausiert'){
+    if(pa&&pa.status!=='abgeschlossen'&&pa.status!=='pausiert'&&pa.status!=='geplant'){
       projektAkt=pa;localStorage.setItem('solano_projekt',JSON.stringify(pa));
       const phLbl={fahrt:'🚗 Fahrt',arbeit:'🔨 Arbeit',rueckfahrt:'🏠 Rückfahrt'};
       projektStatusHome=`${phLbl[pa.status]||pa.status} · ${esc(pa.auftraggeber_name||'–')}`;
@@ -2664,7 +2664,7 @@ function bindEvents(){
   document.querySelectorAll('[data-action="proj-starten-geplant"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
     b.addEventListener('click',async()=>{
-      if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'){toast('Erst aktiven Auftrag abschließen','err');return;}
+      if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'&&projektAkt.status!=='geplant'){toast('Erst aktiven Auftrag abschließen','err');return;}
       try{
         const p=await apiPut(`/api/projekte/${b.dataset.id}/starten`,{});
         projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
@@ -2704,7 +2704,7 @@ function bindEvents(){
   document.querySelectorAll('[data-action="proj-fortsetzen"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
     b.addEventListener('click',async()=>{
-      if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'){toast('Erst aktiven Auftrag abschließen','err');return;}
+      if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'&&projektAkt.status!=='geplant'){toast('Erst aktiven Auftrag abschließen','err');return;}
       try{
         const p=await apiPut(`/api/projekte/${b.dataset.id}/fortsetzen`,{});
         projektAkt=p;localStorage.setItem('solano_projekt',JSON.stringify(p));
