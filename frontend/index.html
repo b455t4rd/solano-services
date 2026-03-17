@@ -2442,7 +2442,7 @@ function bindEvents(){
         <div class="form-group"><label class="form-label">Auftragsnummer</label><input class="form-input" id="pe-nr" value="${esc(d.nr||'')}" placeholder="optional"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">Anzahl MA</label><input type="number" class="form-input" id="pe-ma" value="${d.ma||2}" min="1" max="10"></div>
-          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit (Min)</label><input type="number" class="form-input" id="pe-arbmin" value="${d.arbmin||0}" min="0" step="15"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit (Stunden)</label><input type="number" class="form-input" id="pe-arbstd" value="${((parseInt(d.arbmin)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 3.5"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">× Anzahl MA = MA-Stunden gesamt</div></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">km Hinfahrt</label><input type="number" class="form-input" id="pe-kmhin" value="${d.kmhin||0}" min="0" step="0.1"></div>
@@ -2452,7 +2452,7 @@ function bindEvents(){
         <button class="btn btn-primary" id="btn-pe-save" data-id="${d.id}">💾 Speichern</button>`);
       setTimeout(()=>o('btn-pe-save','click',async()=>{
         const id=document.getElementById('btn-pe-save')?.dataset.id;
-        const arbMin=parseInt(document.getElementById('pe-arbmin')?.value)||0;
+        const arbMin=Math.round((parseFloat(document.getElementById('pe-arbstd')?.value)||0)*60);
         try{
           await apiPut(`/api/projekte/${id}`,{
             auftraggeber_name:document.getElementById('pe-agname')?.value||null,
@@ -3088,7 +3088,7 @@ function bindAdminEvents(){
         <div class="form-group"><label class="form-label">Auftragsnummer</label><input class="form-input" id="pe-nr" value="${esc(d.nr||'')}" placeholder="optional"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">Anzahl MA</label><input type="number" class="form-input" id="pe-ma" value="${d.ma||2}" min="1" max="10"></div>
-          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit (Min)</label><input type="number" class="form-input" id="pe-arbmin" value="${d.arbmin||0}" min="0" step="15"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit (Stunden)</label><input type="number" class="form-input" id="pe-arbstd" value="${((parseInt(d.arbmin)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 3.5"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">× Anzahl MA = MA-Stunden gesamt</div></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">km Hinfahrt</label><input type="number" class="form-input" id="pe-kmhin" value="${d.kmhin||0}" min="0" step="0.1"></div>
@@ -3098,12 +3098,13 @@ function bindAdminEvents(){
         <button class="btn btn-primary" id="btn-pe-save" data-id="${d.id}">💾 Speichern</button>`);
       setTimeout(()=>o('btn-pe-save','click',async()=>{
         const id=document.getElementById('btn-pe-save')?.dataset.id;
+        const arbMin=Math.round((parseFloat(document.getElementById('pe-arbstd')?.value)||0)*60);
         try{
           await apiPut(`/api/projekte/${id}`,{
             auftraggeber_name:document.getElementById('pe-agname')?.value||null,
             auftragsnummer:document.getElementById('pe-nr')?.value||null,
             anzahl_mitarbeiter:parseInt(document.getElementById('pe-ma')?.value)||2,
-            arbeitszeit_manuell_min:parseInt(document.getElementById('pe-arbmin')?.value)||0,
+            arbeitszeit_manuell_min:arbMin,
             km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
             km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
             besonderheiten:document.getElementById('pe-bez')?.value||null,
