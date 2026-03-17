@@ -1382,7 +1382,7 @@ async function pageProjekte(){
   const phaseColors={fahrt:'#2563eb',arbeit:'#16a34a',rueckfahrt:'#d97706',abgeschlossen:'#6b7280'};
   const phaseLabels={fahrt:'🚗 Hinfahrt',arbeit:'🔨 Arbeit',rueckfahrt:'🏠 Rückfahrt',abgeschlossen:'✅ Fertig'};
 
-  if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'){
+  if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'&&projektAkt.status!=='geplant'){
     const p=projektAkt,phase=p.status;
     const col=phaseColors[phase];
     const phases=['fahrt','arbeit','rueckfahrt'];
@@ -1416,6 +1416,7 @@ async function pageProjekte(){
             ${p.auftragsnummer?`<div style="font-size:13px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
             ${p.notiz?`<div style="font-size:13px;color:var(--text-muted);margin-top:2px">${esc(p.notiz)}</div>`:''}
             ${p.rapport_erforderlich?`<div style="font-size:12px;color:#7c3aed;margin-top:4px;font-weight:600">📋 Rapport erforderlich</div>`:''}
+            ${p.adresse?`<button onclick="openNav(null,null,'${esc(p.adresse)}')" style="margin-top:8px;background:#3b82f6;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%">🗺️ Navigation öffnen</button>`:''}
             ${kmInfo}${tourInfo}
           </div>
         </div>
@@ -1534,6 +1535,7 @@ async function pageProjekte(){
             ${p.auftragsnummer?`<div style="font-size:12px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
+            ${p.adresse?`<button onclick="openNav(null,null,'${esc(p.adresse)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
             <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
             ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
           </div>
@@ -1614,7 +1616,7 @@ async function renderTabProjekte(){
     const gutschrift=parseFloat(p.gutschrift_betrag||0);
     const maStd=(totArbMin/60)*anzahl;
     const netto=gutschrift-totFk;
-    const stundensatz=maStd>0&&gutschrift>0?netto/maStd:null;
+    const stundensatz=maStd>0&&gutschrift>0&&totArbMin>=10?netto/maStd:null;
     const accentColor=stundensatz!==null?(stundensatz>=30?'#16a34a':stundensatz>=15?'#d97706':'#dc2626'):'#e5e7eb';
     // Session-Details
     const sessHtml=sessions.length>0?`<div style="margin-top:8px;border-top:1px solid #e5e7eb;padding-top:6px">${alleSess.map(s=>{
@@ -2716,40 +2718,35 @@ function bindEvents(){
     if(!projektAkt)return;
     let geplantListe=[];
     try{geplantListe=await apiGet('/api/projekte/geplant');}catch(e){}
-    const calcKm=calcProjektKm(projektGpsTrack);
     const geplantOpts=geplantListe.map(p=>`
       <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px">
         <input type="radio" name="naechster-job" value="${p.id}" style="flex-shrink:0;width:18px;height:18px">
-        <div>
+        <div style="flex:1;min-width:0">
           <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
           ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
           ${p.adresse?`<div style="font-size:12px;color:var(--text-muted)">${esc(p.adresse)}</div>`:''}
         </div>
+        ${p.adresse?`<button type="button" onclick="openNav(null,null,'${esc(p.adresse)}')" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;flex-shrink:0">🗺️</button>`:''}
       </label>`).join('');
     showModal(`
       <button class="modal-close" id="modal-close">×</button>
       <div class="modal-title">➡️ Weiter zum nächsten Auftrag</div>
-      <div class="form-group">
-        <label class="form-label">Kilometer (Verbindungsfahrt)</label>
-        <input type="number" class="form-input" id="weiter-km" value="${calcKm||''}" step="0.1" min="0" placeholder="z.B. 5.5">
-        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${calcKm>0?`GPS: ca. ${calcKm} km`:'GPS nicht verfügbar – bitte manuell eingeben'}</div>
-      </div>
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:12px">Auftrag wird abgeschlossen, Verbindungsfahrt zum nächsten Auftrag startet.</p>
       ${geplantListe.length>0
-        ?`<div style="margin-bottom:8px"><label class="form-label">Nächster Auftrag</label>${geplantOpts}</div>`
-        :`<p style="color:var(--text-muted);font-size:14px;margin-bottom:12px">Keine geplanten Aufträge vorhanden. Erst vorab planen.</p>`}
-      <button class="btn btn-primary" id="btn-weiter-ok" style="background:#7c3aed">➡️ Weiterfahren</button>`);
+        ?`<div style="margin-bottom:12px"><label class="form-label">Nächster Auftrag wählen</label>${geplantOpts}</div>`
+        :`<p style="color:var(--text-muted);font-size:14px;margin-bottom:12px">Keine geplanten Aufträge vorhanden. Bitte zuerst Aufträge vorab planen.</p>`}
+      <button class="btn btn-primary" id="btn-weiter-ok" style="background:#7c3aed" ${!geplantListe.length?'disabled':''}>➡️ Weiterfahren</button>`);
     setTimeout(()=>o('btn-weiter-ok','click',async()=>{
-      const km=parseFloat(document.getElementById('weiter-km')?.value)||0;
       const sel=document.querySelector('input[name="naechster-job"]:checked');
       if(!sel){toast('Nächsten Auftrag wählen','err');return;}
       const naechster_id=parseInt(sel.value);
       try{
         stopProjektGPS();
-        const p=await apiPut(`/api/projekte/${projektAkt.id}/weiter`,{km,naechster_id,besonderheiten:projektAkt.besonderheiten||null});
+        const p=await apiPut(`/api/projekte/${projektAkt.id}/weiter`,{naechster_id,besonderheiten:projektAkt.besonderheiten||null});
         closeModal();stopProjektTimer();projektGpsTrack=[];
         projektAkt=p;
         if(projektAkt)localStorage.setItem('solano_projekt',JSON.stringify(projektAkt));
-        toast('➡️ Weiterfahrt zum nächsten Auftrag','ok');go('projekte');
+        toast('🚗 Verbindungsfahrt gestartet','ok');go('projekte');
       }catch(e){toast(e.message,'err')}
     }),0);
   });

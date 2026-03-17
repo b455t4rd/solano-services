@@ -129,10 +129,10 @@ router.put('/:id/starten', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Zum nächsten Auftrag weiterfahren (rueckfahrt-Ende = Ankunft Nächster) ────
+// ── Zum nächsten Auftrag weiterfahren (Verbindungsfahrt starten) ──────────────
 
 router.put('/:id/weiter', authMiddleware, async (req, res) => {
-  const { km, naechster_id, besonderheiten, notiz } = req.body;
+  const { naechster_id, besonderheiten, notiz } = req.body;
   const now = new Date();
   try {
     const cur = await pool.query('SELECT * FROM projekt_auftraege WHERE id=$1', [req.params.id]);
@@ -143,22 +143,20 @@ router.put('/:id/weiter', authMiddleware, async (req, res) => {
       `UPDATE projekt_auftraege
        SET status='abgeschlossen', fahrt_ende=$1, abgeschlossen_am=$1,
            fahrzeit_zurueck_min=ROUND(EXTRACT(EPOCH FROM ($1-abfahrt_zeit))/60),
-           km_verbindung=$2, naechster_auftrag_id=$3,
-           besonderheiten=COALESCE($4,besonderheiten), notiz=COALESCE($5,notiz)
-       WHERE id=$6`,
-      [now, parseFloat(km)||0, naechster_id||null, besonderheiten||null, notiz||null, req.params.id]
+           naechster_auftrag_id=$2,
+           besonderheiten=COALESCE($3,besonderheiten), notiz=COALESCE($4,notiz)
+       WHERE id=$5`,
+      [now, naechster_id||null, besonderheiten||null, notiz||null, req.params.id]
     );
-    // Nächsten Auftrag in Arbeit starten (Verbindungsfahrt war die Anfahrt)
+    // Nächsten Auftrag in FAHRT starten (Verbindungsfahrt beginnt jetzt)
     const tourId = p.tour_id || require('crypto').randomUUID().split('-')[0];
     const nextPos = (p.tour_position||1) + 1;
     const r2 = await pool.query(
       `UPDATE projekt_auftraege
-       SET status='arbeit', fahrt_start=$1, ankunft=$1, mitarbeiter_id=$2, mitarbeiter_name=$3,
-           tour_id=$4, tour_position=$5,
-           km_hin=$6, fahrzeit_hin_min=ROUND(EXTRACT(EPOCH FROM ($1-$7::timestamptz))/60)
-       WHERE id=$8 RETURNING *`,
-      [now, req.user.id, req.user.name, tourId, nextPos,
-       parseFloat(km)||0, p.abfahrt_zeit||now, naechster_id]
+       SET status='fahrt', fahrt_start=$1, mitarbeiter_id=$2, mitarbeiter_name=$3,
+           tour_id=$4, tour_position=$5
+       WHERE id=$6 RETURNING *`,
+      [now, req.user.id, req.user.name, tourId, nextPos, naechster_id]
     );
     // Tour-ID auch auf Vorgänger setzen wenn noch nicht gesetzt
     await pool.query(
