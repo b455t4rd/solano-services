@@ -398,11 +398,12 @@ function sidebarHTML(){
   const showW=user?.zeige_winterdienst!==false;
   const showG=user?.zeige_gebaeudereinigung!==false;
   const showGr=user?.zeige_gruenpflege!==false;
+  const showP=user?.zeige_projekte!==false||isManager();
   return`
     ${si('nav-home','🏠','Übersicht',page==='home')}
     ${si('nav-nachrichten','📬','Nachrichten'+(window._nachBadge>0?` (${window._nachBadge})`:''),page==='nachrichten')}
     ${si('nav-zeit','⏱️','Zeiterfassung',page==='zeit')}
-    ${si('nav-projekte','🔨','Projekte',page==='projekte')}
+    ${showP?si('nav-projekte','🔨','Projekte',page==='projekte'):''}
     ${showW?`<div class="sidebar-label">WINTERDIENST</div>${si('nav-winter','❄️','Anlagen',page==='anlagen'&&pageData.sparte==='winterdienst')}`:''}
     ${showG?`<div class="sidebar-label">GEBÄUDEREINIGUNG</div>${si('nav-gebaeude','🧹','Anlagen',page==='anlagen'&&pageData.sparte==='gebaeudereinigung')}`:''}
     ${showGr?`<div class="sidebar-label">GRÜNPFLEGE</div>${si('nav-gruenpflege','🌿','Anlagen',page==='anlagen'&&pageData.sparte==='gruenpflege')}`:''}
@@ -492,12 +493,13 @@ async function pageHome(){
   const showW=user?.zeige_winterdienst!==false;
   const showG=user?.zeige_gebaeudereinigung!==false;
   const showGr=user?.zeige_gruenpflege!==false;
+  const showP=user?.zeige_projekte!==false||isManager();
   const projektSub=projektStatusHome?`<div class="sparte-sub" style="color:var(--primary)">${projektStatusHome}</div>`:`<div class="sparte-sub">Montagen &amp; Aufträge</div>`;
   const cards=[
     showW?`<div class="sparte-card" id="card-winter"><span class="sparte-icon">❄️</span><div class="sparte-title">Winterdienst</div><div class="sparte-sub">Räumen &amp; Streuen</div></div>`:'',
     showG?`<div class="sparte-card" id="card-gebaeude"><span class="sparte-icon">🧹</span><div class="sparte-title">Gebäudereinigung</div><div class="sparte-sub">Facility Management</div></div>`:'',
     showGr?`<div class="sparte-card" id="card-gruenpflege"><span class="sparte-icon">🌿</span><div class="sparte-title">Grünpflege</div><div class="sparte-sub">Garten &amp; Außenanlagen</div></div>`:'',
-    `<div class="sparte-card" id="card-projekte"><span class="sparte-icon">🔨</span><div class="sparte-title">Projekte</div>${projektSub}</div>`,
+    showP?`<div class="sparte-card" id="card-projekte"><span class="sparte-icon">🔨</span><div class="sparte-title">Projekte</div>${projektSub}</div>`:'',
   ].join('');
   const _gr=['Schön, dass du da bist.','Was steht heute an?','Schon Kaffee gehabt?','Willkommen zurück.','Wie läuft\'s heute?','Bereit für den Tag?','Gut, dich zu sehen.','Was liegt heute an?','Alles klar bei dir?','Auf geht\'s?','Schön, dass du wieder da bist.','Was ist heute geplant?','Alles fit?','Bereit?','Wie startet dein Tag?','Was gibt\'s heute?','Na, alles gut?','Wie schaut\'s aus?','Los geht\'s.','Was machen wir heute?','Willkommen.','Da bist du ja.','Was geht heute?','Alles im Griff?','Gut drauf heute?','Was kommt als Nächstes?','Wie ist die Lage?','Kann losgehen?','Was hast du vor?','Bereit für heute?','Was ist der Plan?','Schön, dich zu sehen.','Wie läuft der Tag?','Alles bereit?','Was wartet heute?','Hallo, schön dass du da bist.','Was nehmen wir heute in Angriff?','Na, bereit?','Alles entspannt?','Wie sieht\'s heute aus?','Was ist heute wichtig?','Wieder am Start?','Wie geht\'s dir heute?','Schön, dass du reinschaust.','Kaffee schon drin?','Was hast du heute auf dem Zettel?','Kann\'s losgehen?','Alles gut heute?','Hallo zurück.','Was darf\'s heute sein?','Gut, dass du da bist.','Wie läuft dein Morgen?','Was steht als Erstes an?','Alles auf Kurs?','Bereit zum Loslegen?','Was läuft heute?','Was ist heute los?','Willkommen, legen wir los.','Wie startet\'s?','Was packen wir an?','Schön, dass du vorbeischaust.','Wie sieht dein Tag aus?','Alles startklar?','Was steht bei dir an?','Schon wach?','Bereit für Runde zwei?','Wie läuft dein Vormittag?','Alles gut soweit?','Was geht ab?','Startklar?','Na, wie ist\'s?','Was darf heute passieren?','Alles unter Kontrolle?','Gut geschlafen?','Schon im Flow?','Was geht zuerst?','Was kommt heute auf dich zu?','Willkommen zurück im Alltag.','Wie fühlt sich der Tag an?','Heute viel vor?','Was gibt der Tag her?','Wie schaut dein Plan aus?','Alles locker?','Bist du bereit?','Was läuft als Nächstes?','Wieder da?','Schön, dich wiederzusehen.','Wie geht der Tag los?','Schon gestartet?','Was wollen wir heute schaffen?','Wie ist die Stimmung?','Was ist heute dran?','Schon unterwegs?','Gut in den Tag gekommen?','Was liegt zuerst an?','Alles bereit für heute?','Na dann, los.','Schön, dass du reinsiehst.','Heute motiviert?','Was steht vorne an?','Alles gut bei dir?','Was darf heute nicht vergessen werden?','Was ist heute dein Fokus?','Los?','Wieder bereit?','Na, schon angekommen?','Wie läuft dein Start?','Was soll heute klappen?','Schön, dass du wieder hier bist.','Wie sieht\'s aus bei dir?','Kaffee oder Chaos?','Was ist heute dein Thema?','Na, wie startet\'s?','Alles ruhig?','Bereit für das Nächste?','Wie war dein Morgen?'];
   const _grText=_gr[Math.floor(Math.random()*_gr.length)];
@@ -717,11 +719,11 @@ async function renderTabAnlagen(){
 async function renderTabMitarbeiter(){
   const list=await apiGet('/api/mitarbeiter');
   const rows=list.map(m=>{
-    const sparteIcons=[m.zeige_winterdienst!==false?'❄️':'',m.zeige_gebaeudereinigung!==false?'🧹':'',m.zeige_gruenpflege!==false?'🌿':''].filter(Boolean).join(' ')||'–';
+    const sparteIcons=[m.zeige_winterdienst!==false?'❄️':'',m.zeige_gebaeudereinigung!==false?'🧹':'',m.zeige_gruenpflege!==false?'🌿':'',m.zeige_projekte!==false?'🔨':''].filter(Boolean).join(' ')||'–';
     const roleBadge=m.ist_admin?'<span class="badge badge-red">👑 Admin</span>':m.ist_chef?'<span class="badge badge-blue">⭐ Chef</span>':'<span class="badge badge-gray">Mitarbeiter</span>';
     const alarmBadge=m.winterdienst_alarm?'<span class="badge badge-red">🚨 Alarm</span>':'';
     const beschBadge=m.beschaeftigung&&m.beschaeftigung!=='vollzeit'?`<span class="badge badge-gray">${m.beschaeftigung==='teilzeit'?'Teilzeit':'Geringfügig'} ${m.soll_stunden||38.5}h/W</span>`:'';
-    return`<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge} ${alarmBadge} ${beschBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef||false}" data-zw="${m.zeige_winterdienst!==false}" data-zg="${m.zeige_gebaeudereinigung!==false}" data-zgr="${m.zeige_gruenpflege!==false}" data-alarm="${m.winterdienst_alarm||false}" data-soll="${m.soll_stunden||38.5}" data-beschaeftigung="${m.beschaeftigung||'vollzeit'}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
+    return`<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge} ${alarmBadge} ${beschBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef||false}" data-zw="${m.zeige_winterdienst!==false}" data-zg="${m.zeige_gebaeudereinigung!==false}" data-zgr="${m.zeige_gruenpflege!==false}" data-zp="${m.zeige_projekte!==false}" data-alarm="${m.winterdienst_alarm||false}" data-soll="${m.soll_stunden||38.5}" data-beschaeftigung="${m.beschaeftigung||'vollzeit'}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
   }).join('');
   return`<div class="admin-wrap"><button class="btn btn-primary btn-sm" id="btn-new-ma" style="margin-bottom:12px">+ Neuer Mitarbeiter</button><div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Name</th><th>PIN</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
@@ -1016,6 +1018,7 @@ function modalMitarbeiter(m=null){
   const zW=m?.zeige_winterdienst!==false;
   const zG=m?.zeige_gebaeudereinigung!==false;
   const zGr=m?.zeige_gruenpflege!==false;
+  const zP=m?.zeige_projekte!==false;
   showModal(`
     <button class="modal-close" id="modal-close">×</button>
     <div class="modal-title">${m?'Mitarbeiter bearbeiten':'Neuer Mitarbeiter'}</div>
@@ -1038,6 +1041,7 @@ function modalMitarbeiter(m=null){
         <label class="sparte-check-label"><input type="checkbox" id="m-ma-zw" ${zW?'checked':''}> ❄️ Winterdienst</label>
         <label class="sparte-check-label"><input type="checkbox" id="m-ma-zg" ${zG?'checked':''}> 🧹 Gebäudereinigung</label>
         <label class="sparte-check-label"><input type="checkbox" id="m-ma-zgr" ${zGr?'checked':''}> 🌿 Grünpflege</label>
+        <label class="sparte-check-label"><input type="checkbox" id="m-ma-zp" ${zP?'checked':''}> 🔨 Projekte/Montagen</label>
       </div>
     </div>
     <div class="form-group">
@@ -1391,11 +1395,14 @@ async function pageProjekte(){
 
   // Kein aktiver Auftrag – Neuen starten
   let auftraggeber=[];
-  try{auftraggeber=await apiGet('/api/projekte/auftraggeber')}catch(e){}
+  let agFehler=false;
+  try{auftraggeber=await apiGet('/api/projekte/auftraggeber')}catch(e){agFehler=true;}
   let recent=[];
   try{recent=await apiGet('/api/projekte?limit=10')}catch(e){}
 
-  const agOpts='<option value="">– Auftraggeber wählen –</option>'+auftraggeber.map(ag=>`<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
+  const agOpts=agFehler
+    ?'<option value="">⚠️ Laden fehlgeschlagen – neu öffnen</option>'
+    :'<option value="">– Auftraggeber wählen –</option>'+auftraggeber.map(ag=>`<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
   const statusLbl={fahrt:'Fahrt',arbeit:'Arbeit',rueckfahrt:'Rückfahrt',abgeschlossen:'Abgeschlossen'};
   const recentRows=recent.map(p=>{
     const km=(parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)).toFixed(1);
@@ -1406,7 +1413,10 @@ async function pageProjekte(){
       <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
       <td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
       <td>${parseFloat(km)>0?km+' km':'–'}</td>
-      <td>${hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`:`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}</td>
+      <td><div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+        ${hatGutschrift?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span><button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" style="font-size:11px">✏️</button>`:`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}
+        ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
+      </div></td>
     </tr>`;
   }).join('');
 
@@ -1553,8 +1563,8 @@ async function renderTabProjekte(){
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="btn-proj-laden" style="background:#1e40af;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 16px">🔍 Laden</button>
-        <button id="btn-proj-csv" ${btnSt('#16a34a',!auswertung.length)} ${!auswertung.length?'disabled':''}>📥 Excel</button>
         <button id="btn-proj-pdf" ${btnSt('#6b7280',!auswertung.length)} ${!auswertung.length?'disabled':''}>🖨️ PDF</button>
+        <button id="btn-proj-csv" ${btnSt('#16a34a',!auswertung.length)} ${!auswertung.length?'disabled':''}>📥 Excel</button>
       </div>
     </div></div>
     ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
@@ -2116,6 +2126,7 @@ function renderTabReset(){
     ${btn('btn-reset-nachrichten','💬 Alle Nachrichten löschen','#6b7280','Löscht alle gesendeten und empfangenen Nachrichten')}
     ${btn('btn-reset-todos','✅ Alle TODOs löschen','#f59e0b','Löscht alle TODOs und Zuweisungen')}
     ${btn('btn-reset-einsaetze','📋 Alle Einsätze & Berichte löschen','#ef4444','Löscht alle Einsätze, Fotos, GPS-Tracks und erledigte Aufgaben')}
+    ${btn('btn-reset-projekte','🔨 Alle Projekte/Montagen löschen','#ef4444','Löscht alle Projektaufträge und Auswertungen')}
     <div class="card" style="margin-bottom:12px;border:2px solid #dc262620">
       <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
@@ -2372,6 +2383,16 @@ function bindEvents(){
         });closeModal();toast('✅ Gutschrift gespeichert','ok');go('projekte');
         }catch(e){toast(e.message,'err')}
       }),0);
+    });
+  });
+
+  // Projekte: Letzten Auftrag löschen
+  document.querySelectorAll('[data-action="proj-delete-recent"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(!confirm('Auftrag unwiderruflich löschen?'))return;
+      try{await apiDelete(`/api/projekte/${b.dataset.id}`);toast('Gelöscht','ok');go('projekte');}
+      catch(e){toast(e.message,'err')}
     });
   });
 
@@ -2958,6 +2979,7 @@ function bindAdminEvents(){
     'btn-reset-nachrichten':{label:'alle Nachrichten',endpoint:'/api/admin/reset/nachrichten'},
     'btn-reset-todos':{label:'alle TODOs',endpoint:'/api/admin/reset/todos'},
     'btn-reset-einsaetze':{label:'alle Einsätze & Berichte',endpoint:'/api/admin/reset/einsaetze'},
+    'btn-reset-projekte':{label:'alle Projekte/Montagen',endpoint:'/api/admin/reset/projekte'},
   };
   Object.entries(resetActions).forEach(([id,{label,endpoint}])=>{
     const b=document.getElementById(id);
@@ -3078,7 +3100,7 @@ function bindAdminEvents(){
         if(!confirm('Mitarbeiter löschen?'))return;
         try{await apiDel(`/api/mitarbeiter/${id}`);toast('Gelöscht','ok');reloadTab()}catch(e){toast(e.message,'err')}
       }else if(action==='edit-ma'){
-        modalMitarbeiter({id,name,pin,ist_admin:btn.dataset.admin==='true',ist_chef:btn.dataset.chef==='true',zeige_winterdienst:btn.dataset.zw!=='false',zeige_gebaeudereinigung:btn.dataset.zg!=='false',zeige_gruenpflege:btn.dataset.zgr!=='false',winterdienst_alarm:btn.dataset.alarm==='true',soll_stunden:parseFloat(btn.dataset.soll)||38.5,beschaeftigung:btn.dataset.beschaeftigung||'vollzeit'});
+        modalMitarbeiter({id,name,pin,ist_admin:btn.dataset.admin==='true',ist_chef:btn.dataset.chef==='true',zeige_winterdienst:btn.dataset.zw!=='false',zeige_gebaeudereinigung:btn.dataset.zg!=='false',zeige_gruenpflege:btn.dataset.zgr!=='false',zeige_projekte:btn.dataset.zp!=='false',winterdienst_alarm:btn.dataset.alarm==='true',soll_stunden:parseFloat(btn.dataset.soll)||38.5,beschaeftigung:btn.dataset.beschaeftigung||'vollzeit'});
       }else if(action==='toggle-todo'){
         try{
           await apiPut(`/api/todos/${id}`,{});
@@ -3169,7 +3191,8 @@ function bindModalEvents(){
       ist_admin:document.getElementById('m-ma-admin')?.checked||false,
       ist_chef:document.getElementById('m-ma-chef')?.checked||false,
       aktiv:true,
-      zeige_winterdienst:document.getElementById('m-ma-zw')?.checked!==false,
+      zeige_winterdienst:document.getElementById('m-ma-zw')?.checked||false,
+      zeige_projekte:document.getElementById('m-ma-zp')?.checked||false,
       zeige_gebaeudereinigung:document.getElementById('m-ma-zg')?.checked!==false,
       zeige_gruenpflege:document.getElementById('m-ma-zgr')?.checked!==false,
       winterdienst_alarm:document.getElementById('m-ma-alarm')?.checked||false,

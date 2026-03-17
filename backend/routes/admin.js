@@ -81,4 +81,14 @@ router.delete('/reset/anlagen', adminMiddleware, async (req, res) => {
   }
 });
 
+// Projekte löschen
+router.delete('/reset/projekte', adminMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM projekt_auftraege');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
