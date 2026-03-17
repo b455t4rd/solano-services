@@ -207,6 +207,21 @@ router.put('/:id/weiter', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Alle laufenden Aufträge (Admin/Manager) ───────────────────────────────────
+
+router.get('/laufend', managerMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT p.*, m.name AS mitarbeiter_name_anzeige
+       FROM projekt_auftraege p
+       LEFT JOIN mitarbeiter m ON m.id = p.mitarbeiter_id
+       WHERE p.status NOT IN ('abgeschlossen','geplant')
+       ORDER BY p.erstellt_am DESC`
+    );
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Aktiver Auftrag des aktuellen Nutzers ─────────────────────────────────────
 
 router.get('/aktiv', authMiddleware, async (req, res) => {
@@ -330,6 +345,24 @@ router.put('/:id/zurueckstellen', authMiddleware, async (req, res) => {
        SET status='geplant', fahrt_start=NULL, ankunft=NULL, abfahrt_zeit=NULL,
            fahrt_ende=NULL, abgeschlossen_am=NULL,
            arbeitszeit_min=NULL, fahrzeit_hin_min=NULL, fahrzeit_zurueck_min=NULL
+       WHERE id=$1 RETURNING *`,
+      [req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: Auftrag sofort abschließen ─────────────────────────────────────────
+
+router.put('/:id/abschliessen-admin', managerMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE projekt_auftraege
+       SET status='abgeschlossen', abgeschlossen_am=NOW(),
+           fahrt_ende=COALESCE(fahrt_ende,NOW()),
+           arbeitszeit_min=COALESCE(arbeitszeit_min,
+             CASE WHEN ankunft IS NOT NULL THEN ROUND(EXTRACT(EPOCH FROM (NOW()-ankunft))/60) ELSE 0 END)
        WHERE id=$1 RETURNING *`,
       [req.params.id]
     );

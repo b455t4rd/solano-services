@@ -81,6 +81,45 @@ router.put('/korrigieren/:id', managerMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Aktuell eingestempelte MA (Manager+) ─────────────────────────────────────
+router.get('/eingestempelt', managerMiddleware, async (req, res) => {
+  try {
+    // MA die heute 'kommen' haben aber kein 'gehen'
+    const r = await pool.query(
+      `SELECT DISTINCT ON (z.mitarbeiter_id)
+         z.mitarbeiter_id, z.mitarbeiter_name, z.zeitpunkt AS kommen_seit
+       FROM zeiterfassung z
+       WHERE z.datum = CURRENT_DATE AND z.typ = 'kommen'
+         AND NOT EXISTS (
+           SELECT 1 FROM zeiterfassung g
+           WHERE g.mitarbeiter_id = z.mitarbeiter_id
+             AND g.datum = CURRENT_DATE AND g.typ = 'gehen'
+         )
+       ORDER BY z.mitarbeiter_id, z.zeitpunkt ASC`
+    );
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: MA manuell ausstempeln ─────────────────────────────────────────────
+router.post('/ausstempeln-admin', managerMiddleware, async (req, res) => {
+  const { mitarbeiter_id, zeitpunkt } = req.body;
+  if (!mitarbeiter_id) return res.status(400).json({ error: 'mitarbeiter_id fehlt' });
+  try {
+    const zp = zeitpunkt ? new Date(zeitpunkt) : new Date();
+    const datum = zp.toISOString().split('T')[0];
+    // MA-Name holen
+    const mRow = await pool.query('SELECT name FROM mitarbeiter WHERE id=$1', [mitarbeiter_id]);
+    const maName = mRow.rows[0]?.name || 'Unbekannt';
+    const r = await pool.query(
+      `INSERT INTO zeiterfassung (mitarbeiter_id, mitarbeiter_name, typ, zeitpunkt, datum, notiz)
+       VALUES ($1,$2,'gehen',$3,$4,'Admin-Ausstempelung') RETURNING *`,
+      [mitarbeiter_id, maName, zp, datum]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Auswertung (Manager+) mit Soll/Ist/Saldo ─────────────────────────────────
 router.get('/auswertung', managerMiddleware, async (req, res) => {
   const { von, bis, mitarbeiter_id } = req.query;

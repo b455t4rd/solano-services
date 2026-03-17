@@ -1582,6 +1582,7 @@ async function pageProjekte(){
 async function renderTabProjekte(){
   let auswertung=[],agList=[],fzEinst={diesel_preis:1.80,verbrauch_100km:8,maut_pro_km:0,abnuetzung_pro_km:0.15};
   let maKosten={stundensatz_fa:55,stundensatz_ha:45,stundensatz_gf:35,warnschwelle:55};
+  let laufend=[],eingestempelt=[];
   const _h=new Date(),_mo=new Date(_h);_mo.setDate(1);
   const von=pageData.projVon||_mo.toISOString().split('T')[0];
   const bis=pageData.projBis||_h.toISOString().split('T')[0];
@@ -1591,6 +1592,8 @@ async function renderTabProjekte(){
   try{agList=await apiGet('/api/projekte/auftraggeber');}catch(e){}
   try{fzEinst=await apiGet('/api/projekte/einstellungen');}catch(e){}
   try{maKosten=await apiGet('/api/projekte/ma-kosten');}catch(e){}
+  try{laufend=await apiGet('/api/projekte/laufend');}catch(e){}
+  try{eingestempelt=await apiGet('/api/zeit/eingestempelt');}catch(e){}
   const warnschwelle=parseFloat(maKosten.warnschwelle||55);
 
   // Kosten pro km berechnen
@@ -1707,7 +1710,51 @@ async function renderTabProjekte(){
   const agOpts=agList.map(ag=>`<option value="${ag.id}" ${projAg==ag.id?'selected':''}>${esc(ag.name)}</option>`).join('');
   const btnSt=(c,dis)=>`style="background:${dis?'#9ca3af':c};color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:${dis?'not-allowed':'pointer'}"`;
 
+  // Laufend HTML
+  const statusBadgeLive=s=>({fahrt:'<span class="badge badge-blue">🚗 Fahrt</span>',arbeit:'<span class="badge badge-green">🔨 Arbeit</span>',rueckfahrt:'<span class="badge" style="background:#fef3c7;color:#92400e">🏠 Rückfahrt</span>',pausiert:'<span class="badge" style="background:#f3f4f6;color:#6b7280">⏸ Pausiert</span>'}[s]||s);
+  const laufendHTML=laufend.length===0
+    ?`<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine aktiven Aufträge</div>`
+    :laufend.map(p=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f3f4f6">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${statusBadgeLive(p.status)}
+          <span style="font-weight:700;font-size:13px">${esc(p.auftraggeber_name||'–')}</span>
+          ${p.kundenname?`<span style="font-size:12px;color:#374151">${esc(p.kundenname)}</span>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+          👷 <b>${esc(p.mitarbeiter_name_anzeige||p.mitarbeiter_name||'–')}</b>${p.anzahl_mitarbeiter>1?` +${p.anzahl_mitarbeiter-1} MA`:''}
+          ${p.auftragsnummer?` · Nr. ${esc(p.auftragsnummer)}`:''}
+          · seit ${p.fahrt_start?new Date(p.fahrt_start).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):fDate(p.erstellt_am)}
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${p.anzahl_mitarbeiter||1}" data-arbmin="${(parseInt(p.arbeitszeit_min)||0)+(parseInt(p.arbeitszeit_manuell_min)||0)}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-fahrthin="${p.fahrzeit_hin_min||0}" data-fahrtzurueck="${p.fahrzeit_zurueck_min||0}" data-bez="${esc(p.besonderheiten||'')}" data-rapport="${p.rapport_erforderlich?'1':''}" data-rapportbez="${esc(p.rapport_beschreibung||'')}" title="Bearbeiten">✏️</button>
+        <button class="tbl-btn" data-action="proj-admin-zurueck" data-id="${p.id}" title="Zurückstellen" style="background:#f59e0b;color:white">↩️</button>
+        <button class="tbl-btn" data-action="proj-admin-abschliessen" data-id="${p.id}" title="Jetzt abschließen" style="background:#16a34a;color:white">✅</button>
+      </div>
+    </div>`).join('');
+
+  const eingestempeltHTML=eingestempelt.length===0
+    ?`<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Niemand eingestempelt</div>`
+    :eingestempelt.map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6">
+      <div style="flex:1;font-size:13px">
+        <span style="font-weight:600">👷 ${esc(m.mitarbeiter_name)}</span>
+        <span style="color:var(--text-muted);font-size:12px"> · seit ${new Date(m.kommen_seit).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})}</span>
+      </div>
+      <button class="tbl-btn" data-action="admin-ausstempeln" data-id="${m.mitarbeiter_id}" data-name="${esc(m.mitarbeiter_name)}" title="Ausstempeln" style="background:#dc2626;color:white;font-size:12px">🚪 Gehen</button>
+    </div>`).join('');
+
   return`<div class="admin-wrap">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="card"><div class="card-body" style="padding:12px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:6px">🔴 Laufende Aufträge <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:10px;font-weight:700">${laufend.length}</span></div>
+        ${laufendHTML}
+      </div></div>
+      <div class="card"><div class="card-body" style="padding:12px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:6px">👷 Eingestempelt <span style="font-size:12px;background:#dcfce7;color:#16a34a;padding:1px 7px;border-radius:10px;font-weight:700">${eingestempelt.length}</span></div>
+        ${eingestempeltHTML}
+      </div></div>
+    </div>
     <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="proj-von" value="${von}"></div>
@@ -3654,6 +3701,60 @@ function bindAdminEvents(){
       try{await apiDelete(`/api/projekte/${b.dataset.id}`);toast('Gelöscht','ok');
         const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
       }catch(e){toast(e.message,'err')}
+    });
+  });
+
+  // Admin: Laufenden Auftrag zurückstellen
+  document.querySelectorAll('[data-action="proj-admin-zurueck"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(!confirm('Auftrag zurückstellen? Er wird als "Geplant" gespeichert.'))return;
+      try{await apiPut(`/api/projekte/${b.dataset.id}/zurueckstellen`,{});
+        toast('↩️ Zurückgestellt','ok');
+        const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents();}
+      }catch(e){toast(e.message,'err')}
+    });
+  });
+
+  // Admin: Laufenden Auftrag sofort abschließen
+  document.querySelectorAll('[data-action="proj-admin-abschliessen"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(!confirm('Auftrag jetzt als abgeschlossen markieren?'))return;
+      try{await apiPut(`/api/projekte/${b.dataset.id}/abschliessen-admin`,{});
+        toast('✅ Abgeschlossen','ok');
+        const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents();}
+      }catch(e){toast(e.message,'err')}
+    });
+  });
+
+  // Admin: MA ausstempeln
+  document.querySelectorAll('[data-action="admin-ausstempeln"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      const now=new Date();
+      const nowStr=now.toTimeString().slice(0,5); // HH:MM
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">🚪 ${esc(b.dataset.name)} ausstempeln</div>
+        <div class="form-group">
+          <label class="form-label">Uhrzeit Gehen</label>
+          <input type="time" class="form-input" id="ausstempel-zeit" value="${nowStr}">
+        </div>
+        <button class="btn btn-primary" id="btn-ausstempel-ok" data-id="${b.dataset.id}">✅ Ausstempeln</button>`);
+      setTimeout(()=>{
+        const btn=document.getElementById('btn-ausstempel-ok');
+        if(!btn)return;
+        btn.addEventListener('click',async()=>{
+          const zeitStr=document.getElementById('ausstempel-zeit')?.value||nowStr;
+          const heute=now.toISOString().split('T')[0];
+          const zeitpunkt=new Date(`${heute}T${zeitStr}:00`).toISOString();
+          try{await apiPost('/api/zeit/ausstempeln-admin',{mitarbeiter_id:parseInt(b.dataset.id),zeitpunkt});
+            closeModal();toast('🚪 Ausgestempelt','ok');
+            const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents();}
+          }catch(e){toast(e.message,'err')}
+        });
+      },0);
     });
   });
 
