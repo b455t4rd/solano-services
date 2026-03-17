@@ -678,7 +678,7 @@ async function pageEinsatz(){
 
 async function pageAdmin(){
   const tab=pageData.adminTab||'anlagen';
-  return`<div class="tabs" style="overflow-x:auto;flex-wrap:nowrap">
+  return`<div class="tabs" style="overflow-x:auto;flex-wrap:nowrap;position:sticky;top:0;z-index:50;background:white;border-bottom:1px solid var(--border)">
     <button class="tab-btn ${tab==='anlagen'?'active':''}" data-tab="anlagen">Anlagen</button>
     <button class="tab-btn ${tab==='projekte'?'active':''}" data-tab="projekte">🔨 Projekte</button>
     <button class="tab-btn ${tab==='berichte'?'active':''}" data-tab="berichte">Berichte</button>
@@ -1561,6 +1561,7 @@ async function pageProjekte(){
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0">
               ${navStr?`<button onclick="openNav(null,null,'${esc(navStr)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
+              ${isManager()?`<button class="tbl-btn" data-action="proj-edit-geplant" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-kundenname="${esc(p.kundenname||'')}" data-strasse="${esc(p.adresse_strasse||'')}" data-plz="${esc(p.adresse_plz||'')}" data-ort="${esc(p.adresse_ort||'')}" data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum||''}" data-anzahl="${p.anzahl_mitarbeiter||2}" data-notiz="${esc(p.notiz||'')}" title="Bearbeiten">✏️</button>`:''}
               <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
               ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
             </div>
@@ -1672,58 +1673,32 @@ async function renderTabProjekte(){
       const sArbMin=parseInt(s.arbeitszeit_min)||0;const sKm=parseFloat(s.km_hin||0)+parseFloat(s.km_zurueck||0);const sMA=parseInt(s.anzahl_mitarbeiter)||2;
       return`<div style="font-size:12px;color:#374151;padding:2px 0">📅 ${fDate(s.datum)} · ⏱ ${sArbMin?fMin(sArbMin):'–'} · 👷 ${sMA} MA · 🚗 ${sKm>0?sKm.toFixed(1)+' km':'–'}</div>`;
     }).join('')}</div>`:'';
-    return`<div style="border:1px solid ${accentColor};border-left:4px solid ${accentColor};border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-weight:700;font-size:15px">${esc(p.auftraggeber_name||'–')}</span>
-            ${p.kundenname?`<span style="font-size:12px;color:#374151;font-weight:600">${esc(p.kundenname)}</span>`:''}
-            ${p.auftragsnummer?`<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 7px;border-radius:20px">Nr. ${esc(p.auftragsnummer)}</span>`:''}
-            ${statusBadge(p.status)}
-            ${p.rapport_erforderlich?`<span style="font-size:11px;background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:600">📋 Rapport</span>`:''}
-          </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fDate(p.erstellt_am)} · ${anzahl} Mitarbeiter</div>
-        </div>
-        <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start">
+    return`<tr style="border-bottom:1px solid #f3f4f6;${stundensatz!==null&&stundensatz<warnschwelle?'background:#fff7f7':''}">
+      <td style="white-space:nowrap;font-size:12px;color:var(--text-muted)">${fDate(p.erstellt_am)}</td>
+      <td style="min-width:120px">
+        <div style="font-weight:700;font-size:13px">${esc(p.auftraggeber_name||'–')}</div>
+        ${p.kundenname?`<div style="font-size:11px;color:#374151">${esc(p.kundenname)}</div>`:''}
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">${statusBadge(p.status)}${p.rapport_erforderlich?'<span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:1px 5px;border-radius:10px">📋</span>':''}</div>
+      </td>
+      <td style="white-space:nowrap;font-size:12px">${esc(p.auftragsnummer||'–')}</td>
+      <td style="text-align:center;font-size:13px;font-weight:600">${anzahl}</td>
+      <td style="white-space:nowrap;font-size:12px;color:#2563eb">${totFahrtMin>0?`<b>${fMin(totFahrtMin)}</b><div style="font-size:11px;color:#6b7280">${(totFahrtMin/60).toFixed(2)}h${!fzBezRow?'<span style="color:#dc2626"> ✗</span>':''}</div>`:'<span style="color:#9ca3af">–</span>'}</td>
+      <td style="white-space:nowrap;font-size:12px;color:#16a34a">${totArbMin>0?`<b>${fMin(totArbMin)}</b><div style="font-size:11px;color:#6b7280">${(totArbMin/60).toFixed(2)}h</div>`:'<span style="color:#f59e0b;font-weight:600">!</span>'}</td>
+      <td style="white-space:nowrap;font-size:12px;color:#7c3aed">${totGesamtMin>0?`<b>${fMin(totGesamtMin)}</b><div style="font-size:11px;color:#6b7280">${(totGesamtMin/60*anzahl).toFixed(2)}h×${anzahl}</div>`:'–'}</td>
+      <td style="white-space:nowrap;font-size:12px">${totKm>0?`${totKm.toFixed(1)} km`:'–'}</td>
+      <td style="white-space:nowrap;font-size:12px;color:#dc2626">${totFk>0?`−€${totFk.toFixed(2)}`:'–'}</td>
+      <td style="white-space:nowrap;font-size:12px;color:#16a34a;font-weight:600">${gutschrift>0?`€${gutschrift.toFixed(2)}${fkp>0?`<div style="font-size:10px;color:#16a34a">+€${fkp.toFixed(2)} P.</div>`:''}`:''}</td>
+      <td style="white-space:nowrap">
+        ${stundensatz!==null?`<span style="background:${accentColor};color:white;padding:3px 8px;border-radius:8px;font-weight:700;font-size:13px;white-space:nowrap">€${stundensatz.toFixed(2)}<span style="font-size:10px;font-weight:400">/h/MA</span></span>`:'<span style="color:#9ca3af;font-size:12px">–</span>'}
+      </td>
+      <td>
+        <div style="display:flex;gap:3px">
           <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-fkp="${p.fahrtkosten_pauschale||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" data-arbmin="${totArbMin}" data-anzahl="${anzahl}" title="Gutschrift">💰</button>
-          ${isManager()?`<button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${anzahl}" data-arbmin="${totArbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-bez="${esc(p.besonderheiten||'')}" data-rapport="${p.rapport_erforderlich?'1':''}" data-rapportbez="${esc(p.rapport_beschreibung||'')}" title="Bearbeiten">✏️</button>`:''}
+          ${isManager()?`<button class="tbl-btn" data-action="proj-edit" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-ma="${anzahl}" data-arbmin="${totArbMin}" data-kmhin="${p.km_hin||0}" data-kmzurueck="${p.km_zurueck||0}" data-fahrthin="${p.fahrzeit_hin_min||0}" data-fahrtzurueck="${p.fahrzeit_zurueck_min||0}" data-bez="${esc(p.besonderheiten||'')}" data-rapport="${p.rapport_erforderlich?'1':''}" data-rapportbez="${esc(p.rapport_beschreibung||'')}" title="Bearbeiten">✏️</button>`:''}
           ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
         </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:6px;margin-top:10px">
-        ${totFahrtMin>0?`<div style="background:#eff6ff;border-radius:8px;padding:6px 8px">
-          <div style="font-size:10px;color:#6b7280;font-weight:500">🚗 Fahrzeit</div>
-          <div style="font-size:12px;font-weight:700;white-space:nowrap">${fMin(totFahrtMin)}</div>
-          <div style="font-size:11px;color:#2563eb;font-weight:600">${(totFahrtMin/60*anzahl).toFixed(1)}h${!fzBezRow?'<span style="color:#dc2626;font-size:10px"> unbez.</span>':''}</div>
-        </div>`:''}
-        <div style="background:#f0fdf4;border-radius:8px;padding:6px 8px">
-          <div style="font-size:10px;color:#6b7280;font-weight:500">🔨 Arbeitszeit</div>
-          ${totArbMin>0?`<div style="font-size:12px;font-weight:700;white-space:nowrap">${fMin(totArbMin)}</div>
-          <div style="font-size:11px;color:#16a34a;font-weight:600">${(totArbMin/60*anzahl).toFixed(1)}h</div>`:`<div style="font-size:11px;color:#f59e0b;font-weight:600">nicht erfasst</div>`}
-        </div>
-        ${totGesamtMin>0?`<div style="background:#f5f3ff;border-radius:8px;padding:6px 8px">
-          <div style="font-size:10px;color:#6b7280;font-weight:500">⏱ Gesamt</div>
-          <div style="font-size:12px;font-weight:700;white-space:nowrap">${fMin(totGesamtMin)}</div>
-          <div style="font-size:11px;color:#7c3aed;font-weight:600">${(totGesamtMin/60*anzahl).toFixed(1)}h×${anzahl}MA</div>
-        </div>`:''}
-        ${totKm>0?`<div style="background:#fafafa;border-radius:8px;padding:6px 8px">
-          <div style="font-size:10px;color:#6b7280;font-weight:500">📍 Kilometer</div>
-          <div style="font-size:12px;font-weight:700">${totKm.toFixed(1)} km</div>
-          ${totFk>0?`<div style="font-size:11px;color:#dc2626">−€${totFk.toFixed(2)}</div>`:''}
-        </div>`:''}
-        ${gutschrift>0?`<div style="background:#f0fdf4;border-radius:8px;padding:6px 8px">
-          <div style="font-size:10px;color:#6b7280;font-weight:500">💰 Gutschrift</div>
-          <div style="font-size:12px;font-weight:700">€${gutschrift.toFixed(2)}</div>
-          ${fkp>0?`<div style="font-size:11px;color:#16a34a;font-weight:600">+€${fkp.toFixed(2)} Paus.</div>`:''}
-        </div>`:''}
-        ${stundensatz!==null?`<div style="background:${accentColor};border-radius:8px;padding:6px 8px">
-          <div style="font-size:10px;color:rgba(255,255,255,0.8);font-weight:500">💶 Stundensatz</div>
-          <div style="font-size:15px;font-weight:700;color:white">€${stundensatz.toFixed(2)}</div>
-          <div style="font-size:10px;color:rgba(255,255,255,0.8)">/h/MA${stundensatz<warnschwelle?' ⚠️':''}</div>
-        </div>`:''}
-      </div>
-      ${sessHtml}
-    </div>`}).join('');
+      </td>
+    </tr>`}).join('');
 
   // Auftraggeber-Verwaltung
   const agRows=agList.map(ag=>`<tr>
@@ -1763,8 +1738,26 @@ async function renderTabProjekte(){
       </div>
     </div></div>
     ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
-    <div style="margin-bottom:20px">
-      ${projSuche&&auswertungFiltered.length===0?`<div style="text-align:center;color:var(--text-muted);padding:24px">Keine Ergebnisse für „${esc(pageData.projSuche||'')}"</div>`:rows||`<div style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</div>`}
+    <div style="margin-bottom:20px;overflow-x:auto">
+      ${projSuche&&auswertungFiltered.length===0
+        ?`<div style="text-align:center;color:var(--text-muted);padding:24px">Keine Ergebnisse für „${esc(pageData.projSuche||'')}"</div>`
+        :rows
+          ?`<table class="tbl" style="min-width:900px;width:100%"><thead><tr>
+              <th style="white-space:nowrap">Datum</th>
+              <th>Auftraggeber</th>
+              <th style="white-space:nowrap">Nr.</th>
+              <th style="text-align:center">MA</th>
+              <th style="white-space:nowrap">🚗 Fahrzeit</th>
+              <th style="white-space:nowrap">🔨 Arbeitszeit</th>
+              <th style="white-space:nowrap">⏱ Gesamt</th>
+              <th style="white-space:nowrap">km</th>
+              <th style="white-space:nowrap">⛽ Fahr-K.</th>
+              <th style="white-space:nowrap">💰 Gutschrift</th>
+              <th style="white-space:nowrap">€/Std/MA</th>
+              <th></th>
+            </tr></thead><tbody>${rows}</tbody></table>`
+          :`<div style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</div>`
+      }
     </div>
     <div style="font-weight:700;margin-bottom:8px">Auftraggeber verwalten</div>
     <button class="btn btn-primary btn-sm" id="btn-new-ag" style="margin-bottom:10px">+ Neuer Auftraggeber</button>
@@ -2679,6 +2672,53 @@ function bindEvents(){
     });
   });
 
+  // Projekte: Geplanten Auftrag bearbeiten
+  document.querySelectorAll('[data-action="proj-edit-geplant"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      const d=b.dataset;
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">✏️ Geplanten Auftrag bearbeiten</div>
+        <div class="form-group"><label class="form-label">Auftraggeber</label><input class="form-input" id="gpe-agname" value="${esc(d.agname||'')}" placeholder="Auftraggeber"></div>
+        <div class="form-group"><label class="form-label">Auftragsnummer</label><input class="form-input" id="gpe-nr" value="${esc(d.nr||'')}" placeholder="optional"></div>
+        <div class="form-group"><label class="form-label">Kundenname / Anlage</label><input class="form-input" id="gpe-kundenname" value="${esc(d.kundenname||'')}" placeholder="optional"></div>
+        <div class="form-group">
+          <label class="form-label">Adresse (für Navigation)</label>
+          <input type="text" class="form-input" id="gpe-strasse" placeholder="Straße und Hausnummer" style="margin-bottom:6px" value="${esc(d.strasse||'')}">
+          <div style="display:grid;grid-template-columns:100px 1fr;gap:6px;margin-bottom:6px">
+            <input type="text" class="form-input" id="gpe-plz" placeholder="PLZ" value="${esc(d.plz||'')}">
+            <input type="text" class="form-input" id="gpe-ort" placeholder="Ort / Stadt" value="${esc(d.ort||'')}">
+          </div>
+          <input type="text" class="form-input" id="gpe-land" placeholder="Land" value="${esc(d.land||'Österreich')}">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">Geplantes Datum</label><input type="date" class="form-input" id="gpe-datum" value="${d.datum||''}"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Anzahl MA</label><input type="number" class="form-input" id="gpe-anzahl" value="${d.anzahl||2}" min="1" max="10"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Notiz</label><textarea class="form-input" id="gpe-notiz" rows="2">${esc(d.notiz||'')}</textarea></div>
+        <button class="btn btn-primary" id="btn-gpe-save" data-id="${d.id}">💾 Speichern</button>`);
+      setTimeout(()=>o('btn-gpe-save','click',async()=>{
+        const id=document.getElementById('btn-gpe-save')?.dataset.id;
+        try{
+          await apiPut(`/api/projekte/${id}`,{
+            auftraggeber_name:document.getElementById('gpe-agname')?.value||null,
+            auftragsnummer:document.getElementById('gpe-nr')?.value||null,
+            kundenname:document.getElementById('gpe-kundenname')?.value||null,
+            adresse_strasse:document.getElementById('gpe-strasse')?.value||null,
+            adresse_plz:document.getElementById('gpe-plz')?.value||null,
+            adresse_ort:document.getElementById('gpe-ort')?.value||null,
+            adresse_land:document.getElementById('gpe-land')?.value||null,
+            geplant_datum:document.getElementById('gpe-datum')?.value||null,
+            anzahl_mitarbeiter:parseInt(document.getElementById('gpe-anzahl')?.value)||2,
+            notiz:document.getElementById('gpe-notiz')?.value?.trim()||null,
+          });
+          closeModal();toast('💾 Gespeichert','ok');go('projekte');
+        }catch(e){toast(e.message,'err')}
+      }),0);
+    });
+  });
+
   // Projekte: Gutschrift (auch auf user-facing Seite)
   document.querySelectorAll('[data-action="proj-gutschrift"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
@@ -2734,7 +2774,11 @@ function bindEvents(){
         <div class="form-group"><label class="form-label">Auftragsnummer</label><input class="form-input" id="pe-nr" value="${esc(d.nr||'')}" placeholder="optional"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">Anzahl MA</label><input type="number" class="form-input" id="pe-ma" value="${d.ma||2}" min="1" max="10"></div>
-          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit (Stunden)</label><input type="number" class="form-input" id="pe-arbstd" value="${((parseInt(d.arbmin)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 3.5"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">× Anzahl MA = MA-Stunden gesamt</div></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit an Ort (Std.)</label><input type="number" class="form-input" id="pe-arbstd" value="${((parseInt(d.arbmin)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 3.5"><div style="font-size:11px;color:var(--text-muted);margin-top:2px">Dezimal: 2.5 = 2h 30min</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">🚗 Fahrzeit Hin (Std.)</label><input type="number" class="form-input" id="pe-fahrthin" value="${((parseInt(d.fahrthin)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 0.5"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">🏠 Fahrzeit Rück. (Std.)</label><input type="number" class="form-input" id="pe-fahrtzurueck" value="${((parseInt(d.fahrtzurueck)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 0.5"></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">km Hinfahrt</label><input type="number" class="form-input" id="pe-kmhin" value="${d.kmhin||0}" min="0" step="0.1"></div>
@@ -2759,6 +2803,8 @@ function bindEvents(){
             anzahl_mitarbeiter:parseInt(document.getElementById('pe-ma')?.value)||2,
             arbeitszeit_min:arbMin,
             arbeitszeit_manuell_min:0,
+            fahrzeit_hin_min:Math.round((parseFloat(document.getElementById('pe-fahrthin')?.value)||0)*60),
+            fahrzeit_zurueck_min:Math.round((parseFloat(document.getElementById('pe-fahrtzurueck')?.value)||0)*60),
             km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
             km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
             besonderheiten:document.getElementById('pe-bez')?.value||null,
@@ -3522,7 +3568,11 @@ function bindAdminEvents(){
         <div class="form-group"><label class="form-label">Auftragsnummer</label><input class="form-input" id="pe-nr" value="${esc(d.nr||'')}" placeholder="optional"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">Anzahl MA</label><input type="number" class="form-input" id="pe-ma" value="${d.ma||2}" min="1" max="10"></div>
-          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit (Stunden)</label><input type="number" class="form-input" id="pe-arbstd" value="${((parseInt(d.arbmin)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 3.5"><div style="font-size:11px;color:var(--text-muted);margin-top:3px">× Anzahl MA = MA-Stunden gesamt</div></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Arbeitszeit an Ort (Std.)</label><input type="number" class="form-input" id="pe-arbstd" value="${((parseInt(d.arbmin)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 3.5"><div style="font-size:11px;color:var(--text-muted);margin-top:2px">Dezimal: 2.5 = 2h 30min</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">🚗 Fahrzeit Hin (Std.)</label><input type="number" class="form-input" id="pe-fahrthin" value="${((parseInt(d.fahrthin)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 0.5"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">🏠 Fahrzeit Rück. (Std.)</label><input type="number" class="form-input" id="pe-fahrtzurueck" value="${((parseInt(d.fahrtzurueck)||0)/60).toFixed(2)}" min="0" step="0.25" placeholder="z.B. 0.5"></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">km Hinfahrt</label><input type="number" class="form-input" id="pe-kmhin" value="${d.kmhin||0}" min="0" step="0.1"></div>
@@ -3547,6 +3597,8 @@ function bindAdminEvents(){
             anzahl_mitarbeiter:parseInt(document.getElementById('pe-ma')?.value)||2,
             arbeitszeit_min:arbMin,
             arbeitszeit_manuell_min:0,
+            fahrzeit_hin_min:Math.round((parseFloat(document.getElementById('pe-fahrthin')?.value)||0)*60),
+            fahrzeit_zurueck_min:Math.round((parseFloat(document.getElementById('pe-fahrtzurueck')?.value)||0)*60),
             km_hin:parseFloat(document.getElementById('pe-kmhin')?.value)||0,
             km_zurueck:parseFloat(document.getElementById('pe-kmzurueck')?.value)||0,
             besonderheiten:document.getElementById('pe-bez')?.value||null,
