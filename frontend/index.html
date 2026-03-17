@@ -1395,7 +1395,7 @@ async function pageProjekte(){
   let recent=[];
   try{recent=await apiGet('/api/projekte?limit=10')}catch(e){}
 
-  const agOpts=auftraggeber.map(ag=>`<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
+  const agOpts='<option value="">– Auftraggeber wählen –</option>'+auftraggeber.map(ag=>`<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
   const statusLbl={fahrt:'Fahrt',arbeit:'Arbeit',rueckfahrt:'Rückfahrt',abgeschlossen:'Abgeschlossen'};
   const recentRows=recent.map(p=>{
     const km=(parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)).toFixed(1);
@@ -1445,61 +1445,84 @@ async function pageProjekte(){
 
 // ── ADMIN TAB: PROJEKTE ───────────────────────────────────────────────────────
 async function renderTabProjekte(){
-  let auswertung=[],agList=[],maList=[];
+  let auswertung=[],agList=[],fzEinst={diesel_preis:1.80,verbrauch_100km:8,maut_pro_km:0,abnuetzung_pro_km:0.15};
   const _h=new Date(),_mo=new Date(_h);_mo.setDate(1);
   const von=pageData.projVon||_mo.toISOString().split('T')[0];
   const bis=pageData.projBis||_h.toISOString().split('T')[0];
   const projAg=pageData.projAg||'';
-  try{[auswertung,agList,maList]=await Promise.all([
+  try{[auswertung,agList,fzEinst]=await Promise.all([
     apiGet(`/api/projekte/auswertung?von=${von}&bis=${bis}${projAg?'&auftraggeber_id='+projAg:''}`),
     apiGet('/api/projekte/auftraggeber'),
-    apiGet('/api/mitarbeiter')
+    apiGet('/api/projekte/einstellungen')
   ]);}catch(e){}
+
+  // Kosten pro km berechnen
+  const kostenProKm=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
 
   // Summen pro Auftraggeber
   const agSummen={};
   for(const p of auswertung){
     const ak=p.auftraggeber_name||'Unbekannt';
-    if(!agSummen[ak])agSummen[ak]={name:ak,count:0,arbeit:0,fahrt:0,km:0,mwNetto:0,gutschrift:0};
+    const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
+    const fk=km*kostenProKm;
+    const anzahl=parseInt(p.anzahl_mitarbeiter||1);
+    const gutschrift=parseFloat(p.gutschrift_betrag||0);
+    const maStd=((p.arbeitszeit_min||0)/60)*anzahl;
+    if(!agSummen[ak])agSummen[ak]={name:ak,count:0,arbeit:0,fahrt:0,km:0,fahrtkosten:0,gutschrift:0,maStd:0};
     agSummen[ak].count++;
     agSummen[ak].arbeit+=parseInt(p.arbeitszeit_min||0);
-    agSummen[ak].fahrt+=parseInt((p.fahrzeit_hin_min||0))+(parseInt(p.fahrzeit_zurueck_min||0));
-    agSummen[ak].km+=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
-    agSummen[ak].mwNetto+=parseFloat(p.montagewert_netto||0);
-    agSummen[ak].gutschrift+=parseFloat(p.gutschrift_betrag||0);
+    agSummen[ak].fahrt+=parseInt(p.fahrzeit_hin_min||0)+parseInt(p.fahrzeit_zurueck_min||0);
+    agSummen[ak].km+=km;
+    agSummen[ak].fahrtkosten+=fk;
+    agSummen[ak].gutschrift+=gutschrift;
+    agSummen[ak].maStd+=maStd;
   }
 
-  const sumHTML=Object.values(agSummen).map(s=>`
-    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px">
+  const sumHTML=Object.values(agSummen).map(s=>{
+    const netto=s.gutschrift-s.fahrtkosten;
+    const eurStd=s.maStd>0&&s.gutschrift>0?netto/s.maStd:null;
+    return`<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px">
       <div style="font-weight:700;font-size:14px">${esc(s.name)}</div>
       <div style="display:flex;gap:12px;margin-top:4px;font-size:13px;flex-wrap:wrap">
         <span>${s.count} Aufträge</span>
         <span>Arbeit: <b>${fMin(s.arbeit)}</b></span>
-        <span>Fahrt: <b>${fMin(s.fahrt)}</b></span>
+        <span>MA-Std: <b>${s.maStd.toFixed(1)}h</b></span>
         ${s.km>0?`<span>km: <b>${s.km.toFixed(1)}</b></span>`:''}
-        ${s.mwNetto>0?`<span>Montagewert: <b>€${s.mwNetto.toFixed(2)}</b></span>`:''}
-        ${s.gutschrift>0?`<span style="color:#16a34a;font-weight:700">Gutschrift: €${s.gutschrift.toFixed(2)}</span>`:''}
+        ${s.fahrtkosten>0?`<span style="color:#dc2626">Fahrtk.: <b>-€${s.fahrtkosten.toFixed(2)}</b></span>`:''}
+        ${s.gutschrift>0?`<span style="color:#16a34a">Gutschrift: <b>€${s.gutschrift.toFixed(2)}</b></span>`:''}
+        ${s.gutschrift>0?`<span style="color:${netto>=0?'#16a34a':'#dc2626'}">Netto: <b>€${netto.toFixed(2)}</b></span>`:''}
+        ${eurStd!==null?`<span style="color:#7c3aed;font-weight:700">€/Std/MA: <b>${eurStd.toFixed(2)}</b></span>`:''}
       </div>
-    </div>`).join('');
+    </div>`;}).join('');
 
   const statusBadge=s=>({fahrt:'<span class="badge badge-blue">Fahrt</span>',arbeit:'<span class="badge badge-green">Arbeit</span>',rueckfahrt:'<span class="badge" style="background:#fef3c7;color:#92400e">Rückfahrt</span>',abgeschlossen:'<span class="badge badge-gray">Fertig</span>'}[s]||s);
 
-  const rows=auswertung.map(p=>`<tr>
-    <td>${fDate(p.erstellt_am)}</td>
-    <td style="font-size:13px">${esc(p.mitarbeiter_name||'–')}</td>
-    <td>${esc(p.auftraggeber_name||'–')}</td>
-    <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
-    <td>${statusBadge(p.status)}</td>
-    <td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
-    <td>${p.fahrzeit_hin_min||p.fahrzeit_zurueck_min?fMin((p.fahrzeit_hin_min||0)+(p.fahrzeit_zurueck_min||0)):'–'}</td>
-    <td>${parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)>0?(parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0)).toFixed(1)+' km':'–'}</td>
-    <td>${p.montagewert_netto?`€${parseFloat(p.montagewert_netto).toFixed(2)}`:'–'}</td>
-    <td>${p.gutschrift_betrag?`<span style="color:#16a34a;font-weight:700">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`:'–'}</td>
-    <td><div style="display:flex;gap:4px">
-      <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" title="Gutschrift erfassen">💰</button>
-      ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
-    </div></td>
-  </tr>`).join('');
+  const rows=auswertung.map(p=>{
+    const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
+    const fk=km*kostenProKm;
+    const anzahl=parseInt(p.anzahl_mitarbeiter||1);
+    const gutschrift=parseFloat(p.gutschrift_betrag||0);
+    const arbeitStd=(p.arbeitszeit_min||0)/60;
+    const maStd=arbeitStd*anzahl;
+    const netto=gutschrift-fk;
+    const eurStd=maStd>0&&gutschrift>0?netto/maStd:null;
+    return`<tr>
+      <td>${fDate(p.erstellt_am)}</td>
+      <td>${esc(p.auftraggeber_name||'–')}</td>
+      <td style="font-size:12px">${esc(p.auftragsnummer||'–')}</td>
+      <td style="text-align:center;font-weight:700">${anzahl}</td>
+      <td>${statusBadge(p.status)}</td>
+      <td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
+      <td>${p.fahrzeit_hin_min||p.fahrzeit_zurueck_min?fMin((p.fahrzeit_hin_min||0)+(p.fahrzeit_zurueck_min||0)):'–'}</td>
+      <td>${km>0?km.toFixed(1)+' km':'–'}</td>
+      <td>${fk>0?`<span style="color:#dc2626">-€${fk.toFixed(2)}</span>`:'–'}</td>
+      <td>${gutschrift>0?`<span style="color:#16a34a;font-weight:700">€${gutschrift.toFixed(2)}</span>`:'–'}</td>
+      <td>${eurStd!==null?`<span style="color:#7c3aed;font-weight:700">€${eurStd.toFixed(2)}</span>`:'–'}</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="${p.gutschrift_betrag||''}" data-mw="${p.montagewert_netto||''}" data-gd="${p.gutschrift_datum||''}" data-gnr="${esc(p.gutschrift_nummer||'')}" title="Gutschrift erfassen">💰</button>
+        ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
+      </div></td>
+    </tr>`;}).join('');
 
   // Auftraggeber-Verwaltung
   const agRows=agList.map(ag=>`<tr>
@@ -1514,6 +1537,7 @@ async function renderTabProjekte(){
   </tr>`).join('');
 
   const agOpts=agList.map(ag=>`<option value="${ag.id}" ${projAg==ag.id?'selected':''}>${esc(ag.name)}</option>`).join('');
+  const btnSt=(c,dis)=>`style="background:${dis?'#9ca3af':c};color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:${dis?'not-allowed':'pointer'}"`;
 
   return`<div class="admin-wrap">
     <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
@@ -1526,22 +1550,38 @@ async function renderTabProjekte(){
           <option value="">Alle Auftraggeber</option>${agOpts}
         </select>
       </div>
-      <button id="btn-proj-laden" style="background:#1e40af;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer">🔍 Laden</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="btn-proj-laden" style="background:#1e40af;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 16px">🔍 Laden</button>
+        <button id="btn-proj-csv" ${btnSt('#16a34a',!auswertung.length)} ${!auswertung.length?'disabled':''}>📥 Excel</button>
+        <button id="btn-proj-pdf" ${btnSt('#6b7280',!auswertung.length)} ${!auswertung.length?'disabled':''}>🖨️ PDF</button>
+      </div>
     </div></div>
     ${sumHTML?`<div style="margin-bottom:12px">${sumHTML}</div>`:''}
     <div class="card" style="overflow:auto;margin-bottom:20px">
       <table class="tbl"><thead><tr>
-        <th>Datum</th><th>MA</th><th>Auftraggeber</th><th>Nr.</th><th>Status</th>
-        <th>Arbeitszeit</th><th>Fahrzeit</th><th>km</th><th>Montagewert</th><th>Gutschrift</th><th></th>
+        <th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>MA</th><th>Status</th>
+        <th>Arbeitszeit</th><th>Fahrzeit</th><th>km</th><th>Fahrtkosten</th><th>Gutschrift</th><th>€/Std/MA</th><th></th>
       </tr></thead>
-      <tbody>${rows||`<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</td></tr>`}</tbody>
+      <tbody>${rows||`<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</td></tr>`}</tbody>
       </table>
     </div>
     <div style="font-weight:700;margin-bottom:8px">Auftraggeber verwalten</div>
     <button class="btn btn-primary btn-sm" id="btn-new-ag" style="margin-bottom:10px">+ Neuer Auftraggeber</button>
-    <div class="card" style="overflow:auto"><table class="tbl"><thead><tr>
+    <div class="card" style="overflow:auto;margin-bottom:20px"><table class="tbl"><thead><tr>
       <th>Name</th><th>Gutschrift %</th><th>Stundensatz</th><th>Notiz</th><th></th>
     </tr></thead><tbody>${agRows}</tbody></table></div>
+    ${user?.ist_admin?`
+    <div style="font-weight:700;margin-bottom:8px">⚙️ Fahrzeugkosten-Einstellungen</div>
+    <div class="card" style="margin-bottom:20px"><div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="margin:0"><label class="form-label">Dieselpreis (€/L)</label><input type="number" class="form-input" id="fz-diesel" step="0.001" value="${parseFloat(fzEinst.diesel_preis||1.80).toFixed(3)}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Verbrauch (L/100km)</label><input type="number" class="form-input" id="fz-verbrauch" step="0.1" value="${parseFloat(fzEinst.verbrauch_100km||8).toFixed(1)}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Maut (€/km)</label><input type="number" class="form-input" id="fz-maut" step="0.001" value="${parseFloat(fzEinst.maut_pro_km||0).toFixed(3)}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Abnützung (€/km)</label><input type="number" class="form-input" id="fz-abnutzung" step="0.001" value="${parseFloat(fzEinst.abnuetzung_pro_km||0.15).toFixed(3)}"></div>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Aktuell: <b>€${kostenProKm.toFixed(3)}/km</b> (Diesel+Maut+Abnützung)</div>
+      <button class="btn btn-primary" id="btn-fz-save" style="margin-top:12px">💾 Einstellungen speichern</button>
+    </div></div>`:''}
   </div>`;
 }
 
@@ -1865,6 +1905,68 @@ async function renderTabKalender(){
       <div id="kal-sync-result" style="margin-top:10px;font-size:13px"></div>
     </div></div>
   </div>`;
+}
+
+function exportProjekteCSV(daten, von, bis, fzEinst){
+  const kpk=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
+  const hdr=['Datum','Auftraggeber','Auftragsnummer','Anzahl MA','Status','Arbeitszeit (Min)','MA-Stunden','Fahrzeit (Min)','km gesamt','Fahrtkosten (€)','Gutschrift (€)','Netto (€)','€/Std/MA','Besonderheiten'];
+  const rows=daten.map(p=>{
+    const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
+    const fk=km*kpk;
+    const anzahl=parseInt(p.anzahl_mitarbeiter||1);
+    const arbeitStd=(p.arbeitszeit_min||0)/60;
+    const maStd=arbeitStd*anzahl;
+    const gut=parseFloat(p.gutschrift_betrag||0);
+    const netto=gut-fk;
+    const eurStd=maStd>0&&gut>0?(netto/maStd).toFixed(2):'';
+    return[fDate(p.erstellt_am),p.auftraggeber_name||'',p.auftragsnummer||'',anzahl,p.status||'',
+      p.arbeitszeit_min||0,maStd.toFixed(2),(p.fahrzeit_hin_min||0)+(p.fahrzeit_zurueck_min||0),
+      km.toFixed(1),fk.toFixed(2),gut.toFixed(2),netto.toFixed(2),eurStd,p.besonderheiten||''
+    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const blob=new Blob(['\uFEFF'+hdr.join(',')+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`Projekte_${von}_${bis}.csv`;a.click();
+}
+
+function exportProjektePDF(daten, von, bis, fzEinst){
+  const kpk=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
+  // Summen
+  const sum={count:0,arbeit:0,km:0,fk:0,gut:0,maStd:0};
+  daten.forEach(p=>{
+    const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
+    const fk=km*kpk;
+    const anzahl=parseInt(p.anzahl_mitarbeiter||1);
+    sum.count++;sum.arbeit+=parseInt(p.arbeitszeit_min||0);sum.km+=km;sum.fk+=fk;
+    sum.gut+=parseFloat(p.gutschrift_betrag||0);sum.maStd+=(p.arbeitszeit_min||0)/60*anzahl;
+  });
+  const rows=daten.map(p=>{
+    const km=parseFloat(p.km_hin||0)+parseFloat(p.km_zurueck||0);
+    const fk=km*kpk;const anzahl=parseInt(p.anzahl_mitarbeiter||1);
+    const gut=parseFloat(p.gutschrift_betrag||0);const maStd=(p.arbeitszeit_min||0)/60*anzahl;
+    const eurStd=maStd>0&&gut>0?((gut-fk)/maStd).toFixed(2):'–';
+    return`<tr><td>${fDate(p.erstellt_am)}</td><td>${esc(p.auftraggeber_name||'–')}</td><td>${esc(p.auftragsnummer||'–')}</td>
+      <td style="text-align:center">${anzahl}</td><td>${p.arbeitszeit_min?fMin(p.arbeitszeit_min):'–'}</td>
+      <td>${km>0?km.toFixed(1)+' km':'–'}</td><td>${fk>0?'-€'+fk.toFixed(2):'–'}</td>
+      <td>${gut>0?'€'+gut.toFixed(2):'–'}</td><td>${eurStd}</td></tr>`;
+  }).join('');
+  const netto=sum.gut-sum.fk;
+  const eurStdGes=sum.maStd>0&&sum.gut>0?(netto/sum.maStd).toFixed(2):'–';
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Projekte ${von}–${bis}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}h2{font-size:16px}
+  table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}
+  th{background:#f3f4f6}tfoot td{font-weight:700;background:#f9fafb}
+  .summary{margin-bottom:16px;background:#f9fafb;padding:10px;border-radius:6px}
+  @media print{button{display:none}}</style></head><body>
+  <h2>🔨 Projekte-Auswertung: ${von} – ${bis}</h2>
+  <div class="summary">Aufträge: <b>${sum.count}</b> · Arbeitszeit: <b>${fMin(sum.arbeit)}</b> · MA-Stunden: <b>${sum.maStd.toFixed(1)}h</b> · km: <b>${sum.km.toFixed(1)}</b><br>
+  Fahrtkosten: <b style="color:#dc2626">-€${sum.fk.toFixed(2)}</b> · Gutschrift: <b style="color:#16a34a">€${sum.gut.toFixed(2)}</b> · Netto: <b style="color:${netto>=0?'#16a34a':'#dc2626'}">€${netto.toFixed(2)}</b> · €/Std/MA: <b style="color:#7c3aed">${eurStdGes}</b></div>
+  <table><thead><tr><th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>MA</th><th>Arbeit</th><th>km</th><th>Fahrtkosten</th><th>Gutschrift</th><th>€/Std/MA</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+  <div style="margin-top:20px;font-size:10px;color:#9ca3af">Fahrtkosten-Basis: €${kpk.toFixed(3)}/km (Diesel+Maut+Abnützung) · Erstellt: ${new Date().toLocaleString('de-AT')}</div>
+  <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Drucken</button>
+  </body></html>`;
+  const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();}
 }
 
 function exportZeitCSV(daten, von, bis){
@@ -2749,11 +2851,11 @@ function bindAdminEvents(){
       showModal(`
         <button class="modal-close" id="modal-close">×</button>
         <div class="modal-title">💰 Gutschrift erfassen</div>
-        <div class="form-group"><label class="form-label">Montagewert netto (€)</label><input type="number" class="form-input" id="gs-mw" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label class="form-label">Gutschrift-Betrag (€)</label><input type="number" class="form-input" id="gs-betrag" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label class="form-label">Gutschrift-Datum</label><input type="date" class="form-input" id="gs-datum"></div>
-        <div class="form-group"><label class="form-label">Gutschrift-Nummer</label><input type="text" class="form-input" id="gs-nummer" placeholder="GS-2025-001"></div>
-        <button class="btn btn-primary" id="btn-gs-save" data-id="${b.dataset.id}">Speichern</button>`);
+        <div class="form-group"><label class="form-label">Montagewert netto (€)</label><input type="number" class="form-input" id="gs-mw" step="0.01" placeholder="0.00" value="${b.dataset.mw||''}"></div>
+        <div class="form-group"><label class="form-label">Gutschrift-Betrag (€) <span style="color:#dc2626">*</span></label><input type="number" class="form-input" id="gs-betrag" step="0.01" placeholder="0.00" value="${b.dataset.gs||''}"></div>
+        <div class="form-group"><label class="form-label">Gutschrift-Datum</label><input type="date" class="form-input" id="gs-datum" value="${b.dataset.gd||''}"></div>
+        <div class="form-group"><label class="form-label">Gutschrift-Nummer</label><input type="text" class="form-input" id="gs-nummer" placeholder="GS-2025-001" value="${b.dataset.gnr||''}"></div>
+        <button class="btn btn-primary" id="btn-gs-save" data-id="${b.dataset.id}">💾 Speichern</button>`);
       setTimeout(()=>o('btn-gs-save','click',async()=>{
         const id=document.getElementById('btn-gs-save')?.dataset.id;
         try{await apiPut(`/api/projekte/${id}/gutschrift`,{
@@ -2767,6 +2869,49 @@ function bindAdminEvents(){
       }),0);
     });
   });
+
+  // Projekte: Fahrzeugkosten speichern
+  const fzSave=document.getElementById('btn-fz-save');
+  if(fzSave&&!fzSave._bound){fzSave._bound=true;fzSave.addEventListener('click',async()=>{
+    try{await apiPut('/api/projekte/einstellungen',{
+      diesel_preis:document.getElementById('fz-diesel')?.value||1.80,
+      verbrauch_100km:document.getElementById('fz-verbrauch')?.value||8,
+      maut_pro_km:document.getElementById('fz-maut')?.value||0,
+      abnuetzung_pro_km:document.getElementById('fz-abnutzung')?.value||0.15
+    });toast('✅ Einstellungen gespeichert','ok');
+    const c=document.getElementById('admin-tab-content');if(c){c.innerHTML=await renderTabProjekte();bindAdminEvents()}
+    }catch(e){toast(e.message,'err')}
+  })}
+
+  // Projekte: CSV Export
+  const pCsv=document.getElementById('btn-proj-csv');
+  if(pCsv&&!pCsv._bound){pCsv._bound=true;pCsv.addEventListener('click',async()=>{
+    try{
+      const von=document.getElementById('proj-von')?.value||'';
+      const bis=document.getElementById('proj-bis')?.value||'';
+      const ag=document.getElementById('proj-ag-filter')?.value||'';
+      const [d,fz]=await Promise.all([
+        apiGet(`/api/projekte/auswertung?von=${von}&bis=${bis}${ag?'&auftraggeber_id='+ag:''}`),
+        apiGet('/api/projekte/einstellungen')
+      ]);
+      exportProjekteCSV(d,von,bis,fz);
+    }catch(e){toast('Fehler','err')}
+  })}
+
+  // Projekte: PDF Export
+  const pPdf=document.getElementById('btn-proj-pdf');
+  if(pPdf&&!pPdf._bound){pPdf._bound=true;pPdf.addEventListener('click',async()=>{
+    try{
+      const von=document.getElementById('proj-von')?.value||'';
+      const bis=document.getElementById('proj-bis')?.value||'';
+      const ag=document.getElementById('proj-ag-filter')?.value||'';
+      const [d,fz]=await Promise.all([
+        apiGet(`/api/projekte/auswertung?von=${von}&bis=${bis}${ag?'&auftraggeber_id='+ag:''}`),
+        apiGet('/api/projekte/einstellungen')
+      ]);
+      exportProjektePDF(d,von,bis,fz);
+    }catch(e){toast('Fehler','err')}
+  })}
 
   // Projekte: Löschen
   document.querySelectorAll('[data-action="proj-delete"]').forEach(b=>{

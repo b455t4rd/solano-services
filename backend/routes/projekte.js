@@ -58,6 +58,30 @@ router.delete('/auftraggeber/:id', adminMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Fahrzeugkosten-Einstellungen (vor /:id !) ─────────────────────────────────
+
+router.get('/einstellungen', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM fahrzeug_einstellungen WHERE id=1');
+    res.json(r.rows[0] || { diesel_preis: 1.80, verbrauch_100km: 8, maut_pro_km: 0, abnuetzung_pro_km: 0.15 });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/einstellungen', adminMiddleware, async (req, res) => {
+  const { diesel_preis, verbrauch_100km, maut_pro_km, abnuetzung_pro_km } = req.body;
+  try {
+    const r = await pool.query(
+      `INSERT INTO fahrzeug_einstellungen (id, diesel_preis, verbrauch_100km, maut_pro_km, abnuetzung_pro_km, aktualisiert_am)
+       VALUES (1, $1, $2, $3, $4, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         diesel_preis=$1, verbrauch_100km=$2, maut_pro_km=$3, abnuetzung_pro_km=$4, aktualisiert_am=NOW()
+       RETURNING *`,
+      [diesel_preis || 1.80, verbrauch_100km || 8, maut_pro_km || 0, abnuetzung_pro_km || 0.15]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Auswertung (vor /:id !) ────────────────────────────────────────────────────
 
 router.get('/auswertung', managerMiddleware, async (req, res) => {
