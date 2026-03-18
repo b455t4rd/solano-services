@@ -1608,9 +1608,9 @@ async function pageProjekte(){
     </div></div>
     ${geplant.length>0?`
       <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <button data-action="proj-kal-abo" style="background:#7c3aed;color:white;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">📅 Abo</button>
         <span style="font-weight:700">📋 Geplante Aufträge</span>
         <span style="font-size:12px;color:var(--text-muted)">· Drag &amp; Drop</span>
+        <button data-action="proj-kal-abo" style="margin-left:auto;background:#7c3aed;color:white;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">📅 Abo</button>
       </div>
       <div id="geplant-list" style="margin-bottom:16px">
         ${geplant.map(p=>{
@@ -1627,8 +1627,8 @@ async function pageProjekte(){
               ${p.auftragsnummer?`<div style="font-size:12px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0">
-              ${navStr?`<button onclick="openNav(null,null,'${esc(navStr)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
               ${p.geplant_datum?`<button class="tbl-btn" data-action="proj-ical" data-datum="${p.geplant_datum}" data-title="${esc((p.auftraggeber_name||'Auftrag')+(p.kundenname?' – '+p.kundenname:''))}" data-adresse="${esc(navStr)}" title="In Kalender eintragen">📅</button>`:''}
+              ${navStr?`<button onclick="openNav(null,null,'${esc(navStr)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
               ${isManager()?`<button class="tbl-btn" data-action="proj-edit-geplant" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-kundenname="${esc(p.kundenname||'')}" data-strasse="${esc(p.adresse_strasse||'')}" data-plz="${esc(p.adresse_plz||'')}" data-ort="${esc(p.adresse_ort||'')}" data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum||''}" data-anzahl="${p.anzahl_mitarbeiter||2}" data-notiz="${esc(p.notiz||'')}" title="Bearbeiten">✏️</button>`:''}
               <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
               ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
