@@ -226,20 +226,55 @@ router.get('/ical', async (req, res) => {
       'METHOD:PUBLISH',
       'X-WR-CALNAME:Solano Aufträge',
       'X-WR-TIMEZONE:Europe/Vienna',
+      // VTIMEZONE für Europe/Vienna (CET/CEST)
+      'BEGIN:VTIMEZONE',
+      'TZID:Europe/Vienna',
+      'BEGIN:STANDARD',
+      'DTSTART:19701025T030000',
+      'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10',
+      'TZOFFSETFROM:+0200',
+      'TZOFFSETTO:+0100',
+      'TZNAME:CET',
+      'END:STANDARD',
+      'BEGIN:DAYLIGHT',
+      'DTSTART:19700329T020000',
+      'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3',
+      'TZOFFSETFROM:+0100',
+      'TZOFFSETTO:+0200',
+      'TZNAME:CEST',
+      'END:DAYLIGHT',
+      'END:VTIMEZONE',
     ];
     for (const p of r.rows) {
       const dt = p.geplant_datum.toISOString().split('T')[0].replace(/-/g, '');
-      // DTEND = Folgetag (ICS-Standard für Ganztages-Events)
-      const dtEnd = new Date(p.geplant_datum);
-      dtEnd.setDate(dtEnd.getDate() + 1);
-      const dtEndStr = dtEnd.toISOString().split('T')[0].replace(/-/g, '');
       const title = [p.auftraggeber_name, p.kundenname].filter(Boolean).join(' – ');
       const adresse = [p.adresse_strasse, [p.adresse_plz, p.adresse_ort].filter(Boolean).join(' '), p.adresse_land].filter(Boolean).join(', ');
       const desc = [p.auftragsnummer ? 'Nr. ' + p.auftragsnummer : null, p.anzahl_mitarbeiter ? p.anzahl_mitarbeiter + ' MA' : null, p.notiz].filter(Boolean).join(' · ');
       lines.push('BEGIN:VEVENT');
       lines.push(`UID:solano-${p.id}@solano`);
-      lines.push(`DTSTART;VALUE=DATE:${dt}`);
-      lines.push(`DTEND;VALUE=DATE:${dtEndStr}`);
+      if (p.geplant_uhrzeit) {
+        // Termin mit Uhrzeit
+        const [hh, mm] = p.geplant_uhrzeit.slice(0, 5).split(':');
+        const startSec = parseInt(hh) * 3600 + parseInt(mm) * 60;
+        const durMin = parseInt(p.geplant_dauer_min) || 120;
+        const endSec = startSec + durMin * 60;
+        const endHh = String(Math.floor(endSec / 3600) % 24).padStart(2, '0');
+        const endMm = String(Math.floor((endSec % 3600) / 60)).padStart(2, '0');
+        // Falls Termin über Mitternacht geht: Folgetag
+        const endDt = endSec >= 86400 ? (() => {
+          const d = new Date(p.geplant_datum); d.setDate(d.getDate() + 1);
+          return d.toISOString().split('T')[0].replace(/-/g, '');
+        })() : dt;
+        lines.push(`DTSTART;TZID=Europe/Vienna:${dt}T${hh}${mm}00`);
+        lines.push(`DTEND;TZID=Europe/Vienna:${endDt}T${endHh}${endMm}00`);
+      } else {
+        // Ganztags-Event
+        const dtEnd = new Date(p.geplant_datum);
+        dtEnd.setDate(dtEnd.getDate() + 1);
+        const dtEndStr = dtEnd.toISOString().split('T')[0].replace(/-/g, '');
+        lines.push(`DTSTART;VALUE=DATE:${dt}`);
+        lines.push(`DTEND;VALUE=DATE:${dtEndStr}`);
+      }
       lines.push(`SUMMARY:${(title||'Auftrag').replace(/\n/g,' ')}`);
       if (adresse) lines.push(`LOCATION:${adresse.replace(/\n/g,' ')}`);
       if (desc) lines.push(`DESCRIPTION:${desc.replace(/\n/g,' ')}`);
@@ -427,7 +462,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
           auftraggeber_id, auftraggeber_name, kundenname, adresse,
           adresse_strasse, adresse_plz, adresse_ort, adresse_land,
           rapport_erforderlich, rapport_beschreibung,
-          geplant_datum, ma_typen, sort_order, fahrtkosten_pauschale } = req.body;
+          geplant_datum, geplant_uhrzeit, geplant_dauer_min,
+          ma_typen, sort_order, fahrtkosten_pauschale } = req.body;
   try {
     const r = await pool.query(
       `UPDATE projekt_auftraege
@@ -449,8 +485,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
            arbeitszeit_min=COALESCE($21, arbeitszeit_min),
            fahrzeit_hin_min=COALESCE($22, fahrzeit_hin_min),
            fahrzeit_zurueck_min=COALESCE($23, fahrzeit_zurueck_min),
-           fahrtkosten_pauschale=COALESCE($24, fahrtkosten_pauschale)
-       WHERE id=$25 RETURNING *`,
+           fahrtkosten_pauschale=COALESCE($24, fahrtkosten_pauschale),
+           geplant_uhrzeit=COALESCE($25, geplant_uhrzeit),
+           geplant_dauer_min=COALESCE($26, geplant_dauer_min)
+       WHERE id=$27 RETURNING *`,
       [notiz||null, besonderheiten||null, anzahl_mitarbeiter||2, auftragsnummer||null,
        km_hin!=null?km_hin:null, km_zurueck!=null?km_zurueck:null,
        arbeitszeit_manuell_min!=null?arbeitszeit_manuell_min:null,
@@ -466,6 +504,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
        fahrzeit_hin_min!=null?fahrzeit_hin_min:null,
        fahrzeit_zurueck_min!=null?fahrzeit_zurueck_min:null,
        fahrtkosten_pauschale!=null?parseFloat(fahrtkosten_pauschale):null,
+       geplant_uhrzeit||null,
+       geplant_dauer_min!=null?parseInt(geplant_dauer_min):null,
        req.params.id]
     );
     res.json(r.rows[0]);

@@ -1587,7 +1587,11 @@ async function pageProjekte(){
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label class="form-label">Geplantes Datum (optional)</label>
-        <input type="date" class="form-input" id="proj-geplant-datum">
+        <input type="date" class="form-input" id="proj-geplant-datum" style="margin-bottom:6px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><label style="font-size:12px;color:var(--text-muted)">Uhrzeit (optional)</label><input type="time" class="form-input" id="proj-geplant-uhrzeit"></div>
+          <div><label style="font-size:12px;color:var(--text-muted)">Dauer (Minuten)</label><input type="number" class="form-input" id="proj-geplant-dauer" value="120" min="15" step="15"></div>
+        </div>
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label class="form-label">Anzahl Mitarbeiter</label>
@@ -1620,7 +1624,7 @@ async function pageProjekte(){
           return`<div class="geplant-item" data-id="${p.id}" style="display:flex;align-items:center;background:white;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:6px;gap:10px;touch-action:none">
             <div class="drag-handle-geplant" style="color:#9ca3af;font-size:18px;cursor:grab;flex-shrink:0;padding:0 4px;user-select:none">⠿</div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:3px;min-height:16px">${p.geplant_datum?`📅 ${fDate(p.geplant_datum)}`:''}</div>
+              <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:3px;min-height:16px">${p.geplant_datum?`📅 ${fDate(p.geplant_datum)}${p.geplant_uhrzeit?` ⏰ ${p.geplant_uhrzeit.slice(0,5)}`:''}`  :''}</div>
               <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
               ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
               ${str?`<div style="font-size:12px;color:var(--text-muted)">${esc([str,[plz,ort].filter(Boolean).join(' ')].filter(Boolean).join(', '))}</div>`:''}
@@ -1629,7 +1633,7 @@ async function pageProjekte(){
             <div style="display:flex;gap:5px;flex-shrink:0">
               ${p.geplant_datum?`<button class="tbl-btn" data-action="proj-ical" data-datum="${p.geplant_datum}" data-title="${esc((p.auftraggeber_name||'Auftrag')+(p.kundenname?' – '+p.kundenname:''))}" data-adresse="${esc(navStr)}" title="In Kalender eintragen">📅</button>`:''}
               ${navStr?`<button onclick="openNav(null,null,'${esc(navStr)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
-              ${isManager()?`<button class="tbl-btn" data-action="proj-edit-geplant" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-kundenname="${esc(p.kundenname||'')}" data-strasse="${esc(p.adresse_strasse||'')}" data-plz="${esc(p.adresse_plz||'')}" data-ort="${esc(p.adresse_ort||'')}" data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum||''}" data-anzahl="${p.anzahl_mitarbeiter||2}" data-notiz="${esc(p.notiz||'')}" title="Bearbeiten">✏️</button>`:''}
+              ${isManager()?`<button class="tbl-btn" data-action="proj-edit-geplant" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-kundenname="${esc(p.kundenname||'')}" data-strasse="${esc(p.adresse_strasse||'')}" data-plz="${esc(p.adresse_plz||'')}" data-ort="${esc(p.adresse_ort||'')}" data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum||''}" data-uhrzeit="${p.geplant_uhrzeit?p.geplant_uhrzeit.slice(0,5):''}" data-dauer="${p.geplant_dauer_min||120}" data-anzahl="${p.anzahl_mitarbeiter||2}" data-notiz="${esc(p.notiz||'')}" title="Bearbeiten">✏️</button>`:''}
               <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
               ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
             </div>
@@ -2796,6 +2800,8 @@ function bindEvents(){
       adresse_land:document.getElementById('proj-adresse-land')?.value?.trim()||null,
       notiz:document.getElementById('proj-notiz')?.value?.trim()||null,
       geplant_datum:document.getElementById('proj-geplant-datum')?.value||null,
+      geplant_uhrzeit:document.getElementById('proj-geplant-uhrzeit')?.value||null,
+      geplant_dauer_min:parseInt(document.getElementById('proj-geplant-dauer')?.value)||120,
       ma_typen:getMaTypen()
     };
   }
@@ -2858,6 +2864,10 @@ function bindEvents(){
           <div class="form-group" style="margin:0"><label class="form-label">Geplantes Datum</label><input type="date" class="form-input" id="gpe-datum" value="${d.datum||''}"></div>
           <div class="form-group" style="margin:0"><label class="form-label">Anzahl MA</label><input type="number" class="form-input" id="gpe-anzahl" value="${d.anzahl||2}" min="1" max="10"></div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">⏰ Uhrzeit (optional)</label><input type="time" class="form-input" id="gpe-uhrzeit" value="${d.uhrzeit||''}"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Dauer (Min.)</label><input type="number" class="form-input" id="gpe-dauer" value="${d.dauer||120}" min="15" step="15"></div>
+        </div>
         <div class="form-group"><label class="form-label">Notiz</label><textarea class="form-input" id="gpe-notiz" rows="2">${esc(d.notiz||'')}</textarea></div>
         <button class="btn btn-primary" id="btn-gpe-save" data-id="${d.id}">💾 Speichern</button>`);
       setTimeout(()=>o('btn-gpe-save','click',async()=>{
@@ -2872,6 +2882,8 @@ function bindEvents(){
             adresse_ort:document.getElementById('gpe-ort')?.value||null,
             adresse_land:document.getElementById('gpe-land')?.value||null,
             geplant_datum:document.getElementById('gpe-datum')?.value||null,
+            geplant_uhrzeit:document.getElementById('gpe-uhrzeit')?.value||null,
+            geplant_dauer_min:parseInt(document.getElementById('gpe-dauer')?.value)||120,
             anzahl_mitarbeiter:parseInt(document.getElementById('gpe-anzahl')?.value)||2,
             notiz:document.getElementById('gpe-notiz')?.value?.trim()||null,
           });
