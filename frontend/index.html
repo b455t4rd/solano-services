@@ -1602,8 +1602,8 @@ function startProjektGPS(){
   setGps('','GPS wird aktiviert…');
   projektGpsWatcher=navigator.geolocation.watchPosition(pos=>{
     const acc=Math.round(pos.coords.accuracy||999);
-    // Nur Punkte mit ausreichender Genauigkeit speichern (≤50m)
-    if(acc<=50){
+    // Nur völlig unbrauchbare Fixes verwerfen (>150m), Rest behalten
+    if(acc<=150){
       projektGpsTrack.push({lat:pos.coords.latitude,lng:pos.coords.longitude,ts:new Date().toISOString(),acc});
     }
     const calcKm=calcProjektKm(projektGpsTrack);
@@ -1618,14 +1618,18 @@ function startProjektGPS(){
 function stopProjektGPS(){if(projektGpsWatcher!==null){navigator.geolocation.clearWatch(projektGpsWatcher);projektGpsWatcher=null}}
 function calcProjektKm(track){
   if(!track||track.length<2)return 0;
-  let km=0;
-  // Mindestschwelle 20m pro Segment – verhindert GPS-Rauschen beim Stillstand
-  const MIN_DIST_M=20;
+  let m=0;
+  const MIN_M=15;        // unter 15m → Rauschen im Stillstand ignorieren
+  const MAX_KMH=250;     // über 250 km/h → GPS-Sprung, verwerfen
   for(let i=1;i<track.length;i++){
     const d=haversineDist(track[i-1].lat,track[i-1].lng,track[i].lat,track[i].lng);
-    if(d>=MIN_DIST_M)km+=d;
+    if(d<MIN_M)continue; // Stillstand / Rauschen
+    const dtSec=(new Date(track[i].ts)-new Date(track[i-1].ts))/1000||1;
+    const kmh=d/dtSec*3.6;
+    if(kmh>MAX_KMH)continue; // GPS-Sprung
+    m+=d;
   }
-  return Math.round(km/100)/10; // m → km, auf 0.1 gerundet
+  return Math.round(m/100)/10; // m → km, 1 Dezimalstelle
 }
 
 // ── PROJEKTE PAGE ─────────────────────────────────────────────────────────────
