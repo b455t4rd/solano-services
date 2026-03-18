@@ -207,6 +207,53 @@ router.put('/:id/weiter', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── iCal-Kalender-Feed (token-basiert, kein Session-Cookie nötig) ─────────────
+
+router.get('/ical', async (req, res) => {
+  const token = process.env.ICAL_TOKEN || 'solano-ical-2025';
+  if (req.query.token !== token) return res.status(401).send('Unauthorized');
+  try {
+    const r = await pool.query(
+      `SELECT * FROM projekt_auftraege
+       WHERE geplant_datum IS NOT NULL
+       ORDER BY geplant_datum ASC`
+    );
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Solano Services//Auftraege//DE',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:Solano Aufträge',
+      'X-WR-TIMEZONE:Europe/Vienna',
+    ];
+    for (const p of r.rows) {
+      const dt = p.geplant_datum.toISOString().split('T')[0].replace(/-/g, '');
+      // DTEND = Folgetag (ICS-Standard für Ganztages-Events)
+      const dtEnd = new Date(p.geplant_datum);
+      dtEnd.setDate(dtEnd.getDate() + 1);
+      const dtEndStr = dtEnd.toISOString().split('T')[0].replace(/-/g, '');
+      const title = [p.auftraggeber_name, p.kundenname].filter(Boolean).join(' – ');
+      const adresse = [p.adresse_strasse, [p.adresse_plz, p.adresse_ort].filter(Boolean).join(' '), p.adresse_land].filter(Boolean).join(', ');
+      const desc = [p.auftragsnummer ? 'Nr. ' + p.auftragsnummer : null, p.anzahl_mitarbeiter ? p.anzahl_mitarbeiter + ' MA' : null, p.notiz].filter(Boolean).join(' · ');
+      lines.push('BEGIN:VEVENT');
+      lines.push(`UID:solano-${p.id}@solano`);
+      lines.push(`DTSTART;VALUE=DATE:${dt}`);
+      lines.push(`DTEND;VALUE=DATE:${dtEndStr}`);
+      lines.push(`SUMMARY:${(title||'Auftrag').replace(/\n/g,' ')}`);
+      if (adresse) lines.push(`LOCATION:${adresse.replace(/\n/g,' ')}`);
+      if (desc) lines.push(`DESCRIPTION:${desc.replace(/\n/g,' ')}`);
+      lines.push('STATUS:CONFIRMED');
+      lines.push('END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    const ics = lines.join('\r\n') + '\r\n';
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="solano-auftraege.ics"');
+    res.send(ics);
+  } catch (err) { res.status(500).send('Fehler: ' + err.message); }
+});
+
 // ── Alle laufenden Aufträge (Admin/Manager) ───────────────────────────────────
 
 router.get('/laufend', managerMiddleware, async (req, res) => {

@@ -1607,7 +1607,9 @@ async function pageProjekte(){
       <button class="btn" id="btn-proj-planen" style="width:100%;padding:13px;font-size:14px;font-weight:600;background:#6b7280;color:white;margin-top:10px">📋 Vorab planen (kein Fahrtstart)</button>
     </div></div>
     ${geplant.length>0?`
-      <div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px">📋 Geplante Aufträge <span style="font-size:12px;color:var(--text-muted);font-weight:400">· Reihenfolge per Drag &amp; Drop ändern</span></div>
+      <div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">📋 Geplante Aufträge <span style="font-size:12px;color:var(--text-muted);font-weight:400">· Reihenfolge per Drag &amp; Drop ändern</span>
+        <button data-action="proj-kal-abo" style="margin-left:auto;background:#7c3aed;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">📅 Kalender-Abo</button>
+      </div>
       <div id="geplant-list" style="margin-bottom:16px">
         ${geplant.map(p=>{
           const str=p.adresse_strasse||p.adresse||'';
@@ -3141,27 +3143,61 @@ function bindEvents(){
     }
   });
 
-  // Geplante Aufträge: In Kalender eintragen (ICS-Download)
+  // Geplante Aufträge: Kalender-Abo Modal
+  document.querySelectorAll('[data-action="proj-kal-abo"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      const token='solano-ical-2025';
+      const base=`${location.protocol}//${location.host}/api/projekte/ical?token=${token}`;
+      const webcal=`webcal://${location.host}/api/projekte/ical?token=${token}`;
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">📅 Kalender abonnieren</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Einmal einrichten – alle Termine werden automatisch aktuell gehalten.</p>
+        <div style="margin-bottom:12px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px"> iPhone / Mac (Apple Kalender)</div>
+          <button onclick="window.location.href='${webcal}'" style="width:100%;background:#7c3aed;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:6px">📱 Jetzt abonnieren (öffnet Kalender)</button>
+          <div style="font-size:11px;color:var(--text-muted)">Öffnet direkt den Kalender-Abo Dialog</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">🤖 Android / Google Calendar</div>
+          <div style="display:flex;gap:6px">
+            <input readonly class="form-input" value="${base}" id="ical-url-input" style="font-size:11px;flex:1">
+            <button onclick="navigator.clipboard?.writeText('${base}');document.getElementById('ical-url-input').select();toast('📋 Kopiert','ok')" style="background:#374151;color:white;border:none;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer">📋</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">In Google Calendar: Weitere Kalender → Per URL hinzufügen</div>
+        </div>`);
+    });
+  });
+
+  // Geplante Aufträge: Einzel-ICS Download (fix: DTEND = Folgetag)
   document.querySelectorAll('[data-action="proj-ical"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
     b.addEventListener('click',()=>{
       const d=b.dataset;
-      const dt=d.datum.replace(/-/g,''); // YYYYMMDD
-      const title=d.title||'Auftrag';
-      const adresse=d.adresse||'';
-      const uid=`solano-${dt}-${Math.random().toString(36).slice(2)}@solano`;
-      const ics=[
+      const dt=d.datum.replace(/-/g,'');
+      // Folgetag berechnen
+      const dtObj=new Date(d.datum+'T00:00:00');
+      dtObj.setDate(dtObj.getDate()+1);
+      const dtEnd=dtObj.toISOString().split('T')[0].replace(/-/g,'');
+      const title=(d.title||'Auftrag').replace(/\n/g,' ');
+      const adresse=(d.adresse||'').replace(/\n/g,' ');
+      const uid=`solano-dl-${dt}-${Math.random().toString(36).slice(2)}@solano`;
+      const lines=[
         'BEGIN:VCALENDAR','VERSION:2.0','CALSCALE:GREGORIAN',
+        'PRODID:-//Solano Services//Auftraege//DE',
         'METHOD:PUBLISH',
         'BEGIN:VEVENT',
         `UID:${uid}`,
         `DTSTART;VALUE=DATE:${dt}`,
-        `DTEND;VALUE=DATE:${dt}`,
+        `DTEND;VALUE=DATE:${dtEnd}`,
         `SUMMARY:${title}`,
         adresse?`LOCATION:${adresse}`:'',
-        `DESCRIPTION:Solano Auftrag – ${title}`,
+        `DESCRIPTION:Solano Auftrag`,
+        'STATUS:CONFIRMED',
         'END:VEVENT','END:VCALENDAR'
-      ].filter(Boolean).join('\r\n');
+      ].filter(Boolean);
+      const ics=lines.join('\r\n')+'\r\n';
       const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
       const url=URL.createObjectURL(blob);
       const a=document.createElement('a');
