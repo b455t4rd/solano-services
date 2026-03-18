@@ -2347,7 +2347,8 @@ async function exportProjektePDF(daten, von, bis, fzEinst){
     const fahrtMin=(parseInt(p.fahrzeit_hin_min)||0)+(parseInt(p.fahrzeit_zurueck_min)||0);
     const gesamtMin=arbMin+fahrtMin;
     const fkp=parseFloat(p.fahrtkosten_pauschale||0);
-    sum.count++;sum.fahrt+=fahrtMin;sum.arbeit+=arbMin;sum.km+=km;sum.fk+=fk;
+    // Worker-Hours akkumulieren (× anzahl), damit GESAMT mit Einzelzeilen übereinstimmt
+    sum.count++;sum.fahrt+=fahrtMin*anzahl;sum.arbeit+=arbMin*anzahl;sum.km+=km;sum.fk+=fk;
     sum.gut+=parseFloat(p.gutschrift_betrag||0);sum.maStd+=(gesamtMin/60)*anzahl;
   });
   const rows=daten.map(p=>{
@@ -2388,8 +2389,8 @@ async function exportProjektePDF(daten, von, bis, fzEinst){
   ${firmaHeader}<h2>Projekte-Auswertung: ${von} – ${bis}</h2>
   <div class="summary">
     Aufträge: <b>${sum.count}</b> &nbsp;·&nbsp;
-    Fahrzeit: <b>${fMin(sum.fahrt)}</b> &nbsp;·&nbsp;
-    Arbeitszeit: <b>${fMin(sum.arbeit)}</b> &nbsp;·&nbsp;
+    Fahrzeit: <b>${(sum.fahrt/60).toFixed(1)}h MA-Std</b> &nbsp;·&nbsp;
+    Arbeitszeit: <b>${(sum.arbeit/60).toFixed(1)}h MA-Std</b> &nbsp;·&nbsp;
     km: <b>${sum.km.toFixed(1)}</b> &nbsp;·&nbsp;
     Fahrtkosten: <b style="color:#dc2626">−€${sum.fk.toFixed(2)}</b><br>
     Gutschrift: <b style="color:#16a34a">€${sum.gut.toFixed(2)}</b> &nbsp;·&nbsp;
@@ -2398,15 +2399,15 @@ async function exportProjektePDF(daten, von, bis, fzEinst){
   </div>
   <table><thead><tr>
     <th>Datum</th><th>Auftraggeber</th><th>Nr.</th><th>MA</th>
-    <th>Fahrzeit</th><th>Arbeitszeit</th><th>Gesamtzeit</th>
+    <th>Fahrzeit (MA-Std)</th><th>Arbeitszeit (MA-Std)</th><th>Gesamt (MA-Std)</th>
     <th>km</th><th>Fahr-K.</th><th>Gutschrift</th><th>€/Std/MA</th>
   </tr></thead>
   <tbody>${rows}</tbody>
   <tfoot><tr>
     <td colspan="4"><b>GESAMT (${sum.count} Aufträge)</b></td>
-    <td><b>${fMin(sum.fahrt)}</b></td>
-    <td><b>${fMin(sum.arbeit)}</b></td>
-    <td><b>${fMin(sum.fahrt+sum.arbeit)}</b></td>
+    <td><b>${(sum.fahrt/60).toFixed(2)}h</b><br><span style="font-size:10px;color:#6b7280">${fMin(sum.fahrt)} MA-Std</span></td>
+    <td><b>${(sum.arbeit/60).toFixed(2)}h</b><br><span style="font-size:10px;color:#6b7280">${fMin(sum.arbeit)} MA-Std</span></td>
+    <td><b>${((sum.fahrt+sum.arbeit)/60).toFixed(2)}h</b><br><span style="font-size:10px;color:#6b7280">${fMin(sum.fahrt+sum.arbeit)} MA-Std</span></td>
     <td><b>${sum.km.toFixed(1)} km</b></td>
     <td style="color:#dc2626"><b>−€${sum.fk.toFixed(2)}</b></td>
     <td style="color:#16a34a"><b>€${sum.gut.toFixed(2)}</b></td>
