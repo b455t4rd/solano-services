@@ -1340,7 +1340,10 @@ async function pageZeit(){
     <div class="card"><div class="card-body" style="padding:0">${heute.map(e=>`
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border)">
         <div><span style="font-weight:600">${{kommen:'🟢 Kommen',gehen:'🔴 Gehen',pause_start:'⏸ Pause Start',pause_ende:'▶️ Pause Ende',urlaub:'🏖️ Urlaub',krankenstand:'🤒 Krankenstand'}[e.typ]||e.typ}</span></div>
-        <div style="color:var(--text-muted);font-size:13px">${fUhr(e.zeitpunkt)}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="color:var(--text-muted);font-size:13px">${fUhr(e.zeitpunkt)}</span>
+          <button class="tbl-btn danger" data-action="zeit-eintrag-loeschen" data-id="${e.id}" title="Eintrag löschen">🗑️</button>
+        </div>
       </div>`).join('')}</div></div>`:''}
   </div>`;
 }
@@ -2683,6 +2686,18 @@ function bindEvents(){
         closeModal();toast(`✅ ${count} Urlaubstag${count===1?'':'e'} eingetragen`,'ok');go('zeit');
       }catch(e){toast(e.message,'err')}
     }),0);
+  });
+
+  // Zeiterfassung: Heutigen Eintrag löschen
+  document.querySelectorAll('[data-action="zeit-eintrag-loeschen"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(!confirm('Eintrag löschen?'))return;
+      try{
+        await apiDelete(`/api/zeit/${b.dataset.id}`);
+        toast('🗑️ Eintrag gelöscht','ok');go('zeit');
+      }catch(e){toast(e.message,'err')}
+    });
   });
 
   // Krankenstand
