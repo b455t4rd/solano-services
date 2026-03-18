@@ -1607,8 +1607,10 @@ async function pageProjekte(){
       <button class="btn" id="btn-proj-planen" style="width:100%;padding:13px;font-size:14px;font-weight:600;background:#6b7280;color:white;margin-top:10px">📋 Vorab planen (kein Fahrtstart)</button>
     </div></div>
     ${geplant.length>0?`
-      <div style="font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">📋 Geplante Aufträge <span style="font-size:12px;color:var(--text-muted);font-weight:400">· Reihenfolge per Drag &amp; Drop ändern</span>
-        <button data-action="proj-kal-abo" style="margin-left:auto;background:#7c3aed;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">📅 Kalender-Abo</button>
+      <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-weight:700">📋 Geplante Aufträge</span>
+        <span style="font-size:12px;color:var(--text-muted)">· Reihenfolge per Drag &amp; Drop ändern</span>
+        <button data-action="proj-kal-abo" style="background:#7c3aed;color:white;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">📅 Kalender-Abo</button>
       </div>
       <div id="geplant-list" style="margin-bottom:16px">
         ${geplant.map(p=>{
@@ -1618,7 +1620,7 @@ async function pageProjekte(){
           return`<div class="geplant-item" data-id="${p.id}" style="display:flex;align-items:center;background:white;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:6px;gap:10px;touch-action:none">
             <div class="drag-handle-geplant" style="color:#9ca3af;font-size:18px;cursor:grab;flex-shrink:0;padding:0 4px;user-select:none">⠿</div>
             <div style="flex:1;min-width:0">
-              ${p.geplant_datum?`<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:3px">📅 ${fDate(p.geplant_datum)}</div>`:''}
+              <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:3px;min-height:16px">${p.geplant_datum?`📅 ${fDate(p.geplant_datum)}`:''}</div>
               <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
               ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
               ${str?`<div style="font-size:12px;color:var(--text-muted)">${esc([str,[plz,ort].filter(Boolean).join(' ')].filter(Boolean).join(', '))}</div>`:''}
