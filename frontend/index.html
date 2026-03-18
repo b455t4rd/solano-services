@@ -754,10 +754,17 @@ async function renderTabAnlagen(){
 }
 
 async function renderTabFirma(){
-  let firma={};
-  try{firma=await apiGet('/api/admin/firma');}catch(e){}
+  let firma={},fzEinst={diesel_preis:1.80,verbrauch_100km:8,maut_pro_km:0,abnuetzung_pro_km:0.15};
+  let maKosten={stundensatz_fa:55,stundensatz_ha:45,stundensatz_gf:35,warnschwelle:55};
+  try{[firma,fzEinst,maKosten]=await Promise.all([
+    apiGet('/api/admin/firma').catch(()=>({})),
+    apiGet('/api/projekte/einstellungen').catch(()=>fzEinst),
+    apiGet('/api/projekte/ma-kosten').catch(()=>maKosten),
+  ]);}catch(e){}
+  const kostenProKm=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
   const logoPreview=firma.logo_base64?`<div style="margin-top:8px"><img src="${firma.logo_base64}" style="max-height:80px;max-width:200px;border-radius:8px;border:1px solid var(--border)"></div>`:'';
-  return`<div class="admin-wrap"><div class="card"><div class="card-body">
+  return`<div class="admin-wrap">
+  <div class="card" style="margin-bottom:12px"><div class="card-body">
     <h3 style="margin-bottom:16px">🏢 Firmendaten</h3>
     <div class="form-group"><label class="form-label">Firmenname</label><input type="text" class="form-input" id="firma-name" value="${esc(firma.name||'')}"></div>
     <div class="form-group"><label class="form-label">Anschrift</label><textarea class="form-input" id="firma-anschrift" rows="3">${esc(firma.anschrift||'')}</textarea></div>
@@ -767,7 +774,30 @@ async function renderTabFirma(){
       ${logoPreview}
     </div>
     <button class="btn btn-primary btn-sm" id="btn-firma-save">💾 Speichern</button>
-  </div></div></div>`;
+  </div></div>
+  <div class="card" style="margin-bottom:12px"><div class="card-body">
+    <h3 style="margin-bottom:16px">⚙️ Fahrzeugkosten</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group" style="margin:0"><label class="form-label">Dieselpreis (€/L)</label><input type="number" class="form-input" id="fz-diesel" step="0.001" value="${parseFloat(fzEinst.diesel_preis||1.80).toFixed(3)}"></div>
+      <div class="form-group" style="margin:0"><label class="form-label">Verbrauch (L/100km)</label><input type="number" class="form-input" id="fz-verbrauch" step="0.1" value="${parseFloat(fzEinst.verbrauch_100km||8).toFixed(1)}"></div>
+      <div class="form-group" style="margin:0"><label class="form-label">Maut (€/km)</label><input type="number" class="form-input" id="fz-maut" step="0.001" value="${parseFloat(fzEinst.maut_pro_km||0).toFixed(3)}"></div>
+      <div class="form-group" style="margin:0"><label class="form-label">Abnützung (€/km)</label><input type="number" class="form-input" id="fz-abnutzung" step="0.001" value="${parseFloat(fzEinst.abnuetzung_pro_km||0.15).toFixed(3)}"></div>
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Aktuell: <b>€${kostenProKm.toFixed(3)}/km</b></div>
+    <button class="btn btn-primary btn-sm" id="btn-fz-save" style="margin-top:10px">💾 Fahrzeugkosten speichern</button>
+  </div></div>
+  <div class="card" style="margin-bottom:12px"><div class="card-body">
+    <h3 style="margin-bottom:16px">👷 Mitarbeiterkosten</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group" style="margin:0"><label class="form-label">Facharbeiter (€/h)</label><input type="number" class="form-input" id="ma-fa" step="0.5" value="${parseFloat(maKosten.stundensatz_fa||55).toFixed(2)}"></div>
+      <div class="form-group" style="margin:0"><label class="form-label">Hilfsarbeiter (€/h)</label><input type="number" class="form-input" id="ma-ha" step="0.5" value="${parseFloat(maKosten.stundensatz_ha||45).toFixed(2)}"></div>
+      <div class="form-group" style="margin:0"><label class="form-label">Geringfügig (€/h)</label><input type="number" class="form-input" id="ma-gf" step="0.5" value="${parseFloat(maKosten.stundensatz_gf||35).toFixed(2)}"></div>
+      <div class="form-group" style="margin:0"><label class="form-label" title="Stundensatz wird ROT wenn unter dieser Schwelle">Warnschwelle €/h/MA</label><input type="number" class="form-input" id="ma-warn" step="0.5" value="${parseFloat(maKosten.warnschwelle||55).toFixed(2)}"></div>
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Stundensatz wird <span style="color:#dc2626;font-weight:700">ROT</span> wenn unter der Warnschwelle</div>
+    <button class="btn btn-primary btn-sm" id="btn-ma-kosten-save" style="margin-top:10px">💾 Mitarbeiterkosten speichern</button>
+  </div></div>
+  </div>`;
 }
 
 async function renderTabMitarbeiter(){
@@ -1773,9 +1803,8 @@ async function pageProjekte(){
       <td style="white-space:nowrap;font-size:13px">${totalArbMin?fMin(totalArbMin):'–'}</td>
       <td style="white-space:nowrap;font-size:13px">${totalKm>0?totalKm.toFixed(1)+' km':'–'}</td>
       <td><div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-        ${isPausiert?`<button class="tbl-btn" data-action="proj-fortsetzen" data-id="${p.id}" style="background:#f59e0b;color:white">▶️ Fortsetzen</button>`
-          :isAbgeschlossen?`${hatGutschrift?`<span style="color:#16a34a;font-weight:700;font-size:12px">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`:''}`
-          :`<button class="tbl-btn" data-action="proj-gutschrift" data-id="${p.id}" data-gs="" data-mw="" data-gd="" data-gnr="" style="background:#16a34a;color:white">💰 Gutschrift</button>`}
+        ${isPausiert?`<button class="tbl-btn" data-action="proj-fortsetzen" data-id="${p.id}" style="background:#f59e0b;color:white">▶️ Fortsetzen</button>`:''}
+        ${hatGutschrift?`<span style="color:#16a34a;font-weight:700;font-size:12px">€${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`:''}
         ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
       </div></td>
     </tr>`;
@@ -1943,29 +1972,7 @@ async function renderTabProjekte(){
     <div class="card" style="overflow:auto;margin-bottom:20px"><table class="tbl"><thead><tr>
       <th>Name</th><th>Gutschrift %</th><th>Stundensatz</th><th>🚗 Fahrzeit</th><th>Notiz</th><th></th>
     </tr></thead><tbody>${agRows}</tbody></table></div>
-    ${user?.ist_admin?`
-    <div style="font-weight:700;margin-bottom:8px">⚙️ Fahrzeugkosten-Einstellungen</div>
-    <div class="card" style="margin-bottom:16px"><div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group" style="margin:0"><label class="form-label">Dieselpreis (€/L)</label><input type="number" class="form-input" id="fz-diesel" step="0.001" value="${parseFloat(fzEinst.diesel_preis||1.80).toFixed(3)}"></div>
-        <div class="form-group" style="margin:0"><label class="form-label">Verbrauch (L/100km)</label><input type="number" class="form-input" id="fz-verbrauch" step="0.1" value="${parseFloat(fzEinst.verbrauch_100km||8).toFixed(1)}"></div>
-        <div class="form-group" style="margin:0"><label class="form-label">Maut (€/km)</label><input type="number" class="form-input" id="fz-maut" step="0.001" value="${parseFloat(fzEinst.maut_pro_km||0).toFixed(3)}"></div>
-        <div class="form-group" style="margin:0"><label class="form-label">Abnützung (€/km)</label><input type="number" class="form-input" id="fz-abnutzung" step="0.001" value="${parseFloat(fzEinst.abnuetzung_pro_km||0.15).toFixed(3)}"></div>
-      </div>
-      <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Aktuell: <b>€${kostenProKm.toFixed(3)}/km</b></div>
-      <button class="btn btn-primary" id="btn-fz-save" style="margin-top:10px">💾 Fahrzeugkosten speichern</button>
-    </div></div>
-    <div style="font-weight:700;margin-bottom:8px">👷 Mitarbeiterkosten-Einstellungen</div>
-    <div class="card" style="margin-bottom:20px"><div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group" style="margin:0"><label class="form-label">Facharbeiter (€/h)</label><input type="number" class="form-input" id="ma-fa" step="0.5" value="${parseFloat(maKosten.stundensatz_fa||55).toFixed(2)}"></div>
-        <div class="form-group" style="margin:0"><label class="form-label">Hilfsarbeiter (€/h)</label><input type="number" class="form-input" id="ma-ha" step="0.5" value="${parseFloat(maKosten.stundensatz_ha||45).toFixed(2)}"></div>
-        <div class="form-group" style="margin:0"><label class="form-label">Geringfügig (€/h)</label><input type="number" class="form-input" id="ma-gf" step="0.5" value="${parseFloat(maKosten.stundensatz_gf||35).toFixed(2)}"></div>
-        <div class="form-group" style="margin:0"><label class="form-label" title="Stundensatz wird ROT wenn unter dieser Schwelle">Warnschwelle €/h/MA</label><input type="number" class="form-input" id="ma-warn" step="0.5" value="${parseFloat(maKosten.warnschwelle||55).toFixed(2)}"></div>
-      </div>
-      <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Stundensatz wird <span style="color:#dc2626;font-weight:700">ROT</span> wenn unter der Warnschwelle</div>
-      <button class="btn btn-primary" id="btn-ma-kosten-save" style="margin-top:10px">💾 Mitarbeiterkosten speichern</button>
-    </div></div>`:''}
+    <div style="font-size:12px;color:var(--text-muted);padding:8px 0">ℹ️ Fahrzeugkosten- und Mitarbeiterkosten-Einstellungen sind jetzt unter <b>🏢 Firma</b> zu finden.</div>
   </div>`;
 }
 
@@ -2109,18 +2116,32 @@ async function modalZeitKorrektur(maId,name,datum){
     <div id="zt-liste">${renderListe()}</div>
     <div style="margin-top:14px;padding-top:14px;border-top:2px solid #e5e7eb">
       <div style="font-weight:700;margin-bottom:10px">+ Neuer Eintrag</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <select id="zt-neu-typ" class="form-input" style="padding:8px">${typOpts}</select>
         <input type="time" id="zt-neu-zeit" value="08:00" class="form-input" style="padding:8px">
-        <button id="btn-zt-neu" style="background:#7c3aed;color:white;border:none;border-radius:10px;padding:0 14px;font-weight:700;cursor:pointer;white-space:nowrap">Eintragen</button>
       </div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:12px;color:var(--text-muted)">Datum (leer = ${fDate(datum)})</label>
+          <input type="date" id="zt-neu-datum" class="form-input" value="${datum}" style="padding:8px">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-muted)">&nbsp;</label>
+          <button id="btn-zt-neu" style="background:#7c3aed;color:white;border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;white-space:nowrap;display:block">Eintragen</button>
+        </div>
+      </div>
+      <input type="text" id="zt-neu-notiz" class="form-input" placeholder="Grund / Bemerkung (optional)" style="padding:8px">
     </div>`);
 
-  const reload=async()=>{
-    try{const r=await apiGet(`/api/zeit/auswertung?von=${datum}&bis=${datum}&mitarbeiter_id=${maId}`);
+  const reload=async(refreshDatum)=>{
+    const d=refreshDatum||datum;
+    try{const r=await apiGet(`/api/zeit/auswertung?von=${d}&bis=${d}&mitarbeiter_id=${maId}`);
       eintraege=r.length>0?r[0].eintraege||[]:[];
       const el=document.getElementById('zt-liste');
       if(el){el.innerHTML=renderListe();bindZt();}
+      // Elterntabelle im Hintergrund aktualisieren (damit nach Modal-Schließen Bericht korrekt)
+      const parentC=document.getElementById('admin-tab-content');
+      if(parentC)renderTabBerichte().then(html=>{parentC.innerHTML=html;bindAdminEvents();}).catch(()=>{});
     }catch(e){}
   };
 
@@ -2149,11 +2170,13 @@ async function modalZeitKorrektur(maId,name,datum){
   o('btn-zt-neu','click',async()=>{
     const typ=document.getElementById('zt-neu-typ')?.value;
     const zt=document.getElementById('zt-neu-zeit')?.value;
+    const d=document.getElementById('zt-neu-datum')?.value||datum;
+    const notiz=document.getElementById('zt-neu-notiz')?.value||'';
     if(!typ||!zt)return;
     const[h,m]=zt.split(':');
-    const zp=new Date(`${datum}T${h.padStart(2,'0')}:${m.padStart(2,'0')}:00`);
-    try{await apiPost('/api/zeit/eintragen',{mitarbeiter_id:maId,typ,zeitpunkt:zp.toISOString()});
-      toast('✅ Eingetragen','ok');await reload();}
+    const zp=new Date(`${d}T${h.padStart(2,'0')}:${m.padStart(2,'0')}:00`);
+    try{await apiPost('/api/zeit/eintragen',{mitarbeiter_id:parseInt(maId),typ,zeitpunkt:zp.toISOString(),notiz});
+      toast('✅ Eingetragen','ok');await reload(d);}
     catch(e){toast(e.message,'err');}
   });
 }
