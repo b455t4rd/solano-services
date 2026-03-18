@@ -541,7 +541,7 @@ async function pageHome(){
   ].join('');
   const _gr=['Schön, dass du da bist.','Was steht heute an?','Schon Kaffee gehabt?','Willkommen zurück.','Wie läuft\'s heute?','Bereit für den Tag?','Gut, dich zu sehen.','Was liegt heute an?','Alles klar bei dir?','Auf geht\'s?','Schön, dass du wieder da bist.','Was ist heute geplant?','Alles fit?','Bereit?','Wie startet dein Tag?','Was gibt\'s heute?','Na, alles gut?','Wie schaut\'s aus?','Los geht\'s.','Was machen wir heute?','Willkommen.','Da bist du ja.','Was geht heute?','Alles im Griff?','Gut drauf heute?','Was kommt als Nächstes?','Wie ist die Lage?','Kann losgehen?','Was hast du vor?','Bereit für heute?','Was ist der Plan?','Schön, dich zu sehen.','Wie läuft der Tag?','Alles bereit?','Was wartet heute?','Hallo, schön dass du da bist.','Was nehmen wir heute in Angriff?','Na, bereit?','Alles entspannt?','Wie sieht\'s heute aus?','Was ist heute wichtig?','Wieder am Start?','Wie geht\'s dir heute?','Schön, dass du reinschaust.','Kaffee schon drin?','Was hast du heute auf dem Zettel?','Kann\'s losgehen?','Alles gut heute?','Hallo zurück.','Was darf\'s heute sein?','Gut, dass du da bist.','Wie läuft dein Morgen?','Was steht als Erstes an?','Alles auf Kurs?','Bereit zum Loslegen?','Was läuft heute?','Was ist heute los?','Willkommen, legen wir los.','Wie startet\'s?','Was packen wir an?','Schön, dass du vorbeischaust.','Wie sieht dein Tag aus?','Alles startklar?','Was steht bei dir an?','Schon wach?','Bereit für Runde zwei?','Wie läuft dein Vormittag?','Alles gut soweit?','Was geht ab?','Startklar?','Na, wie ist\'s?','Was darf heute passieren?','Alles unter Kontrolle?','Gut geschlafen?','Schon im Flow?','Was geht zuerst?','Was kommt heute auf dich zu?','Willkommen zurück im Alltag.','Wie fühlt sich der Tag an?','Heute viel vor?','Was gibt der Tag her?','Wie schaut dein Plan aus?','Alles locker?','Bist du bereit?','Was läuft als Nächstes?','Wieder da?','Schön, dich wiederzusehen.','Wie geht der Tag los?','Schon gestartet?','Was wollen wir heute schaffen?','Wie ist die Stimmung?','Was ist heute dran?','Schon unterwegs?','Gut in den Tag gekommen?','Was liegt zuerst an?','Alles bereit für heute?','Na dann, los.','Schön, dass du reinsiehst.','Heute motiviert?','Was steht vorne an?','Alles gut bei dir?','Was darf heute nicht vergessen werden?','Was ist heute dein Fokus?','Los?','Wieder bereit?','Na, schon angekommen?','Wie läuft dein Start?','Was soll heute klappen?','Schön, dass du wieder hier bist.','Wie sieht\'s aus bei dir?','Kaffee oder Chaos?','Was ist heute dein Thema?','Na, wie startet\'s?','Alles ruhig?','Bereit für das Nächste?','Wie war dein Morgen?'];
   const _grText=_gr[Math.floor(Math.random()*_gr.length)];
-  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${kalBtn}${adminBtn}<div style="text-align:center;padding:20px 0 4px"><button class="btn-ghost" data-action="btn-optionen">⚙️ Optionen</button></div></div>`;
+  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${kalBtn}${adminBtn}<div style="text-align:center;padding:20px 0 4px"><button class="btn-ghost" id="btn-optionen">⚙️ Optionen</button></div></div>`;
 }
 
 async function pageNachrichten(){
@@ -1838,11 +1838,12 @@ async function pageProjekte(){
 async function renderTabProjekte(){
   let agList=[],fzEinst={diesel_preis:1.80,verbrauch_100km:8,maut_pro_km:0,abnuetzung_pro_km:0.15};
   let maKosten={stundensatz_fa:55,stundensatz_ha:45,stundensatz_gf:35,warnschwelle:55};
-  let laufend=[];
+  let laufend=[],geplant=[];
   try{agList=await apiGet('/api/projekte/auftraggeber');}catch(e){}
   try{fzEinst=await apiGet('/api/projekte/einstellungen');}catch(e){}
   try{maKosten=await apiGet('/api/projekte/ma-kosten');}catch(e){}
   try{laufend=await apiGet('/api/projekte/laufend');}catch(e){}
+  try{geplant=(await apiGet('/api/projekte/geplant')).filter(p=>p.status==='geplant');}catch(e){}
   const kostenProKm=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
 
   const agRows=agList.map(ag=>`<tr>
@@ -1885,6 +1886,40 @@ async function renderTabProjekte(){
     <div class="card" style="margin-bottom:12px"><div class="card-body" style="padding:12px">
       <div style="font-weight:700;font-size:14px;margin-bottom:6px">🔴 Laufende Aufträge <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:10px;font-weight:700">${laufend.length}</span></div>
       ${laufendHTML}
+    </div></div>
+    <div class="card" style="margin-bottom:12px"><div class="card-body" style="padding:12px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px">📋 Geplante Aufträge <span style="font-size:12px;background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:10px;font-weight:700">${geplant.length}</span></div>
+      ${geplant.length===0
+        ?`<div style="color:var(--text-muted);font-size:13px;padding:4px 0">Keine geplanten Aufträge</div>`
+        :`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+            <th>Datum</th><th>Auftraggeber</th><th>Adresse</th><th>MA</th><th>Aktionen</th>
+          </tr></thead><tbody>
+          ${geplant.map(p=>{
+            const str=p.adresse_strasse||p.adresse||'';
+            const plz=p.adresse_plz||'';const ort=p.adresse_ort||'';const land=p.adresse_land||'';
+            const navStr=[str,[plz,ort].filter(Boolean).join(' '),land].filter(Boolean).join(', ');
+            return`<tr>
+              <td style="white-space:nowrap;font-size:13px">
+                ${p.geplant_datum?`<b>${fDate(p.geplant_datum)}</b>${p.geplant_uhrzeit?`<br><span style="color:var(--text-muted)">${p.geplant_uhrzeit.slice(0,5)}</span>`:''}`:'<span style="color:var(--text-muted)">–</span>'}
+              </td>
+              <td><div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>${p.kundenname?`<div style="font-size:12px;color:var(--text-muted)">${esc(p.kundenname)}</div>`:''}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(navStr)||'–'}</td>
+              <td style="text-align:center">${p.anzahl_mitarbeiter||1}</td>
+              <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+                <button class="tbl-btn" data-action="admin-geplant-edit" data-id="${p.id}"
+                  data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}"
+                  data-kundenname="${esc(p.kundenname||'')}" data-strasse="${esc(p.adresse_strasse||'')}"
+                  data-plz="${esc(p.adresse_plz||'')}" data-ort="${esc(p.adresse_ort||'')}"
+                  data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum||''}"
+                  data-uhrzeit="${p.geplant_uhrzeit?p.geplant_uhrzeit.slice(0,5):''}"
+                  data-dauer="${p.geplant_dauer_min||120}" data-anzahl="${p.anzahl_mitarbeiter||2}"
+                  data-notiz="${esc(p.notiz||'')}">✏️ Bearbeiten</button>
+                <button class="tbl-btn" data-action="admin-geplant-starten" data-id="${p.id}" style="background:#7c3aed;color:white">🚗 Starten</button>
+                <button class="tbl-btn danger" data-action="admin-geplant-del" data-id="${p.id}">🗑️</button>
+              </div></td>
+            </tr>`;
+          }).join('')}
+          </tbody></table></div>`}
     </div></div>
     <div style="font-weight:700;margin-bottom:8px">Auftraggeber verwalten</div>
     <button class="btn btn-primary btn-sm" id="btn-new-ag" style="margin-bottom:10px">+ Neuer Auftraggeber</button>
@@ -2732,8 +2767,7 @@ function bindEvents(){
         const dark=document.body.classList.toggle('dark');
         localStorage.setItem('darkMode',dark?'1':'0');
         closeModal();
-        // Re-render to update toggle colors
-        setTimeout(()=>document.querySelector('[data-action="btn-optionen"]')?.click(),50);
+        setTimeout(()=>document.getElementById('btn-optionen')?.click(),50);
       });
     },0);
   });
@@ -3840,6 +3874,82 @@ function bindAdminEvents(){
       if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;try{c.innerHTML=await renderTabBerichte();}catch(e){c.innerHTML=`<div style="padding:24px;color:#dc2626">Fehler: ${e.message}</div>`;}bindAdminEvents()}
     },400);
   })}
+
+  // Admin: Geplante Aufträge – Bearbeiten
+  document.querySelectorAll('[data-action="admin-geplant-edit"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      const d=b.dataset;
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">✏️ Geplanten Auftrag bearbeiten</div>
+        <div class="form-group"><label class="form-label">Auftraggeber</label><input class="form-input" id="gpe-agname" value="${esc(d.agname||'')}" placeholder="Auftraggeber"></div>
+        <div class="form-group"><label class="form-label">Auftragsnummer</label><input class="form-input" id="gpe-nr" value="${esc(d.nr||'')}" placeholder="optional"></div>
+        <div class="form-group"><label class="form-label">Kundenname</label><input class="form-input" id="gpe-kundenname" value="${esc(d.kundenname||'')}" placeholder="optional"></div>
+        <div class="form-group"><label class="form-label">Adresse</label>
+          <input class="form-input" id="gpe-strasse" value="${esc(d.strasse||'')}" placeholder="Straße" style="margin-bottom:6px">
+          <div style="display:grid;grid-template-columns:100px 1fr;gap:6px;margin-bottom:6px">
+            <input class="form-input" id="gpe-plz" value="${esc(d.plz||'')}" placeholder="PLZ">
+            <input class="form-input" id="gpe-ort" value="${esc(d.ort||'')}" placeholder="Ort">
+          </div>
+          <input class="form-input" id="gpe-land" value="${esc(d.land||'Österreich')}" placeholder="Land">
+        </div>
+        <div class="form-group"><label class="form-label">Datum</label>
+          <input type="date" class="form-input" id="gpe-datum" value="${d.datum||''}" style="margin-bottom:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div><label style="font-size:12px;color:var(--text-muted)">Uhrzeit</label><input type="time" class="form-input" id="gpe-uhrzeit" value="${d.uhrzeit||''}"></div>
+            <div><label style="font-size:12px;color:var(--text-muted)">Dauer (Min)</label><input type="number" class="form-input" id="gpe-dauer" value="${d.dauer||120}" min="15" step="15"></div>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Anzahl Mitarbeiter</label>
+          <select class="form-input" id="gpe-anzahl">
+            ${[1,2,3,4,5].map(n=>`<option value="${n}" ${parseInt(d.anzahl||2)===n?'selected':''}>${n} Person${n>1?'en':''}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Notiz</label><textarea class="form-input" id="gpe-notiz" rows="2">${esc(d.notiz||'')}</textarea></div>
+        <button class="btn btn-primary" id="btn-gpe-save">💾 Speichern</button>`);
+      setTimeout(()=>o('btn-gpe-save','click',async()=>{
+        const body={
+          auftraggeber_name:document.getElementById('gpe-agname')?.value||'',
+          auftragsnummer:document.getElementById('gpe-nr')?.value||'',
+          kundenname:document.getElementById('gpe-kundenname')?.value||'',
+          adresse_strasse:document.getElementById('gpe-strasse')?.value||'',
+          adresse_plz:document.getElementById('gpe-plz')?.value||'',
+          adresse_ort:document.getElementById('gpe-ort')?.value||'',
+          adresse_land:document.getElementById('gpe-land')?.value||'Österreich',
+          geplant_datum:document.getElementById('gpe-datum')?.value||null,
+          geplant_uhrzeit:document.getElementById('gpe-uhrzeit')?.value||null,
+          geplant_dauer_min:parseInt(document.getElementById('gpe-dauer')?.value)||120,
+          anzahl_mitarbeiter:parseInt(document.getElementById('gpe-anzahl')?.value)||2,
+          notiz:document.getElementById('gpe-notiz')?.value||'',
+        };
+        try{await apiPut(`/api/projekte/${d.id}`,body);closeModal();toast('✅ Gespeichert','ok');reloadTab();}
+        catch(e){toast(e.message,'err');}
+      }),0);
+    });
+  });
+
+  // Admin: Geplante Aufträge – Starten
+  document.querySelectorAll('[data-action="admin-geplant-starten"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      try{
+        const res=await apiPut(`/api/projekte/${b.dataset.id}/starten`,{});
+        projektAkt=res;localStorage.setItem('solano_projekt',JSON.stringify(res));
+        toast('🚗 Fahrt gestartet','ok');reloadTab();
+      }catch(e){toast(e.message,'err');}
+    });
+  });
+
+  // Admin: Geplante Aufträge – Löschen
+  document.querySelectorAll('[data-action="admin-geplant-del"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',async()=>{
+      if(!confirm('Auftrag löschen?'))return;
+      try{await apiDelete(`/api/projekte/${b.dataset.id}`);toast('🗑️ Gelöscht','ok');reloadTab();}
+      catch(e){toast(e.message,'err');}
+    });
+  });
 
   // Projekte: Neuer Auftrag (Admin)
   const btnNA=document.getElementById('btn-neuer-auftrag');
