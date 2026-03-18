@@ -1827,7 +1827,7 @@ async function pageProjekte(){
             data-agname="${esc(p.auftraggeber_name||'')}"
             data-kundenname="${esc(p.kundenname||'')}"
             data-adresse="${esc(navStr)}"
-            data-datum="${p.geplant_datum||''}"
+            data-datum="${p.geplant_datum?String(p.geplant_datum).slice(0,10):''}"
             data-uhrzeit="${p.geplant_uhrzeit?p.geplant_uhrzeit.slice(0,5):''}"
             data-anzahl="${p.anzahl_mitarbeiter||''}"
             data-notiz="${esc(p.notiz||'')}">
@@ -1927,7 +1927,7 @@ async function renderTabProjekte(){
                   data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}"
                   data-kundenname="${esc(p.kundenname||'')}" data-strasse="${esc(p.adresse_strasse||'')}"
                   data-plz="${esc(p.adresse_plz||'')}" data-ort="${esc(p.adresse_ort||'')}"
-                  data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum||''}"
+                  data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum?String(p.geplant_datum).slice(0,10):''}"
                   data-uhrzeit="${p.geplant_uhrzeit?p.geplant_uhrzeit.slice(0,5):''}"
                   data-dauer="${p.geplant_dauer_min||120}" data-anzahl="${p.anzahl_mitarbeiter||2}"
                   data-notiz="${esc(p.notiz||'')}">✏️ Bearbeiten</button>
@@ -3990,7 +3990,7 @@ function bindAdminEvents(){
         <input type="text" class="form-input" id="na-land" placeholder="Land" value="Österreich">
       </div>
       <div class="form-group"><label class="form-label">Geplantes Datum</label>
-        <input type="date" class="form-input" id="na-datum" style="margin-bottom:6px">
+        <input type="date" class="form-input" id="na-datum" value="${new Date().toISOString().slice(0,10)}" style="margin-bottom:6px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
           <div><label style="font-size:12px;color:var(--text-muted)">Uhrzeit</label><input type="time" class="form-input" id="na-uhrzeit"></div>
           <div><label style="font-size:12px;color:var(--text-muted)">Dauer (Min)</label><input type="number" class="form-input" id="na-dauer" value="120" min="15" step="15"></div>

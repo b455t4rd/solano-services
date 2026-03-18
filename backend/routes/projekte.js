@@ -339,7 +339,7 @@ router.get('/', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, async (req, res) => {
   const { auftraggeber_id, auftraggeber_name, auftragsnummer, anzahl_mitarbeiter, notiz, geplant,
           kundenname, adresse, adresse_strasse, adresse_plz, adresse_ort, adresse_land,
-          geplant_datum, ma_typen } = req.body;
+          geplant_datum, geplant_uhrzeit, geplant_dauer_min, ma_typen } = req.body;
   const status = geplant ? 'geplant' : 'fahrt';
   try {
     const r = await pool.query(
@@ -347,13 +347,14 @@ router.post('/', authMiddleware, async (req, res) => {
          (mitarbeiter_id, mitarbeiter_name, auftraggeber_id, auftraggeber_name,
           auftragsnummer, anzahl_mitarbeiter, notiz, status, fahrt_start,
           kundenname, adresse, adresse_strasse, adresse_plz, adresse_ort, adresse_land,
-          geplant_datum, ma_typen)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,${geplant?'NULL':'NOW()'},$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+          geplant_datum, geplant_uhrzeit, geplant_dauer_min, ma_typen)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,${geplant?'NULL':'NOW()'},$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
       [req.user.id, req.user.name, auftraggeber_id||null, auftraggeber_name||null,
        auftragsnummer||null, anzahl_mitarbeiter||2, notiz||null, status,
        kundenname||null, adresse||null,
        adresse_strasse||null, adresse_plz||null, adresse_ort||null, adresse_land||null,
-       geplant_datum||null, JSON.stringify(ma_typen||[])]
+       geplant_datum||null, geplant_uhrzeit||null, geplant_dauer_min||null,
+       JSON.stringify(ma_typen||[])]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
