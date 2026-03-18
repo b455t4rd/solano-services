@@ -1801,9 +1801,11 @@ async function pageProjekte(){
                   · seit ${p.fahrt_start?new Date(p.fahrt_start).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):fDate(p.erstellt_am)}
                 </div>
               </div>
-              <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap">
+              ${(()=>{const str=p.adresse_strasse||p.adresse||'';const plz=p.adresse_plz||'';const ort=p.adresse_ort||'';const land=p.adresse_land||'';const nav=[str,[plz,ort].filter(Boolean).join(' '),land].filter(Boolean).join(', ');return nav?`<div style="font-size:12px;color:var(--text-muted);margin-top:4px">📍 ${esc(nav)}</div>`:''})()}
+              <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;margin-top:6px">
+                ${(()=>{const str=p.adresse_strasse||p.adresse||'';const plz=p.adresse_plz||'';const ort=p.adresse_ort||'';const land=p.adresse_land||'';const nav=[str,[plz,ort].filter(Boolean).join(' '),land].filter(Boolean).join(', ');return nav?`<button class="tbl-btn" onclick="openNav(null,null,'${esc(nav)}')" style="background:#3b82f6;color:white">🗺️ Nav</button>`:''})()}
                 <button class="tbl-btn" data-action="mgr-phase-weiter" data-id="${p.id}" data-status="${p.status}" style="background:#7c3aed;color:white;white-space:nowrap">▶️ Phase weiter</button>
-                <button class="tbl-btn" data-action="proj-admin-abschliessen" data-id="${p.id}" style="background:#16a34a;color:white">✅ Abschließen</button>
+                <button class="tbl-btn" data-action="proj-admin-abschliessen" data-id="${p.id}" style="background:#16a34a;color:white">✅</button>
                 <button class="tbl-btn" data-action="proj-admin-zurueck" data-id="${p.id}" style="background:#f59e0b;color:white">↩️</button>
               </div>
             </div>
@@ -4004,8 +4006,12 @@ function bindAdminEvents(){
       <button class="btn btn-primary" id="btn-na-starten" style="background:#7c3aed">🚗 Fahrt starten</button>
       <button class="btn" id="btn-na-planen" style="margin-top:8px;background:#6b7280;color:white">📋 Vorab planen</button>`);
     setTimeout(()=>{
-      const getForm=()=>({
-        auftraggeber_id:document.getElementById('na-ag')?.value||null,
+      const getForm=()=>{
+        const agSel=document.getElementById('na-ag');
+        const agName=agSel?.selectedIndex>0?agSel.options[agSel.selectedIndex].text:'';
+        return({
+        auftraggeber_id:agSel?.value||null,
+        auftraggeber_name:agName||null,
         auftragsnummer:document.getElementById('na-nr')?.value||'',
         kundenname:document.getElementById('na-kundenname')?.value||'',
         adresse_strasse:document.getElementById('na-strasse')?.value||'',
@@ -4017,7 +4023,7 @@ function bindAdminEvents(){
         geplant_dauer_min:parseInt(document.getElementById('na-dauer')?.value)||120,
         anzahl_mitarbeiter:parseInt(document.getElementById('na-anzahl')?.value)||2,
         notiz:document.getElementById('na-notiz')?.value||'',
-      });
+      })};
       o('btn-na-starten','click',async()=>{
         const d=getForm();
         if(!d.auftraggeber_id){toast('Auftraggeber wählen','err');return;}
