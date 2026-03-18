@@ -91,4 +91,33 @@ router.delete('/reset/projekte', adminMiddleware, async (req, res) => {
   }
 });
 
+// Firmendaten laden
+router.get('/firma', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM firma_einstellungen WHERE id=1');
+    res.json(result.rows[0] || {});
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Firmendaten speichern (nur Admin)
+router.put('/firma', adminMiddleware, async (req, res) => {
+  const { name, anschrift, uid_atu, logo_base64 } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO firma_einstellungen (id, name, anschrift, uid_atu, logo_base64)
+       VALUES (1, $1, $2, $3, $4)
+       ON CONFLICT (id) DO UPDATE SET
+         name=EXCLUDED.name, anschrift=EXCLUDED.anschrift,
+         uid_atu=EXCLUDED.uid_atu, logo_base64=EXCLUDED.logo_base64
+       RETURNING *`,
+      [name || null, anschrift || null, uid_atu || null, logo_base64 || null]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

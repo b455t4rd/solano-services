@@ -122,4 +122,66 @@ router.delete('/:id', managerMiddleware, async (req, res) => {
   }
 });
 
+// ── PRIVATE TODOS (nur eigene, 100% privat) ──
+
+// Eigene private Todos abrufen
+router.get('/privat', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM todos_privat WHERE mitarbeiter_id=$1 ORDER BY erstellt_am DESC',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Neues privates Todo anlegen
+router.post('/privat', authMiddleware, async (req, res) => {
+  const { beschreibung } = req.body;
+  if (!beschreibung) return res.status(400).json({ error: 'Beschreibung erforderlich' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO todos_privat (mitarbeiter_id, beschreibung) VALUES ($1,$2) RETURNING *',
+      [req.user.id, beschreibung]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Privates Todo toggle erledigt
+router.put('/privat/:id', authMiddleware, async (req, res) => {
+  try {
+    const check = await pool.query(
+      'SELECT erledigt FROM todos_privat WHERE id=$1 AND mitarbeiter_id=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!check.rows.length) return res.status(403).json({ error: 'Kein Zugriff' });
+    const result = await pool.query(
+      'UPDATE todos_privat SET erledigt=$1 WHERE id=$2 AND mitarbeiter_id=$3 RETURNING *',
+      [!check.rows[0].erledigt, req.params.id, req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Privates Todo löschen
+router.delete('/privat/:id', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM todos_privat WHERE id=$1 AND mitarbeiter_id=$2 RETURNING id',
+      [req.params.id, req.user.id]
+    );
+    if (!result.rows.length) return res.status(403).json({ error: 'Kein Zugriff' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

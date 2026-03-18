@@ -256,39 +256,6 @@
     /* ZULETZT BESUCHT */
     .zuletzt-badge{font-size:12px;color:var(--text-muted);margin-top:3px}
     .zuletzt-badge.heute{color:var(--success);font-weight:600}
-
-    /* DARK MODE */
-    body.dark{
-      --bg:#0f172a;--card:#1e293b;--text:#f1f5f9;--text-muted:#94a3b8;--border:#334155;
-      --primary:#3b82f6;--primary-light:#60a5fa;--success:#22c55e;--danger:#f87171;--warning:#fbbf24;
-      --shadow:0 1px 3px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
-      --shadow-md:0 4px 6px -1px rgba(0,0,0,.5),0 2px 4px -1px rgba(0,0,0,.4);
-    }
-    @media(min-width:768px){body.dark{background:#020617}}
-    body.dark .sidebar{background:#1e293b}
-    body.dark .kal-day{background:#1e293b}
-    body.dark .kal-day:hover{background:#1e3a5f;border-color:#3b82f6}
-    body.dark .kal-day.today{background:#1e3a5f}
-    body.dark .form-input{background:#1e293b;color:var(--text)}
-    body.dark .list-item{background:#1e293b}
-    body.dark .list-item:active{background:#334155}
-    body.dark .sparte-card{background:#1e293b}
-    body.dark .search-input{background:#1e293b;color:var(--text)}
-    body.dark #pwa-banner{background:#1e293b}
-    body.dark .einsatz-header{background:#1e293b}
-    body.dark .tabs{background:#1e293b}
-    body.dark .modal{background:#1e293b}
-    body.dark .login-card{background:#1e293b}
-    body.dark .sparte-check-label{background:#1e293b}
-    body.dark .sparte-check-label:hover{background:#334155}
-    body.dark .tbl-btn:hover{background:#334155}
-    body.dark .btn-ghost{background:#334155;border-color:#475569;color:var(--text-muted)}
-    body.dark .btn-ghost:hover{background:#475569}
-    body.dark .modal-close{background:#334155;color:var(--text)}
-    body.dark .info-box{background:#1e3a5f;border-left-color:#3b82f6}
-    body.dark .nav-btn{background:#1e3a5f;border-color:#3b82f6}
-    body.dark .check-item:active{background:#334155}
-    body.dark .sidebar-item.active{background:#1e3a5f}
   </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -300,8 +267,6 @@
 <script>
 // ── CONFIG & STATE ──
 const API = '';
-const APP_VERSION = '1.0.0';
-if(localStorage.getItem('darkMode')==='1') document.body.classList.add('dark');
 let user       = JSON.parse(localStorage.getItem('solano_user') || 'null');
 let einsatzAkt = JSON.parse(localStorage.getItem('solano_einsatz') || 'null');
 function isManager(){return!!(user?.ist_admin||user?.ist_chef)}
@@ -541,7 +506,7 @@ async function pageHome(){
   ].join('');
   const _gr=['Schön, dass du da bist.','Was steht heute an?','Schon Kaffee gehabt?','Willkommen zurück.','Wie läuft\'s heute?','Bereit für den Tag?','Gut, dich zu sehen.','Was liegt heute an?','Alles klar bei dir?','Auf geht\'s?','Schön, dass du wieder da bist.','Was ist heute geplant?','Alles fit?','Bereit?','Wie startet dein Tag?','Was gibt\'s heute?','Na, alles gut?','Wie schaut\'s aus?','Los geht\'s.','Was machen wir heute?','Willkommen.','Da bist du ja.','Was geht heute?','Alles im Griff?','Gut drauf heute?','Was kommt als Nächstes?','Wie ist die Lage?','Kann losgehen?','Was hast du vor?','Bereit für heute?','Was ist der Plan?','Schön, dich zu sehen.','Wie läuft der Tag?','Alles bereit?','Was wartet heute?','Hallo, schön dass du da bist.','Was nehmen wir heute in Angriff?','Na, bereit?','Alles entspannt?','Wie sieht\'s heute aus?','Was ist heute wichtig?','Wieder am Start?','Wie geht\'s dir heute?','Schön, dass du reinschaust.','Kaffee schon drin?','Was hast du heute auf dem Zettel?','Kann\'s losgehen?','Alles gut heute?','Hallo zurück.','Was darf\'s heute sein?','Gut, dass du da bist.','Wie läuft dein Morgen?','Was steht als Erstes an?','Alles auf Kurs?','Bereit zum Loslegen?','Was läuft heute?','Was ist heute los?','Willkommen, legen wir los.','Wie startet\'s?','Was packen wir an?','Schön, dass du vorbeischaust.','Wie sieht dein Tag aus?','Alles startklar?','Was steht bei dir an?','Schon wach?','Bereit für Runde zwei?','Wie läuft dein Vormittag?','Alles gut soweit?','Was geht ab?','Startklar?','Na, wie ist\'s?','Was darf heute passieren?','Alles unter Kontrolle?','Gut geschlafen?','Schon im Flow?','Was geht zuerst?','Was kommt heute auf dich zu?','Willkommen zurück im Alltag.','Wie fühlt sich der Tag an?','Heute viel vor?','Was gibt der Tag her?','Wie schaut dein Plan aus?','Alles locker?','Bist du bereit?','Was läuft als Nächstes?','Wieder da?','Schön, dich wiederzusehen.','Wie geht der Tag los?','Schon gestartet?','Was wollen wir heute schaffen?','Wie ist die Stimmung?','Was ist heute dran?','Schon unterwegs?','Gut in den Tag gekommen?','Was liegt zuerst an?','Alles bereit für heute?','Na dann, los.','Schön, dass du reinsiehst.','Heute motiviert?','Was steht vorne an?','Alles gut bei dir?','Was darf heute nicht vergessen werden?','Was ist heute dein Fokus?','Los?','Wieder bereit?','Na, schon angekommen?','Wie läuft dein Start?','Was soll heute klappen?','Schön, dass du wieder hier bist.','Wie sieht\'s aus bei dir?','Kaffee oder Chaos?','Was ist heute dein Thema?','Na, wie startet\'s?','Alles ruhig?','Bereit für das Nächste?','Wie war dein Morgen?'];
   const _grText=_gr[Math.floor(Math.random()*_gr.length)];
-  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${kalBtn}${adminBtn}<div style="text-align:center;padding:20px 0 4px"><button class="btn-ghost" data-action="btn-optionen">⚙️ Optionen</button></div></div>`;
+  return`<div class="content"><div style="padding:8px 0 20px"><div style="font-size:22px;font-weight:700">Hallo, ${esc(user?.name)} 👋</div><div style="font-size:14px;color:var(--text-muted);margin-top:4px">${_grText}</div></div>${hint}${todoHint}<div class="sparte-grid">${cards}</div>${zeitBtn}${kalBtn}${adminBtn}</div>`;
 }
 
 async function pageNachrichten(){
@@ -726,7 +691,6 @@ async function pageAdmin(){
     <button class="tab-btn ${tab==='alarm'?'active':''}" data-tab="alarm">🚨 Alarm</button>
     ${user?.ist_admin?`<button class="tab-btn ${tab==='reset'?'active':''}" data-tab="reset">🗑️ Reset</button>`:''}
     <button class="tab-btn ${tab==='karte'?'active':''}" data-tab="karte">🗺️ Karte</button>
-    ${user?.ist_admin?`<button class="tab-btn ${tab==='firma'?'active':''}" data-tab="firma">🏢 Firma</button>`:''}
   </div>
   <div id="admin-tab-content">${await renderTab(tab)}</div>`;
 }
@@ -743,7 +707,6 @@ async function renderTab(tab){
   if(tab==='projekte')return renderTabProjekte();
   if(tab==='kalender'&&isManager())return renderTabKalender();
   if(tab==='reset'&&user?.ist_admin)return renderTabReset();
-  if(tab==='firma'&&user?.ist_admin)return renderTabFirma();
   return'';
 }
 
@@ -751,23 +714,6 @@ async function renderTabAnlagen(){
   const list=await apiGet('/api/anlagen');
   const rows=list.map(a=>`<tr><td><div style="font-weight:600">${esc(a.name)}</div><div style="font-size:12px;color:var(--text-muted)">${esc(a.adresse)}${a.plz?', '+esc(a.plz):''}${a.ort?' '+esc(a.ort):''}</div><div style="margin-top:4px">${sparteBadges(a)}</div></td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-anlage" data-id="${a.id}">Bearbeiten</button><button class="tbl-btn" data-action="aufgaben" data-id="${a.id}" data-name="${esc(a.name)}">Aufgaben</button>${user?.ist_admin?`<button class="tbl-btn danger" data-action="del-anlage" data-id="${a.id}">Löschen</button>`:''}</div></td></tr>`).join('');
   return`<div class="admin-wrap"><button class="btn btn-primary btn-sm" id="btn-new-anlage" style="margin-bottom:12px">+ Neue Anlage</button><div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Anlage</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
-}
-
-async function renderTabFirma(){
-  let firma={};
-  try{firma=await apiGet('/api/admin/firma');}catch(e){}
-  const logoPreview=firma.logo_base64?`<div style="margin-top:8px"><img src="${firma.logo_base64}" style="max-height:80px;max-width:200px;border-radius:8px;border:1px solid var(--border)"></div>`:'';
-  return`<div class="admin-wrap"><div class="card"><div class="card-body">
-    <h3 style="margin-bottom:16px">🏢 Firmendaten</h3>
-    <div class="form-group"><label class="form-label">Firmenname</label><input type="text" class="form-input" id="firma-name" value="${esc(firma.name||'')}"></div>
-    <div class="form-group"><label class="form-label">Anschrift</label><textarea class="form-input" id="firma-anschrift" rows="3">${esc(firma.anschrift||'')}</textarea></div>
-    <div class="form-group"><label class="form-label">UID / ATU</label><input type="text" class="form-input" id="firma-uid" value="${esc(firma.uid_atu||'')}" placeholder="ATU12345678"></div>
-    <div class="form-group"><label class="form-label">Logo</label>
-      <input type="file" id="firma-logo-file" accept="image/*" style="display:block;margin-bottom:8px">
-      ${logoPreview}
-    </div>
-    <button class="btn btn-primary btn-sm" id="btn-firma-save">💾 Speichern</button>
-  </div></div></div>`;
 }
 
 async function renderTabMitarbeiter(){
@@ -1536,25 +1482,6 @@ async function pageZeit(){
   // Admin-Bereich zeigt auch den Zeiterfassungs-Tab
   const adminHinweis=isManager()?`<button class="btn" id="btn-zeit-admin" style="background:#6b7280;color:white;margin-top:12px;width:100%">📊 Übersicht alle Mitarbeiter</button>`:'';
 
-  // Private Todos laden
-  let privTodos=[];
-  try{privTodos=await apiGet('/api/todos/privat')}catch(e){}
-  const privTodoRows=privTodos.map(t=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <input type="checkbox" class="privtodo-check" data-id="${t.id}" ${t.erledigt?'checked':''} style="width:20px;height:20px;cursor:pointer;accent-color:var(--success);flex-shrink:0">
-      <span style="flex:1;font-size:14px;${t.erledigt?'text-decoration:line-through;color:var(--text-muted)':''}">${esc(t.beschreibung)}</span>
-      <button class="tbl-btn danger privtodo-del" data-id="${t.id}" style="flex-shrink:0">🗑️</button>
-    </div>`).join('');
-  const privTodosHTML=`
-    <div style="font-weight:700;margin:16px 0 8px">📝 Meine Aufgaben</div>
-    <div class="card"><div class="card-body">
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <input type="text" id="privtodo-input" class="form-input" placeholder="Neue Aufgabe hinzufügen…" style="flex:1;padding:10px 12px">
-        <button id="privtodo-add" class="btn-icon">＋</button>
-      </div>
-      ${privTodoRows||`<div style="color:var(--text-muted);font-size:14px;text-align:center;padding:12px 0">Noch keine Aufgaben</div>`}
-    </div></div>`;
-
   return`<div class="content">
     <div class="card" style="margin-bottom:16px"><div class="card-body">
       <div style="font-size:16px;font-weight:700;margin-bottom:4px">Heute, ${new Date().toLocaleDateString('de-AT',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'})}</div>
@@ -1573,7 +1500,6 @@ async function pageZeit(){
       <button id="btn-z-nachtrag" ${btnStyle(true,'#0891b2')}>⏱ Pause nachtragen</button>
     </div>
     ${adminHinweis}
-    ${privTodosHTML}
     ${heute.length>0?`<div style="font-weight:700;margin:16px 0 8px">Heutige Einträge</div>
     <div class="card"><div class="card-body" style="padding:0">${heute.map(e=>`
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border)">
@@ -1798,32 +1724,84 @@ async function pageProjekte(){
 
   return`<div class="content">
     ${laufendAndereHTML}
+    <div class="card" style="margin-bottom:16px"><div class="card-body">
+      <div style="font-size:18px;font-weight:700;margin-bottom:16px">🔨 Neuer Auftrag</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Auftraggeber</label>
+        <select class="form-input" id="proj-ag">${agOpts}</select>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Auftragsnummer (optional)</label>
+        <input type="text" class="form-input" id="proj-auftragsnr" placeholder="z.B. 2025-001">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Kundenname (optional)</label>
+        <input type="text" class="form-input" id="proj-kundenname" placeholder="z.B. Mustermann GmbH">
+      </div>
+      <div class="form-group" style="margin-bottom:4px">
+        <label class="form-label">Adresse (für Navigation)</label>
+        <input type="text" class="form-input" id="proj-adresse-strasse" placeholder="Straße und Hausnummer" style="margin-bottom:6px">
+        <div style="display:grid;grid-template-columns:100px 1fr;gap:6px;margin-bottom:6px">
+          <input type="text" class="form-input" id="proj-adresse-plz" placeholder="PLZ">
+          <input type="text" class="form-input" id="proj-adresse-ort" placeholder="Ort / Stadt">
+        </div>
+        <input type="text" class="form-input" id="proj-adresse-land" placeholder="Land" value="Österreich">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Geplantes Datum (optional)</label>
+        <input type="date" class="form-input" id="proj-geplant-datum" style="margin-bottom:6px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><label style="font-size:12px;color:var(--text-muted)">Uhrzeit (optional)</label><input type="time" class="form-input" id="proj-geplant-uhrzeit"></div>
+          <div><label style="font-size:12px;color:var(--text-muted)">Dauer (Minuten)</label><input type="number" class="form-input" id="proj-geplant-dauer" value="120" min="15" step="15"></div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Anzahl Mitarbeiter</label>
+        <select class="form-input" id="proj-anzahl">
+          <option value="1">1 Person</option>
+          <option value="2" selected>2 Personen</option>
+          <option value="3">3 Personen</option>
+          <option value="4">4 Personen</option>
+          <option value="5">5 Personen</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Notiz (optional)</label>
+        <textarea class="form-input" id="proj-notiz" rows="2" placeholder="z.B. Ansprechpartner, Hinweise…"></textarea>
+      </div>
+      <button class="btn btn-primary" id="btn-proj-starten" style="width:100%;padding:16px;font-size:16px;font-weight:700;background:#7c3aed">🚗 Fahrt starten</button>
+      <button class="btn" id="btn-proj-planen" style="width:100%;padding:13px;font-size:14px;font-weight:600;background:#6b7280;color:white;margin-top:10px">📋 Vorab planen (kein Fahrtstart)</button>
+    </div></div>
     ${geplant.length>0?`
-      <div style="margin-bottom:8px;font-weight:700">📋 Geplante Aufträge</div>
+      <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-weight:700">📋 Geplante Aufträge</span>
+        <span style="font-size:12px;color:var(--text-muted)">· Drag &amp; Drop</span>
+        <button data-action="proj-kal-abo" style="margin-left:auto;background:#7c3aed;color:white;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">📅 Abo</button>
+      </div>
       <div id="geplant-list" style="margin-bottom:16px">
         ${geplant.map(p=>{
           const str=p.adresse_strasse||p.adresse||'';
           const plz=p.adresse_plz||'';const ort=p.adresse_ort||'';const land=p.adresse_land||'';
           const navStr=[str,[plz,ort].filter(Boolean).join(' '),land].filter(Boolean).join(', ');
-          return`<div class="card" style="margin-bottom:8px;cursor:pointer" data-action="proj-detail"
-            data-id="${p.id}"
-            data-agname="${esc(p.auftraggeber_name||'')}"
-            data-kundenname="${esc(p.kundenname||'')}"
-            data-adresse="${esc(navStr)}"
-            data-datum="${p.geplant_datum||''}"
-            data-uhrzeit="${p.geplant_uhrzeit?p.geplant_uhrzeit.slice(0,5):''}"
-            data-anzahl="${p.anzahl_mitarbeiter||''}"
-            data-notiz="${esc(p.notiz||'')}">
-            <div class="card-body" style="padding:12px">
-              <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:3px">${p.geplant_datum?`📅 ${fDate(p.geplant_datum)}${p.geplant_uhrzeit?` ⏰ ${p.geplant_uhrzeit.slice(0,5)}`:''}`:'Kein Datum'}</div>
-              <div style="font-weight:700;font-size:15px">${esc(p.auftraggeber_name||'–')}</div>
-              ${p.kundenname?`<div style="font-size:13px">${esc(p.kundenname)}</div>`:''}
+          return`<div class="geplant-item" data-id="${p.id}" style="display:flex;align-items:center;background:white;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:6px;gap:10px;touch-action:none">
+            <div class="drag-handle-geplant" style="color:#9ca3af;font-size:18px;cursor:grab;flex-shrink:0;padding:0 4px;user-select:none">⠿</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:3px;min-height:16px">${p.geplant_datum?`📅 ${fDate(p.geplant_datum)}${p.geplant_uhrzeit?` ⏰ ${p.geplant_uhrzeit.slice(0,5)}`:''}`  :''}</div>
+              <div style="font-weight:600">${esc(p.auftraggeber_name||'–')}</div>
+              ${p.kundenname?`<div style="font-size:12px;font-weight:500">${esc(p.kundenname)}</div>`:''}
               ${str?`<div style="font-size:12px;color:var(--text-muted)">${esc([str,[plz,ort].filter(Boolean).join(' ')].filter(Boolean).join(', '))}</div>`:''}
-              ${p.anzahl_mitarbeiter>1?`<div style="font-size:12px;color:var(--text-muted);margin-top:2px">👷 ${p.anzahl_mitarbeiter} Personen</div>`:''}
+              ${p.auftragsnummer?`<div style="font-size:12px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>`:''}
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0">
+              ${p.geplant_datum?`<button class="tbl-btn" data-action="proj-ical" data-datum="${p.geplant_datum}" data-title="${esc((p.auftraggeber_name||'Auftrag')+(p.kundenname?' – '+p.kundenname:''))}" data-adresse="${esc(navStr)}" title="In Kalender eintragen">📅</button>`:''}
+              ${navStr?`<button onclick="openNav(null,null,'${esc(navStr)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
+              ${isManager()?`<button class="tbl-btn" data-action="proj-edit-geplant" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-kundenname="${esc(p.kundenname||'')}" data-strasse="${esc(p.adresse_strasse||'')}" data-plz="${esc(p.adresse_plz||'')}" data-ort="${esc(p.adresse_ort||'')}" data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum||''}" data-uhrzeit="${p.geplant_uhrzeit?p.geplant_uhrzeit.slice(0,5):''}" data-dauer="${p.geplant_dauer_min||120}" data-anzahl="${p.anzahl_mitarbeiter||2}" data-notiz="${esc(p.notiz||'')}" title="Bearbeiten">✏️</button>`:''}
+              <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
+              ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
             </div>
           </div>`;
         }).join('')}
-      </div>`:`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Keine geplanten Aufträge</div><div class="empty-sub">Neue Aufträge unter Admin → Projekte anlegen</div></div>`}
+      </div>`:''}
     ${recent.filter(p=>p.status!=='geplant').length>0?`
       <div style="font-weight:700;margin-bottom:8px">Letzte Aufträge</div>
       <div style="overflow-x:auto;border-radius:12px;background:white;border:1px solid var(--border)">
@@ -1881,7 +1859,6 @@ async function renderTabProjekte(){
     </div>`).join('');
 
   return`<div class="admin-wrap">
-    <button class="btn btn-primary btn-sm" id="btn-neuer-auftrag" style="margin-bottom:12px;background:#7c3aed">+ Neuer Auftrag</button>
     <div class="card" style="margin-bottom:12px"><div class="card-body" style="padding:12px">
       <div style="font-weight:700;font-size:14px;margin-bottom:6px">🔴 Laufende Aufträge <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:10px;font-weight:700">${laufend.length}</span></div>
       ${laufendHTML}
@@ -2239,9 +2216,7 @@ async function renderTabKalender(){
   </div>`;
 }
 
-async function exportProjekteCSV(daten, von, bis, fzEinst){
-  const firma=await apiGet('/api/admin/firma').catch(()=>({}));
-  const firmaLine=firma.name?`"${firma.name}${firma.uid_atu?' · '+firma.uid_atu:''}"\n\n`:'';
+function exportProjekteCSV(daten, von, bis, fzEinst){
   const kpk=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
   const hdr=['Datum','Auftraggeber','Auftragsnummer','Anzahl MA','Status',
     'Fahrzeit Hin pro MA (Min)','Fahrzeit Rück pro MA (Min)','Fahrzeit gesamt pro MA (Min)',
@@ -2276,17 +2251,12 @@ async function exportProjekteCSV(daten, von, bis, fzEinst){
     '','',sumMaStd.toFixed(2),
     sumKm.toFixed(1),sumFk.toFixed(2),sumGut.toFixed(2),'',sumNetto.toFixed(2),sumEurStd,'']
     .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
-  const blob=new Blob(['\uFEFF'+firmaLine+hdr.join(',')+'\n'+rows.join('\n')+'\n'+sumRow],{type:'text/csv;charset=utf-8'});
+  const blob=new Blob(['\uFEFF'+hdr.join(',')+'\n'+rows.join('\n')+'\n'+sumRow],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download=`Projekte_${von}_${bis}.csv`;a.click();
 }
 
-async function exportProjektePDF(daten, von, bis, fzEinst){
-  const firma=await apiGet('/api/admin/firma').catch(()=>({}));
-  const firmaHeader=firma.name?`<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1e40af">
-    ${firma.logo_base64?`<img src="${firma.logo_base64}" style="max-height:60px;max-width:120px;object-fit:contain">`:''}
-    <div><div style="font-weight:700;font-size:14px">${esc(firma.name)}</div>${firma.anschrift?`<div style="white-space:pre-line;font-size:11px;color:#6b7280">${esc(firma.anschrift)}</div>`:''}${firma.uid_atu?`<div style="font-size:11px;color:#6b7280">UID: ${esc(firma.uid_atu)}</div>`:''}</div>
-  </div>`:'';
+function exportProjektePDF(daten, von, bis, fzEinst){
   const kpk=(parseFloat(fzEinst.diesel_preis||1.80)*parseFloat(fzEinst.verbrauch_100km||8)/100)+parseFloat(fzEinst.maut_pro_km||0)+parseFloat(fzEinst.abnuetzung_pro_km||0.15);
   const sum={count:0,fahrt:0,arbeit:0,km:0,fk:0,gut:0,maStd:0};
   daten.forEach(p=>{
@@ -2335,7 +2305,7 @@ async function exportProjektePDF(daten, von, bis, fzEinst){
   th{background:#1e40af;color:white;font-size:11px}tfoot td{font-weight:700;background:#f0f9ff;border-top:2px solid #1e40af}
   .summary{margin-bottom:14px;background:#f9fafb;padding:10px;border-radius:6px;font-size:12px}
   @media print{button{display:none}}</style></head><body>
-  ${firmaHeader}<h2>Projekte-Auswertung: ${von} – ${bis}</h2>
+  <h2>Projekte-Auswertung: ${von} – ${bis}</h2>
   <div class="summary">
     Aufträge: <b>${sum.count}</b> &nbsp;·&nbsp;
     Fahrzeit: <b>${fMin(sum.fahrt)}</b> &nbsp;·&nbsp;
@@ -2369,9 +2339,7 @@ async function exportProjektePDF(daten, von, bis, fzEinst){
   const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();}
 }
 
-async function exportZeitCSV(daten, von, bis){
-  const firma=await apiGet('/api/admin/firma').catch(()=>({}));
-  const firmaLine=firma.name?`"${firma.name}${firma.uid_atu?' · '+firma.uid_atu:''}"\n\n`:'';
+function exportZeitCSV(daten, von, bis){
   const header='Mitarbeiter;Datum;Typ;Kommen;Gehen;Pause (min);Ist-Stunden;Soll-Stunden;Saldo\n';
   const rows=daten.map(r=>{
     const typ=r.ist_feiertag?'Feiertag':r.ist_wochenende?'Wochenende':r.urlaub?'Urlaub':r.krankenstand?'Krankenstand':'Arbeitstag';
@@ -2385,19 +2353,14 @@ async function exportZeitCSV(daten, von, bis){
       (sal>=0?'+':'')+fMin(Math.abs(sal))
     ].join(';');
   }).join('\n');
-  const blob=new Blob(['\ufeff'+firmaLine+header+rows],{type:'text/csv;charset=utf-8'});
+  const blob=new Blob(['\ufeff'+header+rows],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download=`Zeiterfassung_${von||''}_${bis||''}.csv`;
   a.click();
 }
 
-async function exportZeitPDF(daten, von, bis){
-  const firma=await apiGet('/api/admin/firma').catch(()=>({}));
-  const firmaHeader=firma.name?`<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1e40af">
-    ${firma.logo_base64?`<img src="${firma.logo_base64}" style="max-height:60px;max-width:120px;object-fit:contain">`:''}
-    <div><div style="font-weight:700;font-size:14px">${esc(firma.name)}</div>${firma.anschrift?`<div style="white-space:pre-line;font-size:11px;color:#6b7280">${esc(firma.anschrift)}</div>`:''}${firma.uid_atu?`<div style="font-size:11px;color:#6b7280">UID: ${esc(firma.uid_atu)}</div>`:''}</div>
-  </div>`:'';
+function exportZeitPDF(daten, von, bis){
   const rows=daten.map(r=>`<tr>
     <td>${esc(r.name)}</td><td>${fDate(r.datum)}</td>
     <td>${r.urlaub?'🏖️ Urlaub':fUhr(r.kommen)}</td>
@@ -2409,7 +2372,7 @@ async function exportZeitPDF(daten, von, bis){
   <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}h1{font-size:18px}table{width:100%;border-collapse:collapse}
   th{background:#1e40af;color:white;padding:6px 8px;text-align:left}td{padding:5px 8px;border-bottom:1px solid #ddd}
   tr:nth-child(even)td{background:#f8f8f8}@media print{button{display:none}}</style></head><body>
-  ${firmaHeader}<h1>Solano – Zeiterfassung ${von?'von '+von:''} ${bis?'bis '+bis:''}</h1>
+  <h1>Solano – Zeiterfassung ${von?'von '+von:''} ${bis?'bis '+bis:''}</h1>
   <button onclick="window.print()" style="margin-bottom:12px;padding:8px 16px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Drucken / Als PDF</button>
   <table><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Kommen</th><th>Gehen</th><th>Pause</th><th>Stunden</th></tr></thead>
   <tbody>${rows}</tbody></table></body></html>`;
@@ -2711,33 +2674,6 @@ function bindEvents(){
   o('nav-projekte-akt','click',()=>go('projekte'));
   o('nav-kalender','click',()=>{_kalMonth=null;go('kalender');});
 
-  // Optionen
-  o('btn-optionen','click',()=>{
-    const isDark=document.body.classList.contains('dark');
-    showModal(`
-      <button class="modal-close" id="modal-close">×</button>
-      <div class="modal-title">⚙️ Optionen</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:15px;font-weight:600">🌙 Dark Mode</span>
-        <button id="btn-dark-toggle" style="background:${isDark?'var(--success)':'var(--border)'};border:none;border-radius:20px;width:48px;height:26px;cursor:pointer;position:relative;transition:background .2s">
-          <span style="position:absolute;top:3px;left:${isDark?'24px':'3px'};width:20px;height:20px;background:white;border-radius:50%;transition:left .2s;display:block"></span>
-        </button>
-      </div>
-      <div style="margin-top:20px;text-align:center;color:var(--text-muted);font-size:13px">
-        <div style="font-weight:700;color:var(--text);margin-bottom:4px">Solano Services App</div>
-        <div>Version ${APP_VERSION}</div>
-      </div>`);
-    setTimeout(()=>{
-      o('btn-dark-toggle','click',()=>{
-        const dark=document.body.classList.toggle('dark');
-        localStorage.setItem('darkMode',dark?'1':'0');
-        closeModal();
-        // Re-render to update toggle colors
-        setTimeout(()=>document.querySelector('[data-action="btn-optionen"]')?.click(),50);
-      });
-    },0);
-  });
-
   // Zeiterfassung Stempel-Buttons
   const stempelBtn=(id,typ)=>{
     const b=document.getElementById(id);
@@ -2787,34 +2723,6 @@ function bindEvents(){
         await apiDelete(`/api/zeit/${b.dataset.id}`);
         toast('🗑️ Eintrag gelöscht','ok');go('zeit');
       }catch(e){toast(e.message,'err')}
-    });
-  });
-
-  // Private Todos
-  const addPrivTodo=async()=>{
-    const inp=document.getElementById('privtodo-input');
-    if(!inp)return;
-    const text=inp.value.trim();
-    if(!text)return;
-    try{await apiPost('/api/todos/privat',{beschreibung:text});go('zeit');}
-    catch(e){toast(e.message,'err');}
-  };
-  o('privtodo-add','click',addPrivTodo);
-  const pinp=document.getElementById('privtodo-input');
-  if(pinp&&!pinp._bound){pinp._bound=true;pinp.addEventListener('keydown',e=>{if(e.key==='Enter')addPrivTodo();});}
-  document.querySelectorAll('.privtodo-check').forEach(b=>{
-    if(b._bound)return;b._bound=true;
-    b.addEventListener('change',async()=>{
-      try{await apiPut(`/api/todos/privat/${b.dataset.id}`,{});go('zeit');}
-      catch(e){toast(e.message,'err');}
-    });
-  });
-  document.querySelectorAll('.privtodo-del').forEach(b=>{
-    if(b._bound)return;b._bound=true;
-    b.addEventListener('click',async()=>{
-      if(!confirm('Aufgabe löschen?'))return;
-      try{await apiDelete(`/api/todos/privat/${b.dataset.id}`);go('zeit');}
-      catch(e){toast(e.message,'err');}
     });
   });
 
@@ -2915,39 +2823,6 @@ function bindEvents(){
       await apiPost('/api/projekte',{...d,geplant:true});
       toast('📋 Auftrag geplant','ok');go('projekte');
     }catch(e){toast(e.message,'err')}
-  });
-
-  // Projekte: Detail-Modal für geplante Aufträge
-  document.querySelectorAll('[data-action="proj-detail"]').forEach(b=>{
-    if(b._bound)return;b._bound=true;
-    b.addEventListener('click',()=>{
-      const d=b.dataset;
-      const adresseVoll=d.adresse||'';
-      showModal(`
-        <button class="modal-close" id="modal-close">×</button>
-        <div class="modal-title">📋 Auftragsdetails</div>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-          <div><span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase">Auftraggeber</span><div style="font-weight:700;font-size:16px">${esc(d.agname||'–')}</div></div>
-          ${d.kundenname?`<div><span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase">Kundenname</span><div>${esc(d.kundenname)}</div></div>`:''}
-          ${adresseVoll?`<div><span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase">Adresse</span><div>${esc(adresseVoll)}</div></div>`:''}
-          ${d.datum?`<div><span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase">Datum / Uhrzeit</span><div>${fDate(d.datum)}${d.uhrzeit?' um '+d.uhrzeit:''}</div></div>`:''}
-          ${d.anzahl?`<div><span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase">Mitarbeiter</span><div>${d.anzahl} Person(en)</div></div>`:''}
-          ${d.notiz?`<div><span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase">Notiz</span><div>${esc(d.notiz)}</div></div>`:''}
-        </div>
-        <button class="btn btn-primary" id="btn-modal-proj-starten" style="background:#7c3aed">🚗 Fahrt starten</button>
-        ${adresseVoll?`<button class="btn btn-outline" id="btn-modal-proj-nav" style="margin-top:8px">🗺️ Navigation öffnen</button>`:''}`);
-      setTimeout(()=>{
-        o('btn-modal-proj-starten','click',async()=>{
-          if(projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'&&projektAkt.status!=='geplant'){toast('Erst aktiven Auftrag abschließen','err');return;}
-          try{
-            const res=await apiPut(`/api/projekte/${d.id}/starten`,{});
-            projektAkt=res;localStorage.setItem('solano_projekt',JSON.stringify(res));
-            closeModal();toast('🚗 Fahrt gestartet','ok');go('projekte');
-          }catch(e){toast(e.message,'err');}
-        });
-        o('btn-modal-proj-nav','click',()=>openNav(null,null,adresseVoll));
-      },0);
-    });
   });
 
   // Projekte: Geplanten Auftrag starten
@@ -3688,30 +3563,6 @@ function bindAdminEvents(){
     });
   });
 
-  // Firma speichern
-  const bfs=document.getElementById('btn-firma-save');
-  if(bfs&&!bfs._bound){bfs._bound=true;bfs.addEventListener('click',async()=>{
-    const name=document.getElementById('firma-name')?.value||'';
-    const anschrift=document.getElementById('firma-anschrift')?.value||'';
-    const uid_atu=document.getElementById('firma-uid')?.value||'';
-    const fileInput=document.getElementById('firma-logo-file');
-    let logo_base64=undefined;
-    if(fileInput?.files?.[0]){
-      logo_base64=await new Promise(res=>{
-        const fr=new FileReader();
-        fr.onload=e=>res(e.target.result);
-        fr.readAsDataURL(fileInput.files[0]);
-      });
-    }
-    try{
-      const body={name,anschrift,uid_atu};
-      if(logo_base64!==undefined)body.logo_base64=logo_base64;
-      await apiPut('/api/admin/firma',body);
-      toast('✅ Firmendaten gespeichert','ok');
-      reloadTab();
-    }catch(e){toast(e.message,'err');}
-  })}
-
   // Kalender-Einstellungen speichern
   const kss=document.getElementById('btn-kal-settings-save');
   if(kss&&!kss._bound){kss._bound=true;kss.addEventListener('click',async()=>{
@@ -3791,7 +3642,7 @@ function bindAdminEvents(){
   const zpdf=document.getElementById('btn-zeit-pdf');
   if(zpdf&&!zpdf._bound){zpdf._bound=true;zpdf.addEventListener('click',async()=>{
     const von=pageData.zeitVon||'',bis=pageData.zeitBis||'',maId=pageData.zeitMa||'';
-    try{const d=await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`);await exportZeitPDF(d,von,bis)}catch(e){toast('Fehler','err')}
+    try{const d=await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`);exportZeitPDF(d,von,bis)}catch(e){toast('Fehler','err')}
   })}
   document.querySelectorAll('[data-action="del-zeit-tag"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
@@ -3818,7 +3669,7 @@ function bindAdminEvents(){
   const zcsv=document.getElementById('btn-zeit-csv');
   if(zcsv&&!zcsv._bound){zcsv._bound=true;zcsv.addEventListener('click',async()=>{
     const von=pageData.zeitVon||'',bis=pageData.zeitBis||'',maId=pageData.zeitMa||'';
-    try{const d=await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`);await exportZeitCSV(d,von,bis)}catch(e){toast('Fehler','err')}
+    try{const d=await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId?'&mitarbeiter_id='+maId:''}`);exportZeitCSV(d,von,bis)}catch(e){toast('Fehler','err')}
   })}
 
   // Projekte Admin-Tab: Laden
@@ -3839,78 +3690,6 @@ function bindAdminEvents(){
       const c=document.getElementById('admin-tab-content');
       if(c){c.innerHTML=`<div class="loading"><div class="spinner"></div></div>`;try{c.innerHTML=await renderTabBerichte();}catch(e){c.innerHTML=`<div style="padding:24px;color:#dc2626">Fehler: ${e.message}</div>`;}bindAdminEvents()}
     },400);
-  })}
-
-  // Projekte: Neuer Auftrag (Admin)
-  const btnNA=document.getElementById('btn-neuer-auftrag');
-  if(btnNA&&!btnNA._bound){btnNA._bound=true;btnNA.addEventListener('click',async()=>{
-    let agList=[];
-    try{agList=await apiGet('/api/projekte/auftraggeber');}catch(e){}
-    const agOpts='<option value="">– Auftraggeber wählen –</option>'+agList.map(ag=>`<option value="${ag.id}">${esc(ag.name)}</option>`).join('');
-    showModal(`
-      <button class="modal-close" id="modal-close">×</button>
-      <div class="modal-title">🔨 Neuer Auftrag</div>
-      <div class="form-group"><label class="form-label">Auftraggeber</label><select class="form-input" id="na-ag">${agOpts}</select></div>
-      <div class="form-group"><label class="form-label">Auftragsnummer (optional)</label><input type="text" class="form-input" id="na-nr" placeholder="z.B. 2025-001"></div>
-      <div class="form-group"><label class="form-label">Kundenname (optional)</label><input type="text" class="form-input" id="na-kundenname" placeholder="z.B. Mustermann GmbH"></div>
-      <div class="form-group"><label class="form-label">Adresse</label>
-        <input type="text" class="form-input" id="na-strasse" placeholder="Straße und Hausnummer" style="margin-bottom:6px">
-        <div style="display:grid;grid-template-columns:100px 1fr;gap:6px;margin-bottom:6px">
-          <input type="text" class="form-input" id="na-plz" placeholder="PLZ">
-          <input type="text" class="form-input" id="na-ort" placeholder="Ort">
-        </div>
-        <input type="text" class="form-input" id="na-land" placeholder="Land" value="Österreich">
-      </div>
-      <div class="form-group"><label class="form-label">Geplantes Datum</label>
-        <input type="date" class="form-input" id="na-datum" style="margin-bottom:6px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <div><label style="font-size:12px;color:var(--text-muted)">Uhrzeit</label><input type="time" class="form-input" id="na-uhrzeit"></div>
-          <div><label style="font-size:12px;color:var(--text-muted)">Dauer (Min)</label><input type="number" class="form-input" id="na-dauer" value="120" min="15" step="15"></div>
-        </div>
-      </div>
-      <div class="form-group"><label class="form-label">Anzahl Mitarbeiter</label>
-        <select class="form-input" id="na-anzahl">
-          <option value="1">1 Person</option><option value="2" selected>2 Personen</option>
-          <option value="3">3 Personen</option><option value="4">4 Personen</option><option value="5">5 Personen</option>
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">Notiz (optional)</label><textarea class="form-input" id="na-notiz" rows="2"></textarea></div>
-      <button class="btn btn-primary" id="btn-na-starten" style="background:#7c3aed">🚗 Fahrt starten</button>
-      <button class="btn" id="btn-na-planen" style="margin-top:8px;background:#6b7280;color:white">📋 Vorab planen</button>`);
-    setTimeout(()=>{
-      const getForm=()=>({
-        auftraggeber_id:document.getElementById('na-ag')?.value||null,
-        auftragsnummer:document.getElementById('na-nr')?.value||'',
-        kundenname:document.getElementById('na-kundenname')?.value||'',
-        adresse_strasse:document.getElementById('na-strasse')?.value||'',
-        adresse_plz:document.getElementById('na-plz')?.value||'',
-        adresse_ort:document.getElementById('na-ort')?.value||'',
-        adresse_land:document.getElementById('na-land')?.value||'Österreich',
-        geplant_datum:document.getElementById('na-datum')?.value||null,
-        geplant_uhrzeit:document.getElementById('na-uhrzeit')?.value||null,
-        geplant_dauer_min:parseInt(document.getElementById('na-dauer')?.value)||120,
-        anzahl_mitarbeiter:parseInt(document.getElementById('na-anzahl')?.value)||2,
-        notiz:document.getElementById('na-notiz')?.value||'',
-      });
-      o('btn-na-starten','click',async()=>{
-        const d=getForm();
-        if(!d.auftraggeber_id){toast('Auftraggeber wählen','err');return;}
-        try{
-          const p=await apiPost('/api/projekte',d);
-          const res=await apiPut(`/api/projekte/${p.id}/starten`,{});
-          projektAkt=res;localStorage.setItem('solano_projekt',JSON.stringify(res));
-          closeModal();toast('🚗 Fahrt gestartet','ok');reloadTab();
-        }catch(e){toast(e.message,'err');}
-      });
-      o('btn-na-planen','click',async()=>{
-        const d={...getForm(),geplant:true};
-        if(!d.auftraggeber_id){toast('Auftraggeber wählen','err');return;}
-        try{
-          await apiPost('/api/projekte',d);
-          closeModal();toast('📋 Auftrag geplant','ok');reloadTab();
-        }catch(e){toast(e.message,'err');}
-      });
-    },0);
   })}
 
   // Projekte: Neuer Auftraggeber
@@ -4060,7 +3839,7 @@ function bindAdminEvents(){
         apiGet(`/api/projekte/auswertung?von=${von}&bis=${bis}${ag?'&auftraggeber_id='+ag:''}`),
         apiGet('/api/projekte/einstellungen')
       ]);
-      await exportProjekteCSV(d,von,bis,fz);
+      exportProjekteCSV(d,von,bis,fz);
     }catch(e){toast('Fehler','err')}
   })}
 
@@ -4075,7 +3854,7 @@ function bindAdminEvents(){
         apiGet(`/api/projekte/auswertung?von=${von}&bis=${bis}${ag?'&auftraggeber_id='+ag:''}`),
         apiGet('/api/projekte/einstellungen')
       ]);
-      await exportProjektePDF(d,von,bis,fz);
+      exportProjektePDF(d,von,bis,fz);
     }catch(e){toast('Fehler','err')}
   })}
 
