@@ -1703,10 +1703,7 @@ async function renderTabProjekte(){
       </div>
       <div style="display:flex;gap:10px;margin-top:4px;font-size:13px;flex-wrap:wrap">
         <span>${s.count} Aufträge</span>
-        ${s.fahrt>0?`<span>🚗 <b>${fMin(s.fahrt)}</b>${!s.fzBez?'<span style="font-size:10px;color:#dc2626"> (unbez.)</span>':''}</span>`:''}
-        ${s.arbeit>0?`<span>🔨 <b>${fMin(s.arbeit)}</b></span>`:''}
         <span>MA-Std: <b>${s.maStd.toFixed(1)}h</b></span>
-        ${s.km>0?`<span>km: <b>${s.km.toFixed(1)}</b></span>`:''}
         ${s.fahrtkosten>0?`<span style="color:#dc2626">−€${s.fahrtkosten.toFixed(2)} Fahrt</span>`:''}
         ${s.gutschrift>0?`<span style="color:#16a34a">€${s.gutschrift.toFixed(2)} GS</span>`:''}
         ${s.gutschrift>0?`<span style="color:${netto>=0?'#16a34a':'#dc2626'}">Netto €${netto.toFixed(2)}</span>`:''}
