@@ -273,6 +273,7 @@ function isManager(){return!!(user?.ist_admin||user?.ist_chef)}
 let gpsBatch   = JSON.parse(localStorage.getItem('solano_gps_batch') || '[]');
 let projektAkt = JSON.parse(localStorage.getItem('solano_projekt') || 'null');
 let projektGpsTrack = [], projektGpsWatcher = null, projektTimerIv = null;
+let laufendAndereGlobal = []; // Manager: laufende Aufträge anderer User
 let zeitLiveIv = null;
 let page = 'login', pageData = {}, gpsWatcher = null, timerIv = null;
 window._nachBadge = 0;
@@ -410,6 +411,7 @@ function sidebarHTML(){
     ${showGr?`<div class="sidebar-label">GRÜNPFLEGE</div>${si('nav-gruenpflege','🌿','Anlagen',page==='anlagen'&&pageData.sparte==='gruenpflege')}`:''}
     ${einsatzAkt?`<div class="sidebar-label">AKTIVER EINSATZ</div>${si('nav-einsatz','🟢',esc(einsatzAkt.anlage_name||'Einsatz'),page==='einsatz')}`:''}
     ${projektAkt&&projektAkt.status!=='abgeschlossen'&&projektAkt.status!=='pausiert'?`<div class="sidebar-label">AKTIVER AUFTRAG</div>${si('nav-projekte-akt','🔨',esc(projektAkt.auftraggeber_name||'Auftrag'),page==='projekte')}`:''}
+    ${isManager()&&laufendAndereGlobal.length>0?`${si('nav-projekte','🔴',`${laufendAndereGlobal.length} laufend${laufendAndereGlobal.length>1?'e Aufträge':' Auftrag'}`,page==='projekte')}`:''}
     ${isManager()?`<div class="sidebar-label">VERWALTUNG</div>${si('nav-admin','⚙️','Admin',page==='admin')}`:''}
     <div class="sidebar-spacer"></div>
     <div class="sidebar-divider"></div>
@@ -1392,12 +1394,15 @@ async function pageProjekte(){
     }else{projektAkt=null;localStorage.removeItem('solano_projekt');}
   }catch(e){}
 
+  const phaseLabelsShort={fahrt:'🚗 Fahrt',arbeit:'🔨 Arbeit',rueckfahrt:'🏠 Rückfahrt',pausiert:'⏸ Pausiert'};
+
   // Manager: alle laufenden Aufträge anderer User laden
   let laufendAndere=[];
   if(isManager()){
     try{
       const alle=await apiGet('/api/projekte/laufend');
       laufendAndere=alle.filter(p=>p.id!==(projektAkt?.id));
+      laufendAndereGlobal=laufendAndere;
     }catch(e){}
   }
 
@@ -1455,7 +1460,22 @@ async function pageProjekte(){
       <button id="btn-proj-next-phase" style="width:100%;padding:16px;background:${nextBtnColors[phase]};color:white;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">${nextBtnLabels[phase]}</button>
       ${phase==='rueckfahrt'?`<button id="btn-proj-weiter-auftrag" style="width:100%;padding:14px;background:#7c3aed;color:white;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">➡️ Weiter zum nächsten Auftrag</button>`:''}
       ${isManager()?`<button id="btn-proj-delete" style="width:100%;padding:12px;background:transparent;color:#d97706;border:1px solid #d97706;border-radius:12px;font-size:14px;cursor:pointer">↩️ Auftrag abbrechen & zurückstellen</button>`:''}
-    </div>`;
+    </div>
+    ${laufendAndere.length>0?`<div style="margin-top:16px">
+      <div style="font-weight:700;font-size:13px;color:#dc2626;margin-bottom:6px">🔴 Weitere laufende Aufträge (${laufendAndere.length})</div>
+      ${laufendAndere.map(p=>`
+        <div style="display:flex;align-items:center;gap:8px;background:white;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:10px;padding:8px 10px;margin-bottom:6px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700">${esc(p.auftraggeber_name||'–')}</div>
+            <div style="font-size:11px;color:var(--text-muted)">👷 ${esc(p.mitarbeiter_name_anzeige||p.mitarbeiter_name||'–')} · ${phaseLabelsShort[p.status]||p.status}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <button class="tbl-btn" data-action="mgr-phase-weiter" data-id="${p.id}" data-status="${p.status}" style="background:#7c3aed;color:white">▶️</button>
+            <button class="tbl-btn" data-action="proj-admin-abschliessen" data-id="${p.id}" style="background:#16a34a;color:white">✅</button>
+            <button class="tbl-btn" data-action="proj-admin-zurueck" data-id="${p.id}" style="background:#f59e0b;color:white">↩️</button>
+          </div>
+        </div>`).join('')}
+    </div>`:''}`;
   }
 
   // Kein aktiver Auftrag – Neuen starten
@@ -1510,7 +1530,6 @@ async function pageProjekte(){
     </tr>`;
   }).join('');
 
-  const phaseLabelsShort={fahrt:'🚗 Fahrt',arbeit:'🔨 Arbeit',rueckfahrt:'🏠 Rückfahrt',pausiert:'⏸ Pausiert'};
   const laufendAndereHTML=laufendAndere.length>0?`
     <div style="margin-bottom:16px">
       <div style="font-weight:700;font-size:15px;margin-bottom:8px;color:#dc2626">🔴 Laufende Aufträge (${laufendAndere.length})</div>
@@ -1605,6 +1624,7 @@ async function pageProjekte(){
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0">
               ${navStr?`<button onclick="openNav(null,null,'${esc(navStr)}')" class="tbl-btn" style="background:#3b82f6;color:white" title="Navigation">🗺️</button>`:''}
+              ${p.geplant_datum?`<button class="tbl-btn" data-action="proj-ical" data-datum="${p.geplant_datum}" data-title="${esc((p.auftraggeber_name||'Auftrag')+(p.kundenname?' – '+p.kundenname:''))}" data-adresse="${esc(navStr)}" title="In Kalender eintragen">📅</button>`:''}
               ${isManager()?`<button class="tbl-btn" data-action="proj-edit-geplant" data-id="${p.id}" data-agname="${esc(p.auftraggeber_name||'')}" data-nr="${esc(p.auftragsnummer||'')}" data-kundenname="${esc(p.kundenname||'')}" data-strasse="${esc(p.adresse_strasse||'')}" data-plz="${esc(p.adresse_plz||'')}" data-ort="${esc(p.adresse_ort||'')}" data-land="${esc(p.adresse_land||'Österreich')}" data-datum="${p.geplant_datum||''}" data-anzahl="${p.anzahl_mitarbeiter||2}" data-notiz="${esc(p.notiz||'')}" title="Bearbeiten">✏️</button>`:''}
               <button class="tbl-btn" data-action="proj-starten-geplant" data-id="${p.id}" style="background:#7c3aed;color:white;white-space:nowrap">🚗 Starten</button>
               ${isManager()?`<button class="tbl-btn danger" data-action="proj-delete-recent" data-id="${p.id}" title="Löschen">🗑️</button>`:''}
@@ -3121,6 +3141,37 @@ function bindEvents(){
     }
   });
 
+  // Geplante Aufträge: In Kalender eintragen (ICS-Download)
+  document.querySelectorAll('[data-action="proj-ical"]').forEach(b=>{
+    if(b._bound)return;b._bound=true;
+    b.addEventListener('click',()=>{
+      const d=b.dataset;
+      const dt=d.datum.replace(/-/g,''); // YYYYMMDD
+      const title=d.title||'Auftrag';
+      const adresse=d.adresse||'';
+      const uid=`solano-${dt}-${Math.random().toString(36).slice(2)}@solano`;
+      const ics=[
+        'BEGIN:VCALENDAR','VERSION:2.0','CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        `UID:${uid}`,
+        `DTSTART;VALUE=DATE:${dt}`,
+        `DTEND;VALUE=DATE:${dt}`,
+        `SUMMARY:${title}`,
+        adresse?`LOCATION:${adresse}`:'',
+        `DESCRIPTION:Solano Auftrag – ${title}`,
+        'END:VEVENT','END:VCALENDAR'
+      ].filter(Boolean).join('\r\n');
+      const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;a.download=`auftrag-${d.datum}.ics`;
+      document.body.appendChild(a);a.click();
+      document.body.removeChild(a);URL.revokeObjectURL(url);
+      toast('📅 Kalendereintrag heruntergeladen','ok');
+    });
+  });
+
   // Manager: Auftrag anderer User zurückstellen / abschließen (auf Projekte-Seite)
   document.querySelectorAll('[data-action="proj-admin-zurueck"]').forEach(b=>{
     if(b._bound)return;b._bound=true;
@@ -3284,6 +3335,11 @@ function bindEvents(){
       localStorage.setItem('solano_user',JSON.stringify(user));
       registerPushSubscription();
       await updateNachBadge();
+      // Manager: laufende Aufträge vorladen für Sidebar-Badge
+      if(user?.ist_admin||user?.ist_chef){
+        try{const alle=await apiGet('/api/projekte/laufend');
+          laufendAndereGlobal=alle.filter(p=>p.id!==(projektAkt?.id));}catch(e){}
+      }
       go('home');
     }catch(e){toast(e.message,'err')}
   });
