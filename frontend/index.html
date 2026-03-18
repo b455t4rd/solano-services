@@ -1608,9 +1608,9 @@ async function pageProjekte(){
     </div></div>
     ${geplant.length>0?`
       <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button data-action="proj-kal-abo" style="background:#7c3aed;color:white;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">📅 Abo</button>
         <span style="font-weight:700">📋 Geplante Aufträge</span>
-        <span style="font-size:12px;color:var(--text-muted)">· Reihenfolge per Drag &amp; Drop ändern</span>
-        <button data-action="proj-kal-abo" style="background:#7c3aed;color:white;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">📅 Kalender-Abo</button>
+        <span style="font-size:12px;color:var(--text-muted)">· Drag &amp; Drop</span>
       </div>
       <div id="geplant-list" style="margin-bottom:16px">
         ${geplant.map(p=>{
