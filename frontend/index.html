@@ -681,14 +681,14 @@ async function pageEinsatz(){
 async function pageAdmin(){
   const tab=pageData.adminTab||'anlagen';
   return`<div class="tabs" style="overflow-x:auto;flex-wrap:nowrap;position:sticky;top:0;z-index:50;background:white;border-bottom:1px solid var(--border)">
-    <button class="tab-btn ${tab==='anlagen'?'active':''}" data-tab="anlagen">Anlagen</button>
+    <button class="tab-btn ${tab==='anlagen'?'active':''}" data-tab="anlagen">📍 Anlagen</button>
     <button class="tab-btn ${tab==='projekte'?'active':''}" data-tab="projekte">🔨 Projekte</button>
-    <button class="tab-btn ${tab==='berichte'?'active':''}" data-tab="berichte">Berichte</button>
+    <button class="tab-btn ${tab==='berichte'?'active':''}" data-tab="berichte">📊 Berichte</button>
     <button class="tab-btn ${tab==='zeitauswertung'?'active':''}" data-tab="zeitauswertung">⏱ Zeit</button>
     <button class="tab-btn ${tab==='todos'?'active':''}" data-tab="todos">📋 TODOs</button>
     <button class="tab-btn ${tab==='nachrichten'?'active':''}" data-tab="nachrichten">💬 Nachrichten</button>
     ${user?.ist_admin?`<button class="tab-btn ${tab==='push'?'active':''}" data-tab="push">🔔 Push</button>`:''}
-    <button class="tab-btn ${tab==='mitarbeiter'?'active':''}" data-tab="mitarbeiter">Mitarbeiter</button>
+    <button class="tab-btn ${tab==='mitarbeiter'?'active':''}" data-tab="mitarbeiter">👷 Mitarbeiter</button>
     <button class="tab-btn ${tab==='alarm'?'active':''}" data-tab="alarm">🚨 Alarm</button>
     ${user?.ist_admin?`<button class="tab-btn ${tab==='reset'?'active':''}" data-tab="reset">🗑️ Reset</button>`:''}
     <button class="tab-btn ${tab==='karte'?'active':''}" data-tab="karte">🗺️ Karte</button>
@@ -719,7 +719,10 @@ async function renderTabAnlagen(){
 }
 
 async function renderTabMitarbeiter(){
-  const list=await apiGet('/api/mitarbeiter');
+  const [list,eingestempelt]=await Promise.all([
+    apiGet('/api/mitarbeiter'),
+    apiGet('/api/zeit/eingestempelt').catch(()=>[])
+  ]);
   const rows=list.map(m=>{
     const sparteIcons=[m.zeige_winterdienst!==false?'❄️':'',m.zeige_gebaeudereinigung!==false?'🧹':'',m.zeige_gruenpflege!==false?'🌿':'',m.zeige_projekte!==false?'🔨':''].filter(Boolean).join(' ')||'–';
     const roleBadge=m.ist_admin?'<span class="badge badge-red">👑 Admin</span>':m.ist_chef?'<span class="badge badge-blue">⭐ Chef</span>':'<span class="badge badge-gray">Mitarbeiter</span>';
@@ -727,7 +730,23 @@ async function renderTabMitarbeiter(){
     const beschBadge=m.beschaeftigung&&m.beschaeftigung!=='vollzeit'?`<span class="badge badge-gray">${m.beschaeftigung==='teilzeit'?'Teilzeit':'Geringfügig'} ${m.soll_stunden||38.5}h/W</span>`:'';
     return`<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge} ${alarmBadge} ${beschBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef||false}" data-zw="${m.zeige_winterdienst!==false}" data-zg="${m.zeige_gebaeudereinigung!==false}" data-zgr="${m.zeige_gruenpflege!==false}" data-zp="${m.zeige_projekte!==false}" data-alarm="${m.winterdienst_alarm||false}" data-soll="${m.soll_stunden||38.5}" data-beschaeftigung="${m.beschaeftigung||'vollzeit'}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
   }).join('');
-  return`<div class="admin-wrap"><button class="btn btn-primary btn-sm" id="btn-new-ma" style="margin-bottom:12px">+ Neuer Mitarbeiter</button><div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Name</th><th>PIN</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  const eingestempeltHTML=eingestempelt.length===0
+    ?`<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Niemand eingestempelt</div>`
+    :eingestempelt.map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6">
+      <div style="flex:1;font-size:13px">
+        <span style="font-weight:600">👷 ${esc(m.mitarbeiter_name)}</span>
+        <span style="color:var(--text-muted);font-size:12px"> · seit ${new Date(m.kommen_seit).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})}</span>
+      </div>
+      <button class="tbl-btn" data-action="admin-ausstempeln" data-id="${m.mitarbeiter_id}" data-name="${esc(m.mitarbeiter_name)}" title="Ausstempeln" style="background:#dc2626;color:white;font-size:12px">🚪 Gehen</button>
+    </div>`).join('');
+  return`<div class="admin-wrap">
+    <div class="card" style="margin-bottom:12px"><div class="card-body" style="padding:12px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">👷 Eingestempelt <span style="font-size:12px;background:#dcfce7;color:#16a34a;padding:1px 7px;border-radius:10px;font-weight:700">${eingestempelt.length}</span></div>
+      ${eingestempeltHTML}
+    </div></div>
+    <button class="btn btn-primary btn-sm" id="btn-new-ma" style="margin-bottom:12px">+ Neuer Mitarbeiter</button>
+    <div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Name</th><th>PIN</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
 }
 
 async function renderTabBerichte(){
@@ -1654,7 +1673,7 @@ async function pageProjekte(){
 async function renderTabProjekte(){
   let auswertung=[],agList=[],fzEinst={diesel_preis:1.80,verbrauch_100km:8,maut_pro_km:0,abnuetzung_pro_km:0.15};
   let maKosten={stundensatz_fa:55,stundensatz_ha:45,stundensatz_gf:35,warnschwelle:55};
-  let laufend=[],eingestempelt=[];
+  let laufend=[];
   const _h=new Date(),_mo=new Date(_h);_mo.setDate(1);
   const von=pageData.projVon||_mo.toISOString().split('T')[0];
   const bis=pageData.projBis||_h.toISOString().split('T')[0];
@@ -1665,7 +1684,6 @@ async function renderTabProjekte(){
   try{fzEinst=await apiGet('/api/projekte/einstellungen');}catch(e){}
   try{maKosten=await apiGet('/api/projekte/ma-kosten');}catch(e){}
   try{laufend=await apiGet('/api/projekte/laufend');}catch(e){}
-  try{eingestempelt=await apiGet('/api/zeit/eingestempelt');}catch(e){}
   const warnschwelle=parseFloat(maKosten.warnschwelle||55);
 
   // Kosten pro km berechnen
@@ -1803,27 +1821,11 @@ async function renderTabProjekte(){
       </div>
     </div>`).join('');
 
-  const eingestempeltHTML=eingestempelt.length===0
-    ?`<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Niemand eingestempelt</div>`
-    :eingestempelt.map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6">
-      <div style="flex:1;font-size:13px">
-        <span style="font-weight:600">👷 ${esc(m.mitarbeiter_name)}</span>
-        <span style="color:var(--text-muted);font-size:12px"> · seit ${new Date(m.kommen_seit).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})}</span>
-      </div>
-      <button class="tbl-btn" data-action="admin-ausstempeln" data-id="${m.mitarbeiter_id}" data-name="${esc(m.mitarbeiter_name)}" title="Ausstempeln" style="background:#dc2626;color:white;font-size:12px">🚪 Gehen</button>
-    </div>`).join('');
-
   return`<div class="admin-wrap">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <div class="card"><div class="card-body" style="padding:12px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:6px">🔴 Laufende Aufträge <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:10px;font-weight:700">${laufend.length}</span></div>
-        ${laufendHTML}
-      </div></div>
-      <div class="card"><div class="card-body" style="padding:12px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:6px">👷 Eingestempelt <span style="font-size:12px;background:#dcfce7;color:#16a34a;padding:1px 7px;border-radius:10px;font-weight:700">${eingestempelt.length}</span></div>
-        ${eingestempeltHTML}
-      </div></div>
-    </div>
+    <div class="card" style="margin-bottom:12px"><div class="card-body" style="padding:12px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">🔴 Laufende Aufträge <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:10px;font-weight:700">${laufend.length}</span></div>
+      ${laufendHTML}
+    </div></div>
     <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="proj-von" value="${von}"></div>
