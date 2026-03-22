@@ -1470,8 +1470,13 @@
   <script>
     // ── CONFIG & STATE ──
     const API = '';
-    const APP_VERSION = '1.7.1';
+    const APP_VERSION = '1.8.0';
     const APP_CHANGELOG = [
+      {
+        v: '1.8.0', d: '22.03.2026', punkte: [
+          'Datensicherung: Neues Feature "📦 Voll-Backup". Mit einem Klick kann nun der gesamte Live-Server inklusive Quellcode, Datenbank und sämtlichen Foto-Uploads als Notfall-Archiv (.tar.gz) gesichert und heruntergeladen werden.',
+        ]
+      },
       {
         v: '1.7.1', d: '22.03.2026', punkte: [
           'Datensicherung: Die serverseitigen, automatischen Nacht-Backups sind nun wieder im Admin-Bereich sichtbar und können mit einem Klick heruntergeladen oder wiederhergestellt werden.',
@@ -5342,13 +5347,19 @@
     </div></div>
 
     <div class="card" style="margin-bottom:12px;border:2px solid #16a34a40"><div class="card-body">
-      <div style="font-weight:700;font-size:14px;margin-bottom:10px">💾 Datensicherung</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-        <button class="btn btn-primary btn-sm" id="btn-backup-now" style="background:#16a34a">💾 Jetzt sichern</button>
-        <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#f3f4f6;border:1px solid var(--border);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">
-          📤 Hochladen &amp; wiederherstellen
-          <input type="file" id="backup-upload-input" accept=".sql" style="display:none">
-        </label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <h2 style="margin:0;font-size:18px;color:#1e40af">💾 Manuelles Backup</h2>
+          <div style="font-size:12px;color:var(--text-muted)">Erstellt sofort eine Kopie des aktuellen Standes</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" id="btn-backup-now" style="background:#16a34a">💾 DB-Text sichern</button>
+          <button class="btn btn-primary btn-sm" id="btn-backup-full" style="background:#7c3aed" title="Sichert Datenbank, Quellcode, .env Schlüssel und sämtliche Uploads in ein Archiv">📦 Voll-Backup (App + DB)</button>
+        </div>
+      </div>
+      <div style="margin-bottom:24px;border-top:1px solid var(--border);padding-top:12px;display:flex;align-items:center;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('backup-upload-input').click()">⬆️ Externes Backup wiederherstellen (.sql)</button>
+        <input type="file" id="backup-upload-input" accept=".sql" style="display:none">
       </div>
 
       <div style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px">
@@ -8165,6 +8176,19 @@
       }
 
       // Datensicherung: Upload & Wiederherstellen
+      const btnBackupFull = document.getElementById('btn-backup-full');
+      if (btnBackupFull && !btnBackupFull._bound) {
+        btnBackupFull._bound = true; btnBackupFull.addEventListener('click', async () => {
+          btnBackupFull.disabled = true; btnBackupFull.textContent = '⏳ Packe App & DB (Warten…)';
+          try {
+            toast('Das Zusammenpacken der gesamten App und Datenbank kann einen kleinen Moment dauern...', 'info');
+            const r = await apiPost('/api/admin/backup/create-full', {});
+            toast(`📦 Voll-Backup erstellt: ${r.name}`, 'ok');
+            renderTabDatensicherung();
+          } catch (e) { toast(e.message, 'err'); btnBackupFull.disabled = false; btnBackupFull.textContent = '📦 Voll-Backup (App + DB)'; }
+        });
+      }
+
       const backupUpload = document.getElementById('backup-upload-input');
       if (backupUpload && !backupUpload._bound) {
         backupUpload._bound = true; backupUpload.addEventListener('change', async () => {

@@ -243,6 +243,39 @@ router.post('/backup/create', adminMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Datensicherung: Erstellen (Voll-Backup) ───────────────────────────────────
+router.post('/backup/create-full', adminMiddleware, async (req, res) => {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+    const projectRoot = path.join(__dirname, '../../');
+    const dbFile = path.join(projectRoot, `solano_db_temp_${ts}.sql`);
+
+    // 1. Temporärer DB Dump in root
+    execSync(
+      `PGPASSWORD="${DB_PASS}" pg_dump --clean --if-exists -h ${DB_HOST} -U ${DB_USER} ${DB_NAME} > "${dbFile}"`,
+      { shell: '/bin/bash' }
+    );
+
+    // 2. Tar-Archiv generieren (excl. node_modules, backups, .git)
+    const tarFile = path.join(BACKUP_DIR, `solano_full_${ts}.tar.gz`);
+    execSync(
+      `tar --exclude="node_modules" --exclude=".git" --exclude="backups" --exclude=".DS_Store" -czf "${tarFile}" .`,
+      { shell: '/bin/bash', cwd: projectRoot }
+    );
+
+    // Temp DB Backup aufräumen
+    if (fs.existsSync(dbFile)) fs.unlinkSync(dbFile);
+
+    const stat = fs.statSync(tarFile);
+    await logEvent({ level: 'info', aktion: 'voll-backup-erstellt', ausgeloest_von: req.user.name, details: { datei: path.basename(tarFile), groesse: stat.size } });
+    res.json({ ok: true, name: path.basename(tarFile), size: stat.size, created: stat.mtime });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Datensicherung: Download ──────────────────────────────────────────────────
 router.get('/backup/download/:filename', adminMiddleware, (req, res) => {
   const filename = path.basename(req.params.filename); // security: no path traversal
