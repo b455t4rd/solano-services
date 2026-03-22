@@ -4173,17 +4173,15 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     function _openArtikelanlageModal(stammdaten, artikelKats, bestKats) {
       const katOpts = (artikelKats || []).filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
       const bKatOpts = (bestKats || []).filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${esc(k.name)}</option>`).join('');
-      const hasBarcodeDetector = 'BarcodeDetector' in window;
       showModal(`
         <button class="modal-close" id="modal-close">×</button>
         <div class="modal-title">🏷️ Artikel scannen / anlegen</div>
-        ${hasBarcodeDetector ? `
-          <div style="margin-bottom:10px">
-            <button class="btn btn-primary" id="bc-scan-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px">📷 Barcode fotografieren</button>
-            <input type="file" id="bc-img-input" accept="image/*" capture="environment" style="display:none">
-            <div id="bc-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
-          </div>` : `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">⚠️ Barcode-Scan nicht unterstützt – Scancode manuell eingeben</div>`}
-        <div class="form-group"><label class="form-label">Scancode</label><input class="form-input" id="bc-code" placeholder="EAN / QR-Code"></div>
+        <div style="margin-bottom:10px">
+          <button class="btn btn-primary" id="bc-scan-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px">📷 Barcode / QR-Code fotografieren</button>
+          <input type="file" id="bc-img-input" accept="image/*" capture="environment" style="display:none">
+          <div id="bc-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Scancode (manuell)</label><input class="form-input" id="bc-code" placeholder="EAN / QR-Code"></div>
         <button class="btn btn-outline" id="bc-lookup-btn" style="width:100%;margin-bottom:14px">🔍 Artikel suchen</button>
         <div id="bc-result" style="margin-bottom:10px"></div>
         <hr style="border:none;border-top:1px solid var(--border);margin:10px 0">
@@ -4197,7 +4195,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           <div class="form-group"><label class="form-label">Netto €</label><input class="form-input" id="bc-netto" type="number" step="0.01"></div>
           <div class="form-group"><label class="form-label">Brutto €</label><input class="form-input" id="bc-brutto" type="number" step="0.01"></div>
         </div>
-        <div style="display:flex;gap:6px;margin-bottom:10px">
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
           ${['❄️ Winterdienst', '🧹 Gebäudereinigung', '🌿 Grünpflege', '🔨 Projekte'].map((l, i) => {
         const ids = ['bc-sp-w', 'bc-sp-g', 'bc-sp-gr', 'bc-sp-p'];
         return `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="${ids[i]}"> ${l}</label>`;
@@ -4206,26 +4204,50 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <button class="btn btn-primary" id="bc-save-btn" style="width:100%">💾 Artikel speichern</button>
       `);
 
-      // Barcode scan
-      if (hasBarcodeDetector) {
-        document.getElementById('bc-scan-btn')?.addEventListener('click', () => document.getElementById('bc-img-input')?.click());
-        document.getElementById('bc-img-input')?.addEventListener('change', async ev => {
-          const file = ev.target.files[0]; if (!file) return;
-          const st = document.getElementById('bc-status');
-          if (st) st.textContent = '🔍 Barcode wird erkannt…';
-          try {
+      // Barcode scan via html5-qrcode (works universally for QR + EAN)
+      async function scanBarcode(file) {
+        const st = document.getElementById('bc-status');
+        if (st) st.textContent = '🔍 Barcode wird erkannt…';
+        try {
+          // Try native BarcodeDetector first
+          if ('BarcodeDetector' in window) {
             const bmp = await createImageBitmap(file);
             const det = new BarcodeDetector();
             const codes = await det.detect(bmp);
-            if (codes.length) {
-              const code = codes[0].rawValue;
-              const inp = document.getElementById('bc-code'); if (inp) inp.value = code;
-              if (st) st.textContent = `✅ Barcode: ${code}`;
-              document.getElementById('bc-lookup-btn')?.click();
-            } else { if (st) st.textContent = '❌ Kein Barcode erkannt'; }
-          } catch (e) { if (st) st.textContent = '❌ Fehler: ' + e.message; }
-        });
+            if (codes.length) return codes[0].rawValue;
+          }
+          // Fallback: html5-qrcode
+          if (!window.Html5Qrcode) {
+            await new Promise((ok, fail) => {
+              const s = document.createElement('script');
+              s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+              s.onload = ok; s.onerror = fail; document.head.appendChild(s);
+            });
+          }
+          // html5-qrcode needs a dummy div in DOM
+          let helper = document.getElementById('_qr_helper');
+          if (!helper) { helper = document.createElement('div'); helper.id = '_qr_helper'; helper.style.display = 'none'; document.body.appendChild(helper); }
+          const scanner = new Html5Qrcode('_qr_helper');
+          const result = await scanner.scanFileV2(file, false);
+          scanner.clear().catch(() => { });
+          return result.decodedText;
+        } catch (e) {
+          if (st) st.textContent = '❌ Kein Barcode erkannt: ' + e.message;
+          return null;
+        }
       }
+
+      document.getElementById('bc-scan-btn')?.addEventListener('click', () => document.getElementById('bc-img-input')?.click());
+      document.getElementById('bc-img-input')?.addEventListener('change', async ev => {
+        const file = ev.target.files[0]; if (!file) return;
+        const st = document.getElementById('bc-status');
+        const code = await scanBarcode(file);
+        if (code) {
+          const inp = document.getElementById('bc-code'); if (inp) inp.value = code;
+          if (st) st.textContent = `✅ Erkannt: ${code}`;
+          document.getElementById('bc-lookup-btn')?.click();
+        }
+      });
 
       // Lookup
       document.getElementById('bc-lookup-btn')?.addEventListener('click', async () => {
@@ -4362,15 +4384,17 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       return `
       <style>
         @media print {
-          .header,.sidebar,.btn-print,.btn-back,.btn-excel-bestell,.bericht-bestellt td { display:block!important; }
+          .btn-print,.btn-back,.btn-excel-bestell { display:block!important; }
+          .btn-back,.btn-excel-bestell { display:none!important; }
           .header,.sidebar { display:none!important; }
           body { background:white!important; }
           .bericht-bestellt { display:none!important; }
         }
       </style>
       <div style="max-width:800px;margin:0 auto;padding:0 0 60px">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
-          <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <button class="btn btn-outline btn-back" onclick="go('bestellungen')" style="padding:6px 12px;font-size:18px;line-height:1">‹</button>
+          <div style="flex:1">
             <div style="font-size:20px;font-weight:800">📋 Bestellliste</div>
             <div style="font-size:12px;color:var(--text-muted)">${new Date().toLocaleDateString('de-AT')} · ${offeneGesamt} offen · ${bestelltGesamt} bestellt</div>
           </div>
@@ -4378,6 +4402,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             <button class="btn btn-primary btn-print" onclick="window.print()">🖨️ Drucken</button>
             <button class="btn btn-outline btn-excel-bestell" id="bericht-excel-btn">📊 Excel</button>
           </div>
+        </div>
         </div>
         <div id="bericht-gruppen">${gruppenHtml || '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Keine Einträge</div></div>'}</div>
       </div>`;
