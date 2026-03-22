@@ -5324,7 +5324,7 @@
           <div style="font-size:11px;color:var(--text-muted)">${fSize(b.size)} · ${new Date(b.created).toLocaleString('de-AT')}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <a href="/api/admin/backup/download/${encodeURIComponent(b.name)}" download="${esc(b.name)}" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f3f4f6;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);text-decoration:none;cursor:pointer">⬇️ Download</a>
+          <a href="/api/admin/backup/download/${encodeURIComponent(b.name)}?token=${encodeURIComponent(localStorage.getItem('solano_token') || '')}" download="${esc(b.name)}" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f3f4f6;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);text-decoration:none;cursor:pointer">⬇️ Download</a>
           ${isSql ? `<button class="tbl-btn" data-action="backup-restore" data-name="${esc(b.name)}" style="font-size:12px;background:#1e40af;color:white;border:none">🔄 Wiederherstellen</button>` : ''}
           <button class="tbl-btn danger" data-action="backup-delete" data-name="${esc(b.name)}" style="font-size:12px">🗑️</button>
         </div>
