@@ -350,19 +350,19 @@ router.post('/backup/restore-upload', adminMiddleware, uploadBackup.single('back
 router.get('/backup/schedule', adminMiddleware, async (req, res) => {
   try {
     const r = await pool.query('SELECT * FROM backup_schedule ORDER BY id LIMIT 1');
-    res.json(r.rows[0] || { aktiv: false, wochentage: [], uhrzeit: '02:00' });
+    res.json(r.rows[0] || { aktiv: false, wochentage: [], voll_wochentage: [], uhrzeit: '02:00' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Backup-Zeitplan: Speichern ────────────────────────────────────────────────
 router.put('/backup/schedule', adminMiddleware, async (req, res) => {
   try {
-    const { aktiv, wochentage, uhrzeit } = req.body;
+    const { aktiv, wochentage, voll_wochentage, uhrzeit } = req.body;
     await pool.query(
-      `UPDATE backup_schedule SET aktiv=$1, wochentage=$2, uhrzeit=$3, updated_at=NOW()`,
-      [!!aktiv, JSON.stringify(wochentage || []), uhrzeit || '02:00']
+      `UPDATE backup_schedule SET aktiv=$1, wochentage=$2, voll_wochentage=$3, uhrzeit=$4, updated_at=NOW()`,
+      [!!aktiv, JSON.stringify(wochentage || []), JSON.stringify(voll_wochentage || []), uhrzeit || '02:00']
     );
-    await logEvent({ level: 'info', aktion: 'backup-zeitplan-geaendert', ausgeloest_von: req.user.name, details: { aktiv, wochentage, uhrzeit } });
+    await logEvent({ level: 'info', aktion: 'backup-zeitplan-geaendert', ausgeloest_von: req.user.name, details: { aktiv, wochentage, voll_wochentage, uhrzeit } });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

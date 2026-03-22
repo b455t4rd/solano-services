@@ -24,13 +24,13 @@ app.use('/api/einsaetze', require('./routes/einsaetze'));
 app.use('/api/gps', require('./routes/gps'));
 app.use('/api/fotos', require('./routes/fotos'));
 app.use('/api/todos', require('./routes/todos'));
-app.use('/api/push',  require('./routes/push'));
+app.use('/api/push', require('./routes/push'));
 app.use('/api/nachrichten', require('./routes/nachrichten'));
-app.use('/api/alarm',      require('./routes/alarm'));
-app.use('/api/admin',      require('./routes/admin'));
-app.use('/api/zeit',       require('./routes/zeit'));
-app.use('/api/kalender',   require('./routes/kalender'));
-app.use('/api/projekte',   require('./routes/projekte'));
+app.use('/api/alarm', require('./routes/alarm'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/zeit', require('./routes/zeit'));
+app.use('/api/kalender', require('./routes/kalender'));
+app.use('/api/projekte', require('./routes/projekte'));
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -60,34 +60,60 @@ try {
       if (!r.rows.length) return;
       const cfg = r.rows[0];
       const now = new Date();
-      const pad = n => String(n).padStart(2,'0');
+      const pad = n => String(n).padStart(2, '0');
       const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
       const nowDay = String(now.getDay()); // 0=So,1=Mo,...,6=Sa
       const tage = Array.isArray(cfg.wochentage) ? cfg.wochentage.map(String) : [];
+      const fullTage = Array.isArray(cfg.voll_wochentage) ? cfg.voll_wochentage.map(String) : [];
       if (nowTime !== cfg.uhrzeit) return;
-      if (!tage.includes(nowDay)) return;
+      if (!tage.includes(nowDay) && !fullTage.includes(nowDay)) return;
       // Bereits heute gelaufen?
       if (cfg.letzte_ausfuehrung) {
         const letzt = new Date(cfg.letzte_ausfuehrung);
         if (letzt.toDateString() === now.toDateString()) return;
       }
-      // Backup erstellen
+
+      const projectRoot = pathB.join(__dirname, '../');
       if (!fsB.existsSync(BACKUP_DIR_C)) fsB.mkdirSync(BACKUP_DIR_C, { recursive: true });
-      const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}00`;
-      const dbFile = pathB.join(BACKUP_DIR_C, `solano_db_auto_${ts}.sql`);
-      execB(
-        `PGPASSWORD="${process.env.DB_PASSWORD||''}" pg_dump --clean --if-exists -h ${process.env.DB_HOST||'localhost'} -U ${process.env.DB_USER||'solano'} ${process.env.DB_NAME||'winterdienst'} > "${dbFile}"`,
-        { shell: '/bin/bash' }
-      );
-      await pool.query('UPDATE backup_schedule SET letzte_ausfuehrung=NOW()');
+      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}00`;
+
       const { logEvent } = require('./utils/logger');
-      const stat = fsB.statSync(dbFile);
-      await logEvent({ level: 'info', aktion: 'auto-backup', ausgeloest_von: 'system', details: { datei: pathB.basename(dbFile), groesse: stat.size } });
-      console.log(`Auto-Backup erstellt: ${pathB.basename(dbFile)}`);
-    } catch(e) { console.error('Auto-Backup Fehler:', e.message); }
+
+      // 1. Normales DB Backup
+      if (tage.includes(nowDay)) {
+        const dbFile = pathB.join(BACKUP_DIR_C, `solano_db_auto_${ts}.sql`);
+        execB(
+          `PGPASSWORD="${process.env.DB_PASSWORD || ''}" pg_dump --clean --if-exists -h ${process.env.DB_HOST || 'localhost'} -U ${process.env.DB_USER || 'solano'} ${process.env.DB_NAME || 'winterdienst'} > "${dbFile}"`,
+          { shell: '/bin/bash' }
+        );
+        const stat = fsB.statSync(dbFile);
+        await logEvent({ level: 'info', aktion: 'auto-backup', ausgeloest_von: 'system', details: { datei: pathB.basename(dbFile), groesse: stat.size } });
+        console.log(`Auto-Backup erstellt: ${pathB.basename(dbFile)}`);
+      }
+
+      // 2. Voll-Backup
+      if (fullTage.includes(nowDay)) {
+        const dbFileTemp = pathB.join(projectRoot, `solano_db_temp_auto_${ts}.sql`);
+        execB(
+          `PGPASSWORD="${process.env.DB_PASSWORD || ''}" pg_dump --clean --if-exists -h ${process.env.DB_HOST || 'localhost'} -U ${process.env.DB_USER || 'solano'} ${process.env.DB_NAME || 'winterdienst'} > "${dbFileTemp}"`,
+          { shell: '/bin/bash' }
+        );
+        const tarFile = pathB.join(BACKUP_DIR_C, `solano_full_auto_${ts}.tar.gz`);
+        execB(
+          `tar --exclude="node_modules" --exclude=".git" --exclude="backups" --exclude=".DS_Store" -czf "${tarFile}" .`,
+          { shell: '/bin/bash', cwd: projectRoot }
+        );
+        if (fsB.existsSync(dbFileTemp)) fsB.unlinkSync(dbFileTemp);
+        const statTar = fsB.statSync(tarFile);
+        await logEvent({ level: 'info', aktion: 'auto-voll-backup', ausgeloest_von: 'system', details: { datei: pathB.basename(tarFile), groesse: statTar.size } });
+        console.log(`Auto Voll-Backup erstellt: ${pathB.basename(tarFile)}`);
+      }
+
+      await pool.query('UPDATE backup_schedule SET letzte_ausfuehrung=NOW()');
+    } catch (e) { console.error('Auto-Backup Fehler:', e.message); }
   });
   console.log('Auto-Backup Cron-Job gestartet ✓');
-} catch(e) { console.warn('Cron-Job konnte nicht gestartet werden:', e.message); }
+} catch (e) { console.warn('Cron-Job konnte nicht gestartet werden:', e.message); }
 
 app.listen(PORT, async () => {
   console.log(`SolanoServices Backend läuft auf Port ${PORT}`);
@@ -102,12 +128,13 @@ app.listen(PORT, async () => {
     await pool.query(`SELECT setval('einsaetze_id_seq', COALESCE((SELECT MAX(id) FROM einsaetze), 1))`);
     await pool.query(`SELECT setval('auftraggeber_id_seq', COALESCE((SELECT MAX(id) FROM auftraggeber), 1))`);
     await pool.query(`SELECT setval('projekt_auftraege_id_seq', COALESCE((SELECT MAX(id) FROM projekt_auftraege), 1))`);
+    await pool.query(`ALTER TABLE backup_schedule ADD COLUMN IF NOT EXISTS voll_wochentage jsonb DEFAULT '[]'::jsonb;`);
     console.log('Sequences korrigiert ✓');
-  } catch(e) { console.warn('Sequence-Fix Fehler:', e.message); }
+  } catch (e) { console.warn('Sequence-Fix Fehler:', e.message); }
   // Server-Start ins System-Log schreiben
   try {
     const { logEvent } = require('./utils/logger');
     const pkg = require('./package.json');
     await logEvent({ level: 'info', aktion: 'server-start', ausgeloest_von: 'system', details: { port: PORT, version: pkg.version || '–' } });
-  } catch(e) { console.warn('Log-Fehler:', e.message); }
+  } catch (e) { console.warn('Log-Fehler:', e.message); }
 });

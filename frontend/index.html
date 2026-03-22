@@ -1470,8 +1470,14 @@
   <script>
     // ── CONFIG & STATE ──
     const API = '';
-    const APP_VERSION = '1.8.0';
+    const APP_VERSION = '1.8.1';
     const APP_CHANGELOG = [
+      {
+        v: '1.8.1', d: '22.03.2026', punkte: [
+          'Datensicherung: Der nächtliche Automatismus kann nun separat für Voll-Backups konfiguriert werden (z.B. tägliches DB-Backup, sonntags zusätzliches Voll-Backup).',
+          'UI/UX: Höhe der "Jetzt sichern" Buttons in der Admin-Ansicht vereinheitlicht.'
+        ]
+      },
       {
         v: '1.8.0', d: '22.03.2026', punkte: [
           'Datensicherung: Neues Feature "📦 Voll-Backup". Mit einem Klick kann nun der gesamte Live-Server inklusive Quellcode, Datenbank und sämtlichen Foto-Uploads als Notfall-Archiv (.tar.gz) gesichert und heruntergeladen werden.',
@@ -5326,9 +5332,13 @@
         }).join('');
 
       const wt = schedule.wochentage || [];
-      const tageLabels = [{ v: '0', l: 'So' }, { v: '1', l: 'Mo' }, { v: '2', l: 'Di' }, { v: '3', l: 'Mi' }, { v: '4', l: 'Do' }, { v: '5', l: 'Fr' }, { v: '6', l: 'Sa' }];
+      const fwt = schedule.voll_wochentage || [];
+      const tageLabels = [{ v: '1', l: 'Mo' }, { v: '2', l: 'Di' }, { v: '3', l: 'Mi' }, { v: '4', l: 'Do' }, { v: '5', l: 'Fr' }, { v: '6', l: 'Sa' }, { v: '0', l: 'So' }];
       const tagCheckboxes = tageLabels.map(t => `<label style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;border:1.5px solid ${wt.includes(t.v) ? '#16a34a' : 'var(--border)'};background:${wt.includes(t.v) ? '#dcfce7' : 'var(--bg)'};cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap">
     <input type="checkbox" id="backup-tag-${t.v}" ${wt.includes(t.v) ? 'checked' : ''} style="width:15px;height:15px"> ${t.l}
+  </label>`).join('');
+      const fullTagCheckboxes = tageLabels.map(t => `<label style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;border:1.5px solid ${fwt.includes(t.v) ? '#7c3aed' : 'var(--border)'};background:${fwt.includes(t.v) ? '#f3e8ff' : 'var(--bg)'};cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;color:${fwt.includes(t.v) ? '#6b21a8' : 'var(--text)'}">
+    <input type="checkbox" id="backup-full-tag-${t.v}" ${fwt.includes(t.v) ? 'checked' : ''} style="width:15px;height:15px"> ${t.l}
   </label>`).join('');
       const letzteStr = schedule.letzte_ausfuehrung ? `Letzte Ausführung: ${new Date(schedule.letzte_ausfuehrung).toLocaleString('de-AT')}` : 'Noch nie ausgeführt';
 
@@ -5353,8 +5363,8 @@
           <div style="font-size:12px;color:var(--text-muted)">Erstellt sofort eine Kopie des aktuellen Standes</div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" id="btn-backup-now" style="background:#16a34a">💾 DB-Text sichern</button>
-          <button class="btn btn-primary btn-sm" id="btn-backup-full" style="background:#7c3aed" title="Sichert Datenbank, Quellcode, .env Schlüssel und sämtliche Uploads in ein Archiv">📦 Voll-Backup (App + DB)</button>
+          <button class="btn btn-primary btn-sm" id="btn-backup-now" style="background:#16a34a; white-space:nowrap; height:32px;">💾 DB-Text sichern</button>
+          <button class="btn btn-primary btn-sm" id="btn-backup-full" style="background:#7c3aed; white-space:nowrap; height:32px;" title="Sichert Datenbank, Quellcode, .env Schlüssel und sämtliche Uploads in ein Archiv">📦 Voll-Backup (App + DB)</button>
         </div>
       </div>
       <div style="margin-bottom:24px;border-top:1px solid var(--border);padding-top:12px;display:flex;align-items:center;gap:8px">
@@ -5371,8 +5381,11 @@
           </label>
           <span style="font-size:11px;color:var(--text-muted)">${letzteStr}</span>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tagCheckboxes}</div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-muted)">Nur Datenbank (.sql):</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${tagCheckboxes}</div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#7c3aed">Voll-Backup (App + DB) als .tar.gz:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${fullTagCheckboxes}</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px">
           <label style="font-size:13px;font-weight:600">🕐 Uhrzeit:</label>
           <input type="time" id="backup-auto-uhrzeit" value="${esc(schedule.uhrzeit || '02:00')}" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-weight:600">
           <button class="btn btn-primary btn-sm" id="btn-backup-schedule-save" style="background:#1e40af">💾 Zeitplan speichern</button>
@@ -8153,9 +8166,10 @@
           const aktiv = document.getElementById('backup-auto-aktiv')?.checked || false;
           const uhrzeit = document.getElementById('backup-auto-uhrzeit')?.value || '02:00';
           const wochentage = ['0', '1', '2', '3', '4', '5', '6'].filter(v => document.getElementById(`backup-tag-${v}`)?.checked);
+          const voll_wochentage = ['0', '1', '2', '3', '4', '5', '6'].filter(v => document.getElementById(`backup-full-tag-${v}`)?.checked);
           try {
-            await apiPut('/api/admin/backup/schedule', { aktiv, wochentage, uhrzeit });
-            toast(`✅ Zeitplan gespeichert${aktiv ? ` · ${wochentage.map(v => ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][parseInt(v)]).join(', ')} um ${uhrzeit}` : ''}`, 'ok');
+            await apiPut('/api/admin/backup/schedule', { aktiv, wochentage, voll_wochentage, uhrzeit });
+            toast(`✅ Zeitplan gespeichert`, 'ok');
             const c = document.getElementById('admin-tab-content');
             if (c) { c.innerHTML = await renderTabSystem(); bindAdminEvents(); }
           } catch (e) { toast(e.message, 'err'); }
