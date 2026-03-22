@@ -1470,8 +1470,21 @@
   <script>
     // ── CONFIG & STATE ──
     const API = '';
-    const APP_VERSION = '1.8.1';
+    const APP_VERSION = '1.9.1';
     const APP_CHANGELOG = [
+      {
+        v: '1.9.1', d: '22.03.2026', punkte: [
+          '🛒 Bestelllisten: Neues Modul für Einkaufs- und Bestelllisten – Mitarbeiter können Artikel nach Kategorie (Reinigungsmittel, Salz, Ersatzteile, Montagematerial …) eintragen.',
+          '📦 Artikel-Stammdaten: Artikel mit Preis (Netto/Brutto), Lieferant, Einheit, Scancode und Sparten (❄️🧹🌿🔨) anlegen und verwalten.',
+          '📁 Artikel-Kategorien: Frei definierbare Kategorien für Stammdaten (z.B. Reinigungsmittel, Schrauben, Kleber …).',
+          '📷 Barcode-Scan: Strichcode auf Verpackung fotografieren → Artikel wird automatisch erkannt oder neu angelegt (EAN-13, Code128, UPC-A …).',
+          '📋 Bericht: In-App Bestellliste (sortiert nach Kategorie) mit Drucken-Button und ✅-Checkbox zum Abhaken, keine separaten PDF-Downloads mehr.',
+          '📊 Excel-Export: Bestellliste als Excel-Datei exportieren.',
+          '✅ Bestellt-Status: Admins/Chefs können Einträge als bestellt markieren – Mitarbeiter sehen den Status in der App.',
+          '🔒 Neue Berechtigungen: „Darf Bestellungen eingeben", „Darf PDF/Excel exportieren", „Darf Artikel scannen/anlegen" (einzeln pro Mitarbeiter konfigurierbar).',
+          '🐛 Fix: Fehlende DB-Spalte erledigt_am in todos_privat ergänzt.',
+        ]
+      },
       {
         v: '1.8.1', d: '22.03.2026', punkte: [
           'Datensicherung: Der nächtliche Automatismus kann nun separat für Voll-Backups konfiguriert werden (z.B. tägliches DB-Backup, sonntags zusätzliches Voll-Backup).',
