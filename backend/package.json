@@ -1,6 +1,6 @@
 {
   "name": "winterdienst-backend",
-  "version": "1.9.1",
+  "version": "2.0.2",
   "description": "Solano Winterdienst Backend API",
   "main": "server.js",
   "scripts": {

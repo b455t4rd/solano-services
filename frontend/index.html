@@ -1470,10 +1470,34 @@
   <script>
     // ── CONFIG & STATE ──
     const API = '';
-    const APP_VERSION = '1.9.1';
+    const APP_VERSION = '2.0.2';
     const APP_CHANGELOG = [
       {
-        v: '1.9.1', d: '22.03.2026', punkte: [
+        v: '2.0.2', d: '22.03.2026', punkte: [
+          '🚗 Bestellverwaltung: Lager & Fahrzeug getrennt angezeigt – sofort sichtbar was wohin kommt',
+          '📋 Bestellliste PDF: Separate Lager/Fahrzeug-Bereiche mit farbiger Kennzeichnung',
+          '🔧 Erledigte Bestellungen: Toggle-State pro Bereich (Lager/Fahrzeug) separat gespeichert',
+        ]
+      },
+      {
+        v: '2.0.1', d: '22.03.2026', punkte: [
+          '🛒 Neuer Tab „Bestellverlauf" in Berichte – Verlauf aller Bestellungen mit Suche nach Zeitraum, Sparte und Kategorie',
+          '📋 PDF-Berichte öffnen jetzt in der App (kein neuer Browser-Tab mehr) mit Zurück-Button',
+          '✨ Bestellverwaltung: Schönere Bestell-Karten mit farbigen Status-Badges',
+          '🔄 PDF immer vor Excel, einheitliches 📊 Excel-Icon überall',
+          '📆 Erledigte Bestellungen gruppiert nach Jahr → Monat (auf-/zuklappbar, pro User gespeichert)',
+          '📊 PDF + Excel Export im Bestellverlauf',
+        ]
+      },
+      {
+        v: '1.9.2', d: '22.03.2026', punkte: [
+          '📷 Barcode-Scanner: Komplett neu – nativer Video-Stream mit roter animierter Scanlinie, kein Drittanbieter-Plugin mehr.',
+          '⚡ Barcode-Scanner: Nutzt den nativen Chrome BarcodeDetector (schnell & zuverlässig), ZXing als Fallback für Safari/Firefox.',
+          '🔊 Barcode-Scanner: Beep-Ton bei erfolgreichem Scan.',
+        ]
+      },
+      {
+        v: '2.0.2', d: '22.03.2026', punkte: [
           '🛒 Bestelllisten: Neues Modul für Einkaufs- und Bestelllisten – Mitarbeiter können Artikel nach Kategorie (Reinigungsmittel, Salz, Ersatzteile, Montagematerial …) eintragen.',
           '📦 Artikel-Stammdaten: Artikel mit Preis (Netto/Brutto), Lieferant, Einheit, Scancode und Sparten (❄️🧹🌿🔨) anlegen und verwalten.',
           '📁 Artikel-Kategorien: Frei definierbare Kategorien für Stammdaten (z.B. Reinigungsmittel, Schrauben, Kleber …).',
@@ -1988,6 +2012,7 @@
         case 'privtodos': return pagePrivTodos();
         case 'bestellungen': return pageBestellungen();
         case 'bestellungen-bericht': return pageBestellungenBericht();
+        case 'bericht-viewer': return pageBerichtViewer();
         case 'projekte': return pageProjekte();
         case 'kalender': return pageKalender();
         default: return `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Seite nicht gefunden</div></div>`;
@@ -2082,7 +2107,7 @@
       } catch (e) { }
       const zeitBtn = `<button class="nav-btn" id="card-zeit" style="margin-top:12px;justify-content:space-between"><span>⏱️ Zeiterfassung</span><span style="font-size:12px;opacity:.7;font-weight:400">${zeitStatusHome}</span></button>
 <button class="nav-btn" id="card-privtodos" style="margin-top:8px">📝 Meine Aufgaben</button>
-${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="nav-btn" id="card-bestellungen" style="margin-top:8px;background:linear-gradient(135deg,#f97316,#ea580c);color:white">🛒 Bestellungen</button>` : ''}`;
+${(user?.ist_admin || user?.darf_bestellen) ? `<button class="nav-btn" id="card-bestellungen" style="margin-top:8px;background:linear-gradient(135deg,#f97316,#ea580c);color:white">🛒 Bestellungen</button>` : ''}`;
       const kalBtn = ``; // Kalender ausgeblendet bis CalDAV funktioniert
       // Projekte-Status für Startseite
       let projektStatusHome = 'Kein aktiver Auftrag';
@@ -2376,10 +2401,18 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     ${user?.ist_admin ? `<button class="tab-btn ${tab === 'reset' ? 'active' : ''}" data-tab="reset">🗑️ Reset</button>` : ''}
     <button class="tab-btn ${tab === 'karte' ? 'active' : ''}" data-tab="karte">🗺️ Karte</button>
     ${user?.ist_admin ? `<button class="tab-btn ${tab === 'firma' ? 'active' : ''}" data-tab="firma">🏢 Firma</button>` : ''}
-    ${isManager() ? `<button class="tab-btn ${tab === 'bestellverwaltung' ? 'active' : ''}" data-tab="bestellverwaltung">🛒 Bestellungen</button>` : ''}
+    ${isManager() ? `<button class="tab-btn ${tab === 'bestellverwaltung' ? 'active' : ''}" data-tab="bestellverwaltung" id="adm-bestell-tab-btn">🛒 Bestellungen</button>` : ''}
     ${user?.ist_admin ? `<button class="tab-btn ${tab === 'system' ? 'active' : ''}" data-tab="system">🔧 System</button>` : ''}
   </div>
   <div id="admin-tab-content">${await renderTab(tab)}</div>`;
+      // Badge für neue Artikel zur Prüfung (asynchron laden)
+      if (isManager()) {
+        apiGet('/api/bestellungen/stammdaten').then(sd => {
+          const n = (sd || []).filter(s => s.benoetigt_pruefung).length;
+          const btn = document.getElementById('adm-bestell-tab-btn');
+          if (btn && n > 0) btn.innerHTML = `🛒 Bestellungen <span style="background:#ef4444;color:white;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;margin-left:4px">${n}</span>`;
+        }).catch(() => {});
+      }
     }
 
     async function renderTab(tab) {
@@ -2407,13 +2440,14 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     }
 
     async function renderTabBestellverwaltung() {
-      let kategorien = [], eintraege = [], stammdaten = [], artikelKats = [];
+      let kategorien = [], eintraege = [], stammdaten = [], artikelKats = [], fahrzeuge = [];
       try {
-        [kategorien, eintraege, stammdaten, artikelKats] = await Promise.all([
+        [kategorien, eintraege, stammdaten, artikelKats, fahrzeuge] = await Promise.all([
           apiGet('/api/bestellungen/kategorien'),
           apiGet('/api/bestellungen/eintraege'),
           apiGet('/api/bestellungen/stammdaten'),
           apiGet('/api/bestellungen/artikel-kategorien'),
+          apiGet('/api/bestellungen/fahrzeuge'),
         ]);
       } catch (e) { }
 
@@ -2430,28 +2464,38 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         grouped[key].push(e);
       });
 
-      const eintragRows = Object.entries(grouped).map(([katId, items]) => {
-        const k = katId !== '__none__' ? katMap[parseInt(katId)] : null;
-        return `
-          <div style="margin-bottom:12px">
-            <div style="font-size:12px;font-weight:700;color:var(--text-muted);padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px">
-              ${k ? k.icon + ' ' + esc(k.name) : 'Ohne Kategorie'}
-            </div>
-            ${items.map(e => `
-            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-light,var(--border))">
-              <input type="checkbox" class="adm-bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer;accent-color:#16a34a;flex-shrink:0">
+      // Einträge nach offen/erledigt trennen
+      const _renderEintragRow = e => `
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;margin-bottom:6px;background:${e.bestellt ? '#f0fdf4' : '#fffbeb'};border:1px solid ${e.bestellt ? '#bbf7d0' : '#fde68a'}">
+              <input type="checkbox" class="adm-bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;accent-color:#16a34a;flex-shrink:0;border-radius:6px">
               <div style="flex:1;min-width:0">
-                <div style="font-size:13px;font-weight:600">${esc(e.bezeichnung)}
-                  <span style="font-weight:400;color:var(--text-muted)">${e.menge ? '× ' + esc(e.menge) + (e.einheit ? ' ' + esc(e.einheit) : '') : ''}</span>
-                </div>
-                <div style="font-size:11px;color:var(--text-muted)">${e.lieferant ? esc(e.lieferant) + ' · ' : ''}von ${esc(e.erstellt_von_name || '?')} · ${fmtDate(e.erstellt_am)}
-                  ${e.bestellt ? ` · <span style="color:#15803d">✅ ${esc(e.bestellt_von_name || '')}</span>` : `<span style="color:#92400e"> · ⏳ Offen</span>`}
-                </div>
+                <div style="font-size:13px;font-weight:700">${esc(e.bezeichnung)}${e.menge ? `<span style="font-weight:400;color:var(--text-muted);margin-left:4px">× ${esc(e.menge)}${e.einheit ? ' ' + esc(e.einheit) : ''}</span>` : ''}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${e.lieferant ? esc(e.lieferant) + ' · ' : ''}👤 ${esc(e.erstellt_von_name || '?')} · ${fmtDate(e.erstellt_am)}${e.ziel === 'fahrzeug' ? ` · 🚗 ${esc(e.fahrzeug_kennzeichen || 'Fahrzeug')}` : ''}</div>
               </div>
-              <button class="tbl-btn danger adm-bestell-del" data-id="${e.id}" style="font-size:11px;margin:0;padding:3px 8px;flex-shrink:0">🗑️</button>
-            </div>`).join('')}
-          </div>`;
-      }).join('') || `<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine Einträge</div>`;
+              ${e.ziel === 'fahrzeug' ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#dbeafe;color:#1e40af;white-space:nowrap;flex-shrink:0">🚗 FZ</span>` : ''}
+              <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;background:${e.bestellt ? '#dcfce7' : '#fef3c7'};color:${e.bestellt ? '#15803d' : '#92400e'};flex-shrink:0">${e.bestellt ? '✅ Bestellt' : '⏳ Offen'}</span>
+              <button class="tbl-btn danger adm-bestell-del" data-id="${e.id}" style="font-size:11px;margin:0;padding:4px 8px;flex-shrink:0">🗑️</button>
+            </div>`;
+      // Separieren: Lager vs Fahrzeug, dann offen/erledigt
+      const lagerEintr = eintraege.filter(e => e.ziel !== 'fahrzeug');
+      const fzEintr = eintraege.filter(e => e.ziel === 'fahrzeug');
+
+      const _buildSection = (items, label, icon, borderColor, bgColor, textColor, erlKey) => {
+        const offItems = items.filter(e => !e.bestellt);
+        const erlItems = items.filter(e => e.bestellt);
+        const offRows = offItems.length ? offItems.map(_renderEintragRow).join('') : `<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine offenen Bestellungen</div>`;
+        const _erlOpen = localStorage.getItem(`${erlKey}_${user?.id||'x'}`) === '1';
+        const erlRows = erlItems.length ? `
+          <div class="best-erl-toggle" data-key="${erlKey}" data-open="${_erlOpen?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:10px 14px;margin-top:12px;user-select:none">
+            <span style="font-weight:700;font-size:13px;color:#15803d">✅ Erledigt <span style="font-weight:400;font-size:12px;color:#16a34a">(${erlItems.length})</span></span>
+            <span style="font-size:18px;color:#15803d">${_erlOpen?'▾':'▸'}</span>
+          </div>
+          <div id="best-erl-${erlKey}" style="display:${_erlOpen?'block':'none'};margin-top:8px">${erlItems.map(_renderEintragRow).join('')}</div>` : '';
+        return { offRows, erlRows, offCount: offItems.length, erlCount: erlItems.length, total: items.length };
+      };
+
+      const lager = _buildSection(lagerEintr, 'Lager', '📦', '#f59e0b', '#fffbeb', '#92400e', 'bestErlLager');
+      const fz = _buildSection(fzEintr, 'Fahrzeug', '🚗', '#3b82f6', '#dbeafe', '#1e40af', 'bestErlFz');
 
       // ── STAMMDATEN grouped by artikel-kategorie ──
       const akMap = {};
@@ -2494,29 +2538,65 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const akOpts = artikelKats.filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
       const bkOpts = kategorien.filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${esc(k.name)}</option>`).join('');
 
+      // Neue Artikel zur Prüfung
+      const pruefungsArtikel = stammdaten.filter(s => s.benoetigt_pruefung);
+      const pruefungHtml = pruefungsArtikel.length ? `
+        <div class="card" style="margin-bottom:16px;border:2px solid #f59e0b">
+          <div style="font-size:14px;font-weight:800;color:#92400e;margin-bottom:10px">⚠️ Neue Artikel zur Prüfung (${pruefungsArtikel.length})</div>
+          ${pruefungsArtikel.map(s => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:700">${esc(s.name)}${s.scancode ? ` <span style="font-family:monospace;font-size:11px;background:var(--card-bg);border:1px solid var(--border);border-radius:4px;padding:1px 4px">${esc(s.scancode)}</span>` : ''}</div>
+                <div style="font-size:11px;color:#92400e">Von ${esc(s.erstellt_von_name || 'Mitarbeiter')} angelegt – bitte vervollständigen</div>
+              </div>
+              <button class="tbl-btn adm-sd-edit" data-id="${s.id}" style="font-size:11px;margin:0;padding:4px 10px;background:#f59e0b;color:white;border-color:#f59e0b">✏️ Bearbeiten</button>
+            </div>`).join('')}
+        </div>` : '';
+
+      // Neue Bestellungen (letzte 24h, noch offen)
+      const neu24h = eintraege.filter(e => !e.bestellt && (Date.now() - new Date(e.erstellt_am).getTime()) < 86400000);
+      const neuBadge = neu24h.length ? `<span style="background:#ef4444;color:white;font-size:11px;font-weight:700;border-radius:10px;padding:1px 8px;margin-left:6px">${neu24h.length} neu</span>` : '';
+
       return `<div class="admin-wrap">
         <div style="font-size:16px;font-weight:800;margin-bottom:16px">🛒 Bestellverwaltung</div>
+
+        ${pruefungHtml}
 
         <!-- Einträge -->
         <div class="card" style="margin-bottom:16px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div style="font-size:14px;font-weight:700">📋 Einträge <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${offene} offen</span></div>
-            <button class="btn btn-primary btn-sm" onclick="go('bestellungen-bericht')">📋 Bericht öffnen</button>
+            <div style="font-size:14px;font-weight:700">📋 Einträge${neuBadge} <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${offene} offen</span></div>
+            <div style="display:flex;gap:6px">
+              <button onclick="go('bestellungen-bericht')" style="background:#1e40af;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">🖨️ PDF</button>
+              <button id="bestell-admin-excel-btn" style="background:#16a34a;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">📊 Excel</button>
+            </div>
           </div>
-          ${eintragRows}
+          <!-- 📦 Lager -->
+          ${lager.total ? `
+          <div style="border-left:4px solid #f59e0b;background:#fffbeb;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:800;color:#92400e;margin-bottom:8px">📦 Lager <span style="font-weight:400;font-size:12px">(${lager.offCount} offen${lager.erlCount ? ', ' + lager.erlCount + ' erledigt' : ''})</span></div>
+            ${lager.offRows}
+            ${lager.erlRows}
+          </div>` : ''}
+          <!-- 🚗 Fahrzeug -->
+          ${fz.total ? `
+          <div style="border-left:4px solid #3b82f6;background:#eff6ff;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:800;color:#1e40af;margin-bottom:8px">🚗 Fahrzeugbestückung <span style="font-weight:400;font-size:12px">(${fz.offCount} offen${fz.erlCount ? ', ' + fz.erlCount + ' erledigt' : ''})</span></div>
+            ${fz.offRows}
+            ${fz.erlRows}
+          </div>` : ''}
+          ${!lager.total && !fz.total ? '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine Einträge vorhanden</div>' : ''}
         </div>
 
         <!-- Artikel-Stammdaten -->
         <div class="card" style="margin-bottom:16px">
-          <div style="font-size:14px;font-weight:700;margin-bottom:12px">📦 Artikel-Stammdaten</div>
-          <!-- Neuer Artikel -->
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px">📦 Artikel-Stammdaten <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(${stammdaten.length})</span></div>
           <details style="border:1px solid var(--primary);border-radius:8px;margin-bottom:12px" id="new-sd-details">
             <summary style="padding:10px 12px;cursor:pointer;font-weight:700;font-size:13px;color:var(--primary);list-style:none">+ Neuen Artikel anlegen</summary>
             <div style="padding:12px;border-top:1px solid var(--border)">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
                 <input class="form-input" id="new-sd-name" placeholder="Artikelname *" style="grid-column:1/-1">
                 <select class="form-input" id="new-sd-artkat"><option value="">Artikel-Kategorie</option>${akOpts}</select>
-                <select class="form-input" id="new-sd-bestkat"><option value="">Bestell-Tab</option>${bkOpts}</select>
                 <input class="form-input" id="new-sd-lieferant" placeholder="Lieferant (opt.)">
                 <input class="form-input" id="new-sd-einheit" placeholder="Einheit (opt.)">
                 <input class="form-input" id="new-sd-netto" type="number" step="0.01" placeholder="Netto € (opt.)">
@@ -2535,49 +2615,89 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           ${sdAccordion || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine Stammdaten</div>'}
         </div>
 
-        <!-- Bestell-Kategorien (Tabs) -->
-        <div class="card" style="margin-bottom:16px">
-          <div style="font-size:14px;font-weight:700;margin-bottom:12px">🏷️ Bestell-Tabs verwalten</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-            <input class="form-input" id="new-kat-name" placeholder="Name *" style="max-width:140px">
-            <input class="form-input" id="new-kat-icon" placeholder="Icon" style="max-width:70px">
-            <input class="form-input" id="new-kat-farbe" type="color" value="#6366f1" style="max-width:48px;padding:2px;height:38px">
-            <button id="new-kat-btn" class="btn btn-primary btn-sm">+ Hinzufügen</button>
-          </div>
-          <table class="tbl">
-            <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              ${kategorien.map(k => `<tr>
-                <td>${k.icon} ${esc(k.name)}</td>
-                <td>${k.aktiv ? '<span style="color:#16a34a;font-size:12px">✅ Aktiv</span>' : '<span style="color:#9ca3af;font-size:12px">⏸ Inaktiv</span>'}</td>
-                <td class="tbl-actions">
-                  <button class="tbl-btn adm-kat-toggle" data-id="${k.id}" data-aktiv="${k.aktiv}" style="font-size:12px">${k.aktiv ? 'Deakt.' : 'Aktivieren'}</button>
-                  <button class="tbl-btn danger adm-kat-del" data-id="${k.id}" style="font-size:12px">🗑️</button>
-                </td>
-              </tr>`).join('')}
-            </tbody>
-          </table>
+        <!-- Artikel-Kategorien (aufklappbar) -->
+        ${(() => { const _akOpen = localStorage.getItem(`bestAkOpen_${user?.id||'x'}`) !== '0'; return `
+        <div class="best-band-toggle" data-key="bestAkOpen" data-open="${_akOpen?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#f3f0ff;border:2px solid #7c3aed;border-radius:10px;padding:10px 14px;margin-bottom:6px;user-select:none">
+          <span style="font-weight:700;font-size:14px;color:#5b21b6">📁 Artikel-Kategorien <span style="font-weight:400;font-size:12px;color:#7c3aed">(${artikelKats.length})</span></span>
+          <span style="font-size:20px;color:#5b21b6">${_akOpen?'▾':'▸'}</span>
         </div>
+        <div id="best-band-bestAkOpen" style="display:${_akOpen?'block':'none'};margin-bottom:16px">
+          <div class="card">
+            <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+              <input class="form-input" id="new-ak-name" placeholder="Name *" style="max-width:200px">
+              <button id="new-ak-btn" class="btn btn-primary btn-sm">+ Hinzufügen</button>
+            </div>
+            <table class="tbl">
+              <thead><tr><th>Name</th><th></th></tr></thead>
+              <tbody>
+                ${artikelKats.map(k => `<tr>
+                  <td style="font-size:13px">${esc(k.name)}</td>
+                  <td class="tbl-actions">
+                    <button class="tbl-btn danger adm-ak-del" data-id="${k.id}" style="font-size:12px">🗑️</button>
+                  </td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`; })()}
 
-        <!-- Artikel-Kategorien -->
-        <div class="card">
-          <div style="font-size:14px;font-weight:700;margin-bottom:12px">📁 Artikel-Kategorien verwalten</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-            <input class="form-input" id="new-ak-name" placeholder="Name *" style="max-width:200px">
-            <button id="new-ak-btn" class="btn btn-primary btn-sm">+ Hinzufügen</button>
-          </div>
-          <table class="tbl">
-            <thead><tr><th>Name</th><th></th></tr></thead>
-            <tbody>
-              ${artikelKats.map(k => `<tr>
-                <td style="font-size:13px">${esc(k.name)}</td>
-                <td class="tbl-actions">
-                  <button class="tbl-btn danger adm-ak-del" data-id="${k.id}" style="font-size:12px">🗑️</button>
-                </td>
-              </tr>`).join('')}
-            </tbody>
-          </table>
+        <!-- Bestell-Tabs (aufklappbar, unter Artikel-Kategorien) -->
+        ${(() => { const _btOpen = localStorage.getItem(`bestBtOpen_${user?.id||'x'}`) !== '0'; return `
+        <div class="best-band-toggle" data-key="bestBtOpen" data-open="${_btOpen?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:10px 14px;margin-bottom:6px;user-select:none">
+          <span style="font-weight:700;font-size:14px;color:#92400e">🏷️ Bestell-Tabs <span style="font-weight:400;font-size:12px;color:#b45309">(${kategorien.length})</span></span>
+          <span style="font-size:20px;color:#92400e">${_btOpen?'▾':'▸'}</span>
         </div>
+        <div id="best-band-bestBtOpen" style="display:${_btOpen?'block':'none'};margin-bottom:16px">
+          <div class="card">
+            <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+              <input class="form-input" id="new-kat-name" placeholder="Name *" style="max-width:140px">
+              <input class="form-input" id="new-kat-icon" placeholder="Icon" style="max-width:70px">
+              <input class="form-input" id="new-kat-farbe" type="color" value="#6366f1" style="max-width:48px;padding:2px;height:38px">
+              <button id="new-kat-btn" class="btn btn-primary btn-sm">+ Hinzufügen</button>
+            </div>
+            <table class="tbl">
+              <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                ${kategorien.map(k => `<tr>
+                  <td>${k.icon} ${esc(k.name)}</td>
+                  <td>${k.aktiv ? '<span style="color:#16a34a;font-size:12px">✅ Aktiv</span>' : '<span style="color:#9ca3af;font-size:12px">⏸ Inaktiv</span>'}</td>
+                  <td class="tbl-actions">
+                    <button class="tbl-btn adm-kat-toggle" data-id="${k.id}" data-aktiv="${k.aktiv}" style="font-size:12px">${k.aktiv ? 'Deakt.' : 'Aktivieren'}</button>
+                    <button class="tbl-btn danger adm-kat-del" data-id="${k.id}" style="font-size:12px">🗑️</button>
+                  </td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`; })()}
+
+        <!-- Fahrzeuge (aufklappbar) -->
+        ${(() => { const _fzOpen = localStorage.getItem(`bestFzOpen_${user?.id||'x'}`) === '1'; return `
+        <div class="best-band-toggle" data-key="bestFzOpen" data-open="${_fzOpen?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#dbeafe;border:2px solid #3b82f6;border-radius:10px;padding:10px 14px;margin-bottom:6px;user-select:none">
+          <span style="font-weight:700;font-size:14px;color:#1e40af">🚗 Fahrzeuge <span style="font-weight:400;font-size:12px;color:#3b82f6">(${fahrzeuge.length})</span></span>
+          <span style="font-size:20px;color:#1e40af">${_fzOpen?'▾':'▸'}</span>
+        </div>
+        <div id="best-band-bestFzOpen" style="display:${_fzOpen?'block':'none'};margin-bottom:16px">
+          <div class="card">
+            <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+              <input class="form-input" id="new-fz-kenn" placeholder="Kennzeichen *" style="max-width:140px">
+              <input class="form-input" id="new-fz-bez" placeholder="Bezeichnung (opt.)" style="max-width:180px">
+              <button id="new-fz-btn" class="btn btn-primary btn-sm">+ Hinzufügen</button>
+            </div>
+            <table class="tbl">
+              <thead><tr><th>Kennzeichen</th><th>Bezeichnung</th><th></th></tr></thead>
+              <tbody>
+                ${fahrzeuge.map(f => `<tr>
+                  <td style="font-size:13px;font-weight:600">🚗 ${esc(f.kennzeichen)}</td>
+                  <td style="font-size:13px">${esc(f.bezeichnung || '–')}</td>
+                  <td class="tbl-actions">
+                    <button class="tbl-btn danger adm-fz-del" data-id="${f.id}" style="font-size:12px">🗑️</button>
+                  </td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`; })()}
       </div>`;
     }
 
@@ -2640,7 +2760,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const roleBadge = m.ist_admin ? '<span class="badge badge-red">👑 Admin</span>' : m.ist_chef ? '<span class="badge badge-blue">⭐ Chef</span>' : '<span class="badge badge-gray">Mitarbeiter</span>';
         const alarmBadge = m.winterdienst_alarm ? '<span class="badge badge-red">🚨 Alarm</span>' : '';
         const beschBadge = m.beschaeftigung && m.beschaeftigung !== 'vollzeit' ? `<span class="badge badge-gray">${m.beschaeftigung === 'teilzeit' ? 'Teilzeit' : 'Geringfügig'} ${m.soll_stunden || 38.5}h/W</span>` : '';
-        return `<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge} ${alarmBadge} ${beschBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef || false}" data-zw="${m.zeige_winterdienst !== false}" data-zg="${m.zeige_gebaeudereinigung !== false}" data-zgr="${m.zeige_gruenpflege !== false}" data-zp="${m.zeige_projekte !== false}" data-alarm="${m.winterdienst_alarm || false}" data-soll="${m.soll_stunden || 38.5}" data-beschaeftigung="${m.beschaeftigung || 'vollzeit'}" data-darf-nachrichten="${m.darf_nachrichten || false}" data-nachricht-verfuegbar="${m.nachricht_verfuegbar !== false}" data-sieht-aktive="${m.sieht_aktive_einsaetze || false}" data-sieht-details="${m.sieht_einsatz_details || false}" data-kann-einsteigen="${m.kann_einsteigen || false}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
+        return `<tr><td><div style="font-weight:600">${esc(m.name)}</div>${roleBadge} ${alarmBadge} ${beschBadge}<div style="font-size:12px;color:var(--text-muted);margin-top:3px">${sparteIcons}</div></td><td style="font-family:monospace;font-size:16px">${esc(m.pin)}</td><td><div class="tbl-actions"><button class="tbl-btn" data-action="edit-ma" data-id="${m.id}" data-name="${esc(m.name)}" data-pin="${esc(m.pin)}" data-admin="${m.ist_admin}" data-chef="${m.ist_chef || false}" data-zw="${m.zeige_winterdienst !== false}" data-zg="${m.zeige_gebaeudereinigung !== false}" data-zgr="${m.zeige_gruenpflege !== false}" data-zp="${m.zeige_projekte !== false}" data-alarm="${m.winterdienst_alarm || false}" data-soll="${m.soll_stunden || 38.5}" data-beschaeftigung="${m.beschaeftigung || 'vollzeit'}" data-darf-nachrichten="${m.darf_nachrichten || false}" data-nachricht-verfuegbar="${m.nachricht_verfuegbar !== false}" data-sieht-aktive="${m.sieht_aktive_einsaetze || false}" data-sieht-details="${m.sieht_einsatz_details || false}" data-kann-einsteigen="${m.kann_einsteigen || false}" data-darf-bestellen="${m.darf_bestellen || false}" data-darf-artikelanlage="${m.darf_artikelanlage || false}" data-darf-export="${m.darf_export || false}">Bearbeiten</button><button class="tbl-btn danger" data-action="del-ma" data-id="${m.id}">Löschen</button></div></td></tr>`;
       }).join('');
       const eingestempeltHTML = eingestempelt.length === 0
         ? `<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Niemand eingestempelt</div>`
@@ -2668,10 +2788,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     <button class="tab-btn ${sub === 'projekte' ? 'active' : ''}" data-subtab="projekte">🔨 Projekte</button>
     <button class="tab-btn ${sub === 'zeit' ? 'active' : ''}" data-subtab="zeit">⏱ Zeiterfassung</button>
     <button class="tab-btn ${sub === 'monat' ? 'active' : ''}" data-subtab="monat">📅 Monatsauswertung</button>
+    <button class="tab-btn ${sub === 'bestellverlauf' ? 'active' : ''}" data-subtab="bestellverlauf">🛒 Bestellverlauf</button>
   </div>`;
 
       if (sub === 'zeit') return subNav + await renderTabZeit();
       if (sub === 'monat') return subNav + await renderTabMonatsauswertung();
+      if (sub === 'bestellverlauf') return subNav + await renderTabBestellverlauf();
 
       if (sub === 'projekte') {
         let fzEinst = { diesel_preis: 1.80, verbrauch_100km: 8, maut_pro_km: 0, abnuetzung_pro_km: 0.15 };
@@ -2844,7 +2966,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:stretch">
           <button id="btn-proj-laden" style="background:#1e40af;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 8px">🔍 Laden</button>
           <button id="btn-proj-pdf" ${btnSt('#6b7280', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>🖨️ PDF</button>
-          <button id="btn-proj-csv" ${btnSt('#16a34a', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>📥 Excel</button>
+          <button id="btn-proj-csv" ${btnSt('#16a34a', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>📊 Excel</button>
         </div>
       </div></div>
       ${pageData.projLoaded ? `
@@ -3058,7 +3180,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <button id="btn-bericht-laden" style="background:#1e40af;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 8px">🔍 Laden</button>
         <button id="btn-bericht-pdf" ${!berichteCustom.length ? 'disabled' : ''} style="background:${berichteCustom.length ? '#6b7280' : '#e5e7eb'};color:${berichteCustom.length ? 'white' : '#9ca3af'};height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:${berichteCustom.length ? 'pointer' : 'default'};padding:0 8px">🖨️ PDF</button>
-        <button id="btn-bericht-csv" ${!berichteCustom.length ? 'disabled' : ''} style="background:${berichteCustom.length ? '#16a34a' : '#e5e7eb'};color:${berichteCustom.length ? 'white' : '#9ca3af'};height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:${berichteCustom.length ? 'pointer' : 'default'};padding:0 8px">📥 Excel</button>
+        <button id="btn-bericht-csv" ${!berichteCustom.length ? 'disabled' : ''} style="background:${berichteCustom.length ? '#16a34a' : '#e5e7eb'};color:${berichteCustom.length ? 'white' : '#9ca3af'};height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:${berichteCustom.length ? 'pointer' : 'default'};padding:0 8px">📊 Excel</button>
       </div>
     </div></div>
     ${berichteCustom.length || pageData.berichtVon ? `
@@ -3079,6 +3201,122 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     ${archivHTML ? `<div style="margin-top:20px;font-weight:700;font-size:15px;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;gap:8px"><span>🗄️ Archiv</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
     <div id="bericht-archiv">${archivHTML}</div>` : ''}
   </div>`;
+    }
+
+    // ── BESTELLVERLAUF ───────────────────────────────────────────────────────────
+    async function renderTabBestellverlauf() {
+      if (!isManager()) return `<div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Keine Berechtigung</div></div>`;
+      const now = new Date();
+      const pad2 = n => String(n).padStart(2, '0');
+      const vonDef = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`;
+      const bisDef = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())}`;
+      const von = pageData.bvVon || vonDef;
+      const bis = pageData.bvBis || bisDef;
+      const selKat = pageData.bvKat || '';
+      const selSparten = pageData.bvSparten || { w: false, g: false, gr: false, p: false };
+      let eintraege = [], kategorien = [], artikelKats = [];
+      try {
+        [eintraege, kategorien, artikelKats] = await Promise.all([
+          apiGet('/api/bestellungen/verlauf?' + new URLSearchParams({ von, bis, ...(selSparten.w ? { sparte_w: '1' } : {}), ...(selSparten.g ? { sparte_g: '1' } : {}), ...(selSparten.gr ? { sparte_gr: '1' } : {}), ...(selSparten.p ? { sparte_p: '1' } : {}), ...(selKat ? { kategorie_id: selKat } : {}) })),
+          apiGet('/api/bestellungen/kategorien'),
+          apiGet('/api/bestellungen/artikel-kategorien'),
+        ]);
+      } catch (e) { eintraege = []; kategorien = []; artikelKats = []; }
+      const fmtDT = d => d ? new Date(d).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      const katOpts = kategorien.filter(k => k.aktiv).map(k => `<option value="${k.id}" ${selKat == k.id ? 'selected' : ''}>${k.icon || ''} ${esc(k.name)}</option>`).join('');
+      const akOpts = artikelKats.filter(k => k.aktiv !== false).map(k => `<option value="ak_${k.id}" ${selKat === 'ak_' + k.id ? 'selected' : ''}>${esc(k.name)}</option>`).join('');
+      // Offene
+      const offene = eintraege.filter(e => !e.bestellt);
+      // Erledigte gruppiert nach Jahr → Monat
+      const erledigte = eintraege.filter(e => e.bestellt);
+      const erlJahrMap = {};
+      erledigte.forEach(e => {
+        const d = new Date(e.erstellt_am); const yr = d.getFullYear();
+        const mo = `${yr}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const moLabel = d.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
+        if (!erlJahrMap[yr]) erlJahrMap[yr] = { months: {} };
+        if (!erlJahrMap[yr].months[mo]) erlJahrMap[yr].months[mo] = { label: moLabel, items: [] };
+        erlJahrMap[yr].months[mo].items.push(e);
+      });
+      const _bvYO = (() => { try { return JSON.parse(localStorage.getItem(`bvYearsOpen_${user?.id||'x'}`)||'{}'); } catch { return {}; } })();
+      const _bvMO = (() => { try { return JSON.parse(localStorage.getItem(`bvMonthsOpen_${user?.id||'x'}`)||'{}'); } catch { return {}; } })();
+      const erlHtml = Object.entries(erlJahrMap).sort((a,b)=>b[0]-a[0]).map(([yr,yd])=>{
+        const yrOpen = _bvYO[yr] !== false;
+        const moHtml = Object.entries(yd.months).sort((a,b)=>b[0].localeCompare(a[0])).map(([mo,md])=>{
+          const moOpen = _bvMO[mo] !== false;
+          const rows = md.items.map(e=>`
+            <div data-bv-item="${esc((e.bezeichnung||'').toLowerCase()+' '+(e.erfasst_von||'').toLowerCase()+' '+(e.lieferant||'').toLowerCase())}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:4px;background:#f0fdf4;border:1px solid #bbf7d0">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600">${esc(e.bezeichnung)}${e.menge?`<span style="font-weight:400;color:var(--text-muted);margin-left:4px">× ${esc(e.menge)}${e.einheit?' '+esc(e.einheit):''}</span>`:''}</div>
+                <div style="font-size:11px;color:var(--text-muted)">👤 ${esc(e.erfasst_von||'?')} · ${fmtDT(e.erstellt_am)} · ✅ ${esc(e.bestellt_von_name||'?')}</div>
+              </div>
+              <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#dcfce7;color:#15803d;white-space:nowrap">✅ Bestellt</span>
+            </div>`).join('');
+          return `
+          <div style="border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+            <div class="bv-monat-toggle" data-mo="${mo}" data-open="${moOpen?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none;background:var(--card-bg);border-radius:${moOpen?'8px 8px 0 0':'8px'}">
+              <span style="font-weight:600;font-size:13px">📅 ${md.label} <span style="font-weight:400;color:var(--text-muted)">(${md.items.length})</span></span>
+              <span style="font-size:18px;color:var(--text-muted)">${moOpen?'▾':'▸'}</span>
+            </div>
+            <div id="bv-mo-${mo}" style="display:${moOpen?'block':'none'};padding:8px">${rows}</div>
+          </div>`;
+        }).join('');
+        return `
+        <div style="border:2px solid var(--border);border-radius:10px;margin-bottom:10px">
+          <div class="bv-jahr-toggle" data-yr="${yr}" data-open="${yrOpen?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;background:#dbeafe;border-radius:${yrOpen?'8px 8px 0 0':'8px'};border-bottom:${yrOpen?'1px solid var(--border)':'none'}">
+            <span style="font-weight:800;font-size:15px;color:#1e40af">📆 ${yr} <span style="font-weight:400;font-size:13px;color:#3b82f6">(${Object.values(yd.months).reduce((s,m)=>s+m.items.length,0)} Artikel)</span></span>
+            <span style="font-size:20px;color:#1e40af">${yrOpen?'▾':'▸'}</span>
+          </div>
+          <div id="bv-yr-${yr}" style="display:${yrOpen?'block':'none'};padding:8px">${moHtml}</div>
+        </div>`;
+      }).join('');
+      const offenHtml = offene.length ? offene.map(e=>`
+        <div data-bv-item="${esc((e.bezeichnung||'').toLowerCase()+' '+(e.erfasst_von||'').toLowerCase()+' '+(e.lieferant||'').toLowerCase())}" style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;margin-bottom:6px;background:#fffbeb;border:1px solid #fde68a">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700">${esc(e.bezeichnung)}${e.menge?`<span style="font-weight:400;color:var(--text-muted);margin-left:4px">× ${esc(e.menge)}${e.einheit?' '+esc(e.einheit):''}</span>`:''}</div>
+            <div style="font-size:11px;color:var(--text-muted)">👤 ${esc(e.erfasst_von||'?')} · ${fmtDT(e.erstellt_am)}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#fef3c7;color:#92400e;white-space:nowrap">⏳ Offen</span>
+        </div>`).join('') : `<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine offenen Bestellungen im gewählten Zeitraum</div>`;
+      return `<div class="admin-wrap">
+        <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="bv-von" value="${von}"></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Bis</label><input type="date" class="form-input" id="bv-bis" value="${bis}"></div>
+          </div>
+          <div class="form-group" style="margin:0"><label class="form-label">Kategorie</label>
+            <select class="form-input" id="bv-kat">
+              <option value="">Alle Kategorien</option>
+              <optgroup label="Bestell-Kategorien">${katOpts}</optgroup>
+              <optgroup label="Artikel-Kategorien">${akOpts}</optgroup>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" style="margin-bottom:6px">Sparte</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="bv-sp-w" ${selSparten.w?'checked':''} style="width:16px;height:16px;accent-color:#3b82f6"> ❄️ Winterdienst</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="bv-sp-g" ${selSparten.g?'checked':''} style="width:16px;height:16px;accent-color:#3b82f6"> 🧹 Gebäudereinigung</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="bv-sp-gr" ${selSparten.gr?'checked':''} style="width:16px;height:16px;accent-color:#3b82f6"> 🌿 Grünpflege</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="bv-sp-p" ${selSparten.p?'checked':''} style="width:16px;height:16px;accent-color:#3b82f6"> 🔨 Projekte/Montage</label>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <button id="btn-bv-laden" style="background:#1e40af;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer">🔍 Laden</button>
+            <button id="btn-bv-pdf" style="background:#6b7280;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer">🖨️ PDF</button>
+            <button id="btn-bv-excel" style="background:#16a34a;color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer">📊 Excel</button>
+          </div>
+        </div></div>
+        <div class="search-wrap" style="padding:4px 0 12px"><input class="search-input" id="bv-search" placeholder="Artikel suchen…" type="search" autocomplete="off"></div>
+        <div id="bv-results">
+        <div class="card" style="margin-bottom:16px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:10px">⏳ Offene Bestellungen <span style="font-weight:400;color:var(--text-muted);font-size:12px">(${offene.length})</span></div>
+          ${offenHtml}
+        </div>
+        ${erledigte.length?`
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;margin-top:4px">✅ Erledigte Bestellungen <span style="font-weight:400;color:var(--text-muted);font-size:12px">(${erledigte.length})</span></div>
+        ${erlHtml}`:`<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine erledigten Bestellungen im gewählten Zeitraum</div>`}
+        </div>
+      </div>`;
     }
 
     async function renderTabKarte() {
@@ -3935,126 +4173,242 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     // ── BESTELLUNGEN PAGE ─────────────────────────────────────────────────────
     let _bestellungenData = null;
     async function pageBestellungen() {
-      // Permission gate
-      if (!user?.ist_admin && !user?.ist_chef && !user?.darf_bestellen) {
+      if (!user?.ist_admin && !user?.darf_bestellen) {
         return `<div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Keine Berechtigung für Bestellungen</div></div>`;
       }
-      let kategorien = [], eintraege = [], stammdaten = [], artikelKats = [];
+      let eintraege = [], stammdaten = [], kategorien = [];
       try {
-        [kategorien, eintraege, stammdaten, artikelKats] = await Promise.all([
-          apiGet('/api/bestellungen/kategorien'),
+        [eintraege, stammdaten, kategorien] = await Promise.all([
           apiGet('/api/bestellungen/eintraege'),
           apiGet('/api/bestellungen/stammdaten'),
-          apiGet('/api/bestellungen/artikel-kategorien'),
+          apiGet('/api/bestellungen/kategorien'),
         ]);
       } catch (e) { }
-      _bestellungenData = { kategorien, eintraege, stammdaten, artikelKats };
 
-      const canExport = isManager() || user?.darf_export;
-      const canArtikel = isManager() || user?.darf_artikelanlage;
-      const isManager_ = isManager();
-      const aktKats = kategorien.filter(k => k.aktiv);
-      const firstKatId = aktKats[0]?.id || null;
-      const fmtDate = d => d ? new Date(d).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      // Spartenauswahl aus localStorage (pro User)
+      const _spartKey = `solano_sparten_${user?.id}`;
+      let _spartenSaved = {};
+      try { _spartenSaved = JSON.parse(localStorage.getItem(_spartKey) || '{}'); } catch (e) {}
+      const _sparten = { w: !!_spartenSaved.w, g: !!_spartenSaved.g, gr: !!_spartenSaved.gr, p: !!_spartenSaved.p };
+      const _anySparte = _sparten.w || _sparten.g || _sparten.gr || _sparten.p;
 
-      function renderEintragRow(e) {
-        const bestelltBadge = e.bestellt
-          ? `<span class="badge" style="background:#dcfce7;color:#15803d">✅ Bestellt${e.bestellt_von_name ? ' · ' + esc(e.bestellt_von_name) : ''}</span>`
-          : `<span class="badge" style="background:#fef3c7;color:#92400e">⏳ Offen</span>`;
-        const cb = isManager_
-          ? `<input type="checkbox" class="bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;accent-color:#16a34a;flex-shrink:0" title="Bestellt-Status ändern">`
-          : `<input type="checkbox" ${e.bestellt ? 'checked' : ''} disabled style="width:20px;height:20px;flex-shrink:0;opacity:0.5">`;
-        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-          ${cb}
+      // Stammdaten nach Sparte filtern
+      const _sdFiltered = _anySparte ? stammdaten.filter(s => {
+        const hatKeineSparte = !s.sparte_winterdienst && !s.sparte_gebaeudereinigung && !s.sparte_gruenpflege && !s.sparte_projekte;
+        return hatKeineSparte
+          || (_sparten.w && s.sparte_winterdienst)
+          || (_sparten.g && s.sparte_gebaeudereinigung)
+          || (_sparten.gr && s.sparte_gruenpflege)
+          || (_sparten.p && s.sparte_projekte);
+      }) : stammdaten;
+
+      _bestellungenData = { kategorien, eintraege, stammdaten: _sdFiltered };
+
+      const fmtDate = d => d ? new Date(d).toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+      const meineList = isManager() ? eintraege : eintraege.filter(e => e.erstellt_von == user?.id);
+      const meineOffen = meineList.filter(e => !e.bestellt);
+      const meineAufgegeben = meineList.filter(e => e.bestellt);
+
+      const renderEintragRow = (e) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
           <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:600">${esc(e.bezeichnung)}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
-              ${e.menge ? `${esc(e.menge)}${e.einheit ? ' ' + esc(e.einheit) : ''}` : ''}
-              ${e.lieferant ? ` · ${esc(e.lieferant)}` : ''}
-              · ${esc(e.erstellt_von_name || '?')} · ${fmtDate(e.erstellt_am)}
-            </div>
-            <div style="margin-top:4px">${bestelltBadge}</div>
+            <div style="font-size:14px;font-weight:600${e.bestellt ? ';color:var(--text-muted);text-decoration:line-through' : ''}">${esc(e.bezeichnung)}${e.menge ? `<span style="font-weight:400"> · ${esc(e.menge)}${e.einheit ? ' ' + esc(e.einheit) : ''}</span>` : ''}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(e.erstellt_von_name || '')} · ${fmtDate(e.erstellt_am)}</div>
           </div>
-          ${isManager_ ? `<button class="tbl-btn danger bestell-del" data-id="${e.id}" style="font-size:12px;flex-shrink:0;margin:0;padding:4px 8px">🗑️</button>` : ''}
+          ${e.bestellt
+            ? `<span style="background:#dcfce7;color:#15803d;font-size:12px;font-weight:700;border-radius:8px;padding:3px 10px;flex-shrink:0;white-space:nowrap">✅ Bestellt</span>`
+            : `<span style="background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;border-radius:8px;padding:3px 10px;flex-shrink:0;white-space:nowrap">⏳ Offen</span>`}
+          <button class="bestell-del-btn" data-id="${e.id}" style="background:transparent;border:none;color:#dc2626;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0" title="Löschen">🗑️</button>
         </div>`;
-      }
 
-      // Category tabs
-      const katTabs = aktKats.map((k, i) => {
-        const offene = eintraege.filter(e => e.kategorie_id == k.id && !e.bestellt).length;
-        const isFirst = i === 0;
-        return `<button class="bestell-tab-btn" data-katid="${k.id}"
-          style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;
-          border:2px solid ${k.farbe};background:${isFirst ? k.farbe : 'transparent'};
-          color:${isFirst ? 'white' : k.farbe};font-size:13px;font-weight:700;cursor:pointer;
-          white-space:nowrap;transition:all .2s">
-          ${k.icon} ${esc(k.name)}${offene > 0 ? ` <span style="background:rgba(255,255,255,.25);border-radius:10px;padding:1px 7px;font-size:11px">${offene}</span>` : ''}
-        </button>`;
-      }).join('');
+      const offenHtml = meineOffen.length
+        ? meineOffen.map(renderEintragRow).join('')
+        : `<div style="color:var(--text-muted);font-size:13px;padding:16px 0;text-align:center">Keine offenen Bestellungen</div>`;
 
-      // Select options
-      const katOptions = aktKats.map(k => `<option value="${k.id}">${k.icon} ${esc(k.name)}</option>`).join('');
-      const datalistOpts = stammdaten.map(s => `<option value="${esc(s.name)}">`).join('');
+      const aufgegebenOpen = localStorage.getItem('bestell_aufgegeben_open') !== '0';
+      const aufgegebenHtml = meineAufgegeben.length ? `
+        <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+          <div id="bestell-aufgegeben-toggle" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:4px 0">
+            <span style="font-size:13px;font-weight:700;color:var(--text-muted)">📦 Aufgegebene Bestellungen (${meineAufgegeben.length})</span>
+            <span id="bestell-aufgegeben-arrow" style="font-size:14px;color:var(--text-muted)">${aufgegebenOpen ? '▾' : '▸'}</span>
+          </div>
+          <div id="bestell-aufgegeben-body" style="display:${aufgegebenOpen ? 'block' : 'none'}">
+            ${meineAufgegeben.map(renderEintragRow).join('')}
+          </div>
+        </div>` : '';
 
-      // Entry list for first tab
-      const firstList = eintraege.filter(e => e.kategorie_id == firstKatId);
-      const firstHtml = firstList.length
-        ? firstList.map(renderEintragRow).join('')
-        : `<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Keine Einträge in dieser Kategorie</div>`;
-
-      const artikelBtn = canArtikel
-        ? `<button class="btn btn-outline" id="bestell-artikelanlage-btn" style="display:flex;align-items:center;gap:6px">🏷️ Artikel scannen</button>`
-        : '';
-      const berichtBtn = canExport
-        ? `<button class="btn btn-outline" id="bestell-bericht-btn" style="display:flex;align-items:center;gap:6px">📋 Bericht</button>`
-        : '';
-
+      const _bs = 'display:block;width:100%;padding:16px;font-size:15px;font-weight:700;border:none;border-radius:12px;cursor:pointer;text-align:center;color:white';
       return `
       <div style="max-width:700px;margin:0 auto;padding:0 0 80px">
-        <div style="font-size:20px;font-weight:800;margin-bottom:4px">🛒 Bestellungen</div>
-        ${canArtikel || canExport ? `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">${artikelBtn}${berichtBtn}</div>` : '<div style="margin-bottom:14px"></div>'}
+        <div style="font-size:26px;font-weight:900;margin-bottom:16px">🛒 Bestellungen</div>
 
-        <!-- Kategorie-Tabs -->
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;overflow-x:auto;padding-bottom:4px" id="bestell-tabs">
-          ${katTabs}
+        <!-- Spartenauswahl -->
+        <div class="card" style="padding:12px 14px;margin-bottom:16px">
+          <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:10px">Meine Sparte(n)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600;padding:8px;border-radius:8px;border:2px solid ${_sparten.w ? 'var(--primary)' : 'var(--border)'};background:${_sparten.w ? '#eff6ff' : 'transparent'}">
+              <input type="checkbox" class="sp-check" data-sp="w" ${_sparten.w ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0"> ❄️ Winterdienst
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600;padding:8px;border-radius:8px;border:2px solid ${_sparten.g ? 'var(--primary)' : 'var(--border)'};background:${_sparten.g ? '#eff6ff' : 'transparent'}">
+              <input type="checkbox" class="sp-check" data-sp="g" ${_sparten.g ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0"> 🧹 Gebäudereinigung
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600;padding:8px;border-radius:8px;border:2px solid ${_sparten.gr ? 'var(--primary)' : 'var(--border)'};background:${_sparten.gr ? '#eff6ff' : 'transparent'}">
+              <input type="checkbox" class="sp-check" data-sp="gr" ${_sparten.gr ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0"> 🌿 Grünpflege
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600;padding:8px;border-radius:8px;border:2px solid ${_sparten.p ? 'var(--primary)' : 'var(--border)'};background:${_sparten.p ? '#eff6ff' : 'transparent'}">
+              <input type="checkbox" class="sp-check" data-sp="p" ${_sparten.p ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0"> 🔨 Montage/Projekte
+            </label>
+          </div>
         </div>
 
-        <!-- Eintrag hinzufügen -->
-        <div class="card" style="margin-bottom:14px;padding:14px">
-          <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text-muted)">+ Neuer Eintrag</div>
-          <datalist id="bestell-vorschlaege">${datalistOpts}</datalist>
-          <select class="form-input" id="bestell-kat-select" style="margin-bottom:8px">${katOptions}</select>
-          <input class="form-input" id="bestell-bezeichnung" list="bestell-vorschlaege" placeholder="Bezeichnung *" style="margin-bottom:8px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <input class="form-input" id="bestell-menge" placeholder="Menge">
-            <input class="form-input" id="bestell-einheit" placeholder="Einheit (Stk, Pkg…)">
-          </div>
-          <input class="form-input" id="bestell-lieferant" placeholder="Lieferant (optional)" style="margin-bottom:10px">
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-primary" id="bestell-add-btn" style="flex:1;min-width:120px">+ Hinzufügen</button>
-            <button class="btn btn-outline" id="bestell-ocr-btn" style="flex:1;min-width:120px">📷 OCR Scan</button>
-          </div>
-          <input type="file" id="bestell-ocr-input" accept="image/*" capture="environment" style="display:none">
-          <div id="bestell-ocr-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+          <button id="bestell-scan-btn" style="${_bs};background:var(--primary)">📷 Artikel scannen</button>
+          <button id="bestell-suche-btn" style="${_bs};background:#475569">🔍 Artikel suchen</button>
         </div>
 
-        <!-- Eintrags-Liste -->
-        <div class="card" style="padding:14px" id="bestell-liste-wrap">
-          <div id="bestell-liste">${firstHtml}</div>
+        <div id="bestell-warenkorb-wrap" style="display:none;margin-bottom:20px">
+          <div class="card" style="padding:14px">
+            <div style="font-size:15px;font-weight:800;margin-bottom:10px">🛒 Warenkorb</div>
+            <div id="bestell-warenkorb-liste"></div>
+            <div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:10px">
+              <div style="font-size:13px;font-weight:700;margin-bottom:8px">📍 Wohin?</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <label style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;border:2px solid var(--primary);background:rgba(30,64,175,0.05);cursor:pointer;font-size:13px;font-weight:600">
+                  <input type="radio" name="bestell-ziel" value="lager" checked style="accent-color:var(--primary)"> 📦 Lager
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;border:2px solid var(--border);cursor:pointer;font-size:13px;font-weight:600" id="bestell-ziel-fz-label">
+                  <input type="radio" name="bestell-ziel" value="fahrzeug" style="accent-color:var(--primary)"> 🚗 Fahrzeug
+                </label>
+              </div>
+              <div id="bestell-fz-select-wrap" style="display:none;margin-top:8px">
+                <select class="form-input" id="bestell-fz-select"><option value="">Fahrzeug wählen…</option></select>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="bestell-submit-btn" style="width:100%;margin-top:12px;padding:14px;font-size:15px">✅ Bestellung abschicken</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px">
+          <div style="font-size:15px;font-weight:800;margin-bottom:10px">📋 ${isManager() ? 'Alle Bestellungen' : 'Meine Bestellungen'}</div>
+          ${offenHtml}
+          ${aufgegebenHtml}
         </div>
       </div>`;
     }
 
     async function _initBestellungenEvents(kategorien, eintraege, stammdaten, artikelKats) {
+      const { stammdaten: sd, kategorien: kats } = _bestellungenData || {};
+      const _sd = sd || stammdaten || [];
+      const _kats = kats || kategorien || [];
+      let warenkorb = [];
+
+      const renderWarenkorb = () => {
+        const wrap = document.getElementById('bestell-warenkorb-wrap');
+        const liste = document.getElementById('bestell-warenkorb-liste');
+        if (!wrap || !liste) return;
+        if (warenkorb.length === 0) { wrap.style.display = 'none'; return; }
+        wrap.style.display = '';
+        liste.innerHTML = warenkorb.map((item, i) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600">${esc(item.bezeichnung)}</div>
+              ${item.menge ? `<div style="font-size:12px;color:var(--text-muted)">${esc(item.menge)}${item.einheit ? ' ' + esc(item.einheit) : ''}</div>` : ''}
+            </div>
+            <button class="tbl-btn danger wk-del" data-idx="${i}" style="margin:0;padding:4px 8px;font-size:12px;flex-shrink:0">🗑️</button>
+          </div>`).join('');
+        liste.querySelectorAll('.wk-del').forEach(btn => {
+          btn.addEventListener('click', () => { warenkorb.splice(parseInt(btn.dataset.idx), 1); renderWarenkorb(); });
+        });
+      };
+
+      const addToWarenkorb = (item) => { warenkorb.push(item); renderWarenkorb(); };
+
+      // Spartenauswahl speichern + Seite neu laden bei Änderung
+      const _spartKey2 = `solano_sparten_${user?.id}`;
+      document.querySelectorAll('.sp-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const cur = {};
+          document.querySelectorAll('.sp-check').forEach(c => { cur[c.dataset.sp] = c.checked; });
+          localStorage.setItem(_spartKey2, JSON.stringify(cur));
+          go('bestellungen'); // Seite neu laden mit neuer Filterung
+        });
+      });
+
+      const _artKats = artikelKats || [];
+      document.getElementById('bestell-scan-btn')?.addEventListener('click', () => _openScanBestellModal(_sd, _kats, addToWarenkorb, _artKats));
+      document.getElementById('bestell-suche-btn')?.addEventListener('click', () => _openArtikelSuchModal(_sd, _kats, addToWarenkorb));
+
+      // Aufgegebene Bestellungen – Toggle
+      document.getElementById('bestell-aufgegeben-toggle')?.addEventListener('click', () => {
+        const body = document.getElementById('bestell-aufgegeben-body');
+        const arrow = document.getElementById('bestell-aufgegeben-arrow');
+        if (!body) return;
+        const open = body.style.display === 'none';
+        body.style.display = open ? 'block' : 'none';
+        if (arrow) arrow.textContent = open ? '▾' : '▸';
+        localStorage.setItem('bestell_aufgegeben_open', open ? '1' : '0');
+      });
+
+      // Löschen-Buttons
+      document.querySelectorAll('.bestell-del-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Eintrag löschen?')) return;
+          try {
+            await apiDelete(`/api/bestellungen/eintraege/${btn.dataset.id}`);
+            btn.closest('div[style]').remove();
+            toast('Gelöscht', 'ok');
+          } catch (e) { toast(e.message, 'err'); }
+        });
+      });
+
+      // Ziel-Radio toggle (Lager/Fahrzeug)
+      document.querySelectorAll('input[name="bestell-ziel"]').forEach(r => {
+        r.addEventListener('change', async () => {
+          const wrap = document.getElementById('bestell-fz-select-wrap');
+          const lagerLabel = r.closest('div[style*="grid"]')?.querySelector('label:first-child');
+          const fzLabel = document.getElementById('bestell-ziel-fz-label');
+          if (r.value === 'fahrzeug') {
+            if (wrap) wrap.style.display = 'block';
+            if (fzLabel) { fzLabel.style.borderColor = 'var(--primary)'; fzLabel.style.background = 'rgba(30,64,175,0.05)'; }
+            if (lagerLabel) { lagerLabel.style.borderColor = 'var(--border)'; lagerLabel.style.background = 'transparent'; }
+            // Fahrzeuge laden
+            const sel = document.getElementById('bestell-fz-select');
+            if (sel && !sel.dataset.loaded) {
+              sel.dataset.loaded = '1';
+              try {
+                const fzg = await apiGet('/api/bestellungen/fahrzeuge');
+                sel.innerHTML = '<option value="">Fahrzeug wählen…</option>' + fzg.map(f => `<option value="${f.id}">🚗 ${esc(f.kennzeichen)}${f.bezeichnung ? ' – ' + esc(f.bezeichnung) : ''}</option>`).join('');
+              } catch (e) {}
+            }
+          } else {
+            if (wrap) wrap.style.display = 'none';
+            if (lagerLabel) { lagerLabel.style.borderColor = 'var(--primary)'; lagerLabel.style.background = 'rgba(30,64,175,0.05)'; }
+            if (fzLabel) { fzLabel.style.borderColor = 'var(--border)'; fzLabel.style.background = 'transparent'; }
+          }
+        });
+      });
+      document.getElementById('bestell-submit-btn')?.addEventListener('click', async () => {
+        if (warenkorb.length === 0) return;
+        const ziel = document.querySelector('input[name="bestell-ziel"]:checked')?.value || 'lager';
+        const fahrzeug_id = ziel === 'fahrzeug' ? (parseInt(document.getElementById('bestell-fz-select')?.value) || null) : null;
+        if (ziel === 'fahrzeug' && !fahrzeug_id) { toast('Bitte Fahrzeug auswählen', 'err'); return; }
+        const gruppe = Date.now().toString(36);
+        try {
+          for (const item of warenkorb) await apiPost('/api/bestellungen/eintraege', { ...item, bestell_gruppe: gruppe, ziel, fahrzeug_id });
+          const anzahl = warenkorb.length;
+          warenkorb = [];
+          renderWarenkorb();
+          toast(`✅ ${ziel === 'fahrzeug' ? '🚗 Fahrzeug-' : '📦 '}Bestellung mit ${anzahl} Artikel${anzahl > 1 ? 'n' : ''} abgeschickt!`, 'ok');
+          go('bestellungen');
+        } catch (e) { toast(e.message, 'err'); }
+      });
+
+      // Legacy event handlers (kept for admin in old tabs if needed)
       const isManager_ = isManager();
       const canArtikel = isManager_ || user?.darf_artikelanlage;
       let activeKatId = kategorien.filter(k => k.aktiv)[0]?.id || null;
-
-      // Preset first tab's category in form
       const selEl = document.getElementById('bestell-kat-select');
       if (selEl && activeKatId) selEl.value = activeKatId;
-
-      // Tab switching
       document.querySelectorAll('.bestell-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           activeKatId = parseInt(btn.dataset.katid) || null;
@@ -4064,120 +4418,23 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           });
           const k = kategorien.find(k => k.id == activeKatId);
           btn.style.background = k?.farbe || 'var(--primary)'; btn.style.color = 'white';
-          // Render filtered list
           const list = eintraege.filter(e => e.kategorie_id == activeKatId);
           const getRow = e => {
             const badge = e.bestellt
-              ? `<span class="badge" style="background:#dcfce7;color:#15803d">✅ Bestellt${e.bestellt_von_name ? ' · ' + esc(e.bestellt_von_name) : ''}</span>`
+              ? `<span class="badge" style="background:#dcfce7;color:#15803d">✅ Bestellt</span>`
               : `<span class="badge" style="background:#fef3c7;color:#92400e">⏳ Offen</span>`;
-            const cb = isManager_
-              ? `<input type="checkbox" class="bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;accent-color:#16a34a;flex-shrink:0">`
-              : `<input type="checkbox" ${e.bestellt ? 'checked' : ''} disabled style="width:20px;height:20px;flex-shrink:0;opacity:0.5">`;
             return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-              ${cb}<div style="flex:1;min-width:0">
+              <div style="flex:1;min-width:0">
                 <div style="font-size:14px;font-weight:600">${esc(e.bezeichnung)}</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${e.menge || ''}${e.einheit ? ' ' + esc(e.einheit) : ''} ${e.lieferant ? '· ' + esc(e.lieferant) : ''}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${e.menge || ''}${e.einheit ? ' ' + esc(e.einheit) : ''}</div>
                 <div style="margin-top:4px">${badge}</div>
-              </div>${isManager_ ? `<button class="tbl-btn danger bestell-del" data-id="${e.id}" style="font-size:12px;flex-shrink:0;margin:0;padding:4px 8px">🗑️</button>` : ''}
+              </div>
             </div>`;
+
           };
           const listeEl = document.getElementById('bestell-liste');
           if (listeEl) listeEl.innerHTML = list.length ? list.map(getRow).join('') : `<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Keine Einträge</div>`;
-          _wireBestellCbDel(eintraege, isManager_);
           if (selEl) selEl.value = activeKatId;
-        });
-      });
-
-      // Autocomplete fill-in
-      document.getElementById('bestell-bezeichnung')?.addEventListener('input', e => {
-        const val = e.target.value.trim().toLowerCase();
-        const match = stammdaten.find(s => s.name.toLowerCase() === val);
-        if (match) {
-          if (match.lieferant && !document.getElementById('bestell-lieferant').value) document.getElementById('bestell-lieferant').value = match.lieferant;
-          if (match.einheit && !document.getElementById('bestell-einheit').value) document.getElementById('bestell-einheit').value = match.einheit;
-          if (match.kategorie_id) { const s = document.getElementById('bestell-kat-select'); if (s) s.value = match.kategorie_id; }
-        }
-      });
-
-      // Add entry
-      document.getElementById('bestell-add-btn')?.addEventListener('click', async () => {
-        const bez = document.getElementById('bestell-bezeichnung')?.value?.trim();
-        if (!bez) { toast('Bezeichnung erforderlich', 'err'); return; }
-        const katId = parseInt(document.getElementById('bestell-kat-select')?.value) || null;
-        const menge = document.getElementById('bestell-menge')?.value?.trim() || null;
-        const einheit = document.getElementById('bestell-einheit')?.value?.trim() || null;
-        const lieferant = document.getElementById('bestell-lieferant')?.value?.trim() || null;
-        const existiert = stammdaten.some(s => s.name.toLowerCase() === bez.toLowerCase());
-        try {
-          const neu = await apiPost('/api/bestellungen/eintraege', { kategorie_id: katId, bezeichnung: bez, menge, einheit, lieferant });
-          eintraege.unshift(neu);
-          toast('Eintrag hinzugefügt ✅', 'ok');
-          ['bestell-bezeichnung', 'bestell-menge', 'bestell-einheit', 'bestell-lieferant'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-          if (canArtikel && !existiert) {
-            if (confirm(`"${bez}" ist noch nicht als Artikel angelegt. Jetzt anlegen?`)) {
-              _openStammdatenModal({ name: bez, kategorie_id: katId, lieferant, einheit, artikelKats });
-            }
-          }
-          go('bestellungen');
-        } catch (ex) { toast(ex.message, 'err'); }
-      });
-
-      // OCR scan (Tesseract.js)
-      document.getElementById('bestell-ocr-btn')?.addEventListener('click', () => document.getElementById('bestell-ocr-input')?.click());
-      document.getElementById('bestell-ocr-input')?.addEventListener('change', async ev => {
-        const file = ev.target.files[0]; if (!file) return;
-        const st = document.getElementById('bestell-ocr-status');
-        if (st) st.textContent = '🔍 OCR läuft…';
-        try {
-          if (!window.Tesseract) {
-            await new Promise((ok, fail) => {
-              const s = document.createElement('script');
-              s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-              s.onload = ok; s.onerror = fail; document.head.appendChild(s);
-            });
-          }
-          const worker = await Tesseract.createWorker('deu+eng');
-          const { data: { text } } = await worker.recognize(file);
-          await worker.terminate();
-          const firstLine = text.trim().split('\n')[0].replace(/[^\w\s\-\.äöüÄÖÜß]/g, '').trim();
-          const bezEl = document.getElementById('bestell-bezeichnung');
-          if (bezEl) bezEl.value = firstLine;
-          if (st) st.textContent = `✅ Erkannt: "${firstLine}"`;
-          if (canArtikel && firstLine) {
-            const ex = stammdaten.some(s => s.name.toLowerCase() === firstLine.toLowerCase());
-            if (!ex && confirm(`"${firstLine}" als neuen Artikel anlegen?`)) {
-              _openStammdatenModal({ name: firstLine, kategorie_id: parseInt(document.getElementById('bestell-kat-select')?.value) || null, artikelKats });
-            }
-          }
-        } catch (e) { if (st) st.textContent = '❌ OCR Fehler: ' + e.message; }
-      });
-
-      // Barcode/Artikelanlage button
-      document.getElementById('bestell-artikelanlage-btn')?.addEventListener('click', () => _openArtikelanlageModal(stammdaten, artikelKats, kategorien));
-
-      // Bericht button
-      document.getElementById('bestell-bericht-btn')?.addEventListener('click', () => go('bestellungen-bericht'));
-
-      _wireBestellCbDel(eintraege, isManager_);
-    }
-
-    function _wireBestellCbDel(eintraege, isManager_) {
-      document.querySelectorAll('.bestell-cb').forEach(cb => {
-        if (cb._bound) return; cb._bound = true;
-        cb.addEventListener('change', async () => {
-          try {
-            const r = await apiPatch(`/api/bestellungen/eintraege/${cb.dataset.id}/bestellt`, { bestellt: cb.checked });
-            const e = eintraege.find(x => x.id == cb.dataset.id);
-            if (e) { e.bestellt = cb.checked; e.bestellt_von_name = r?.bestellt_von_name || ''; }
-          } catch (ex) { toast(ex.message, 'err'); cb.checked = !cb.checked; }
-        });
-      });
-      document.querySelectorAll('.bestell-del').forEach(btn => {
-        if (btn._bound) return; btn._bound = true;
-        btn.addEventListener('click', async () => {
-          if (!confirm('Eintrag löschen?')) return;
-          try { await apiDel(`/api/bestellungen/eintraege/${btn.dataset.id}`); btn.closest('div[style*="border-bottom"]').remove(); toast('Gelöscht', 'ok'); }
-          catch (e) { toast(e.message, 'err'); }
         });
       });
     }
@@ -4196,26 +4453,358 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       } catch (e) { }
     }
 
-    // Barcode scan modal for Artikelanlage – live Kamera mit roter Scanlinie + Beep
-    async function _openArtikelanlageModal(stammdaten, artikelKats, bestKats) {
-      const katOpts = (artikelKats || []).filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${k.name.replace(/</g, '&lt;')}</option>`).join('');
-      const bKatOpts = (bestKats || []).filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${k.name.replace(/</g, '&lt;')}</option>`).join('');
-
-      // Lade html5-qrcode Library (hat rote Scanlinie eingebaut)
-      if (!window.Html5Qrcode) {
+    // ── Kamera-Hilfsfunktion: ZXing laden + CSS (einmalig)
+    async function _prepScanner() {
+      if (!window.ZXing) {
         try {
           await new Promise((ok, fail) => {
             const s = document.createElement('script');
-            s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+            s.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
             s.onload = ok; s.onerror = fail; document.head.appendChild(s);
           });
         } catch (e) { }
       }
+      if (!document.getElementById('bc-scan-css')) {
+        const st = document.createElement('style'); st.id = 'bc-scan-css';
+        st.textContent = '@keyframes bc-scan{0%,100%{top:10%}50%{top:85%}}#bc-scan-line{position:absolute;left:0;right:0;height:3px;background:#ef4444;box-shadow:0 0 8px #ef4444,0 0 18px #ef4444;animation:bc-scan 1.8s ease-in-out infinite}';
+        document.head.appendChild(st);
+      }
+    }
+
+    // ── Kamera starten (shared helper)
+    async function _startCamera(vidId, statusId, onRaw) {
+      let _stream = null, _raf = null, _zxing = null;
+      const vid = document.getElementById(vidId);
+      const st = document.getElementById(statusId);
+      const stop = () => {
+        if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
+        if (_zxing) { try { _zxing.reset(); } catch (e) { } _zxing = null; }
+        if (_stream) { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
+      };
+      try {
+        _stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+        if (vid) { vid.srcObject = _stream; await vid.play().catch(() => {}); }
+        if (st) st.textContent = '📷 Barcode in den Rahmen halten…';
+        let lastCode = '', lastTime = 0;
+        const _handle = (text) => {
+          const now = Date.now();
+          if (text === lastCode && now - lastTime < 3000) return;
+          lastCode = text; lastTime = now;
+          onRaw(text, stop);
+        };
+        if ('BarcodeDetector' in window) {
+          const det = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code','data_matrix'] });
+          const loop = async () => {
+            if (!vid || vid.readyState < 2) { _raf = requestAnimationFrame(loop); return; }
+            try { const res = await det.detect(vid); if (res.length) _handle(res[0].rawValue); } catch (e) {}
+            _raf = requestAnimationFrame(loop);
+          };
+          _raf = requestAnimationFrame(loop);
+        } else if (window.ZXing) {
+          _zxing = new ZXing.BrowserMultiFormatReader();
+          await _zxing.decodeFromVideoDevice(null, vid, (result) => { if (result) _handle(result.getText()); });
+        } else {
+          if (st) st.textContent = '⚠️ Kein Scanner verfügbar – Scancode manuell eingeben';
+        }
+      } catch (e) {
+        if (st) st.textContent = '⚠️ Kamera nicht verfügbar – Scancode manuell eingeben';
+      }
+      return stop;
+    }
+
+    // ── NEUES Scan-zum-Bestellen Modal ────────────────────────────────────────
+    async function _openScanBestellModal(stammdaten, kategorien, onAdd, artikelKats) {
+      await _prepScanner();
+      // Bestell-Kategorien für Kategorie-Select nach Fund
+      const katOpts = (kategorien || []).filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.icon || '')} ${esc(k.name)}</option>`).join('');
+      // Produktkategorien für neuen Artikel
+      let _artKats = artikelKats || [];
+      if (!_artKats.length) { try { _artKats = await apiGet('/api/bestellungen/artikel-kategorien'); } catch (e) {} }
+      const artKatOpts = _artKats.filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
+      const _mb = 'display:block;width:100%;padding:14px;font-size:15px;font-weight:700;border:none;border-radius:10px;cursor:pointer;color:white;margin-top:0';
+
+      showModal(`
+        <button class="modal-close" id="sbc-close" style="position:absolute;top:12px;right:12px;z-index:10">×</button>
+        <div class="modal-title">📷 Artikel scannen</div>
+
+        <div id="sbc-scan-view">
+          <div style="position:relative;width:100%;aspect-ratio:16/9;background:#111;border-radius:10px;overflow:hidden;margin-bottom:8px">
+            <video id="sbc-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:block"></video>
+            <div style="position:absolute;inset:0;pointer-events:none">
+              <div id="bc-scan-line"></div>
+              <div style="position:absolute;top:10%;left:8%;right:8%;bottom:10%;border:2px solid rgba(255,255,255,.35);border-radius:6px"></div>
+            </div>
+          </div>
+          <div id="sbc-status" style="font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:10px">📷 Kamera startet…</div>
+          <button class="btn btn-outline" id="sbc-cancel-btn" style="width:100%">Abbrechen</button>
+        </div>
+
+        <div id="sbc-found-view" style="display:none">
+          <div id="sbc-found-info" style="background:#dcfce7;border-radius:8px;padding:12px;margin-bottom:12px;font-size:14px"></div>
+          <div class="form-group"><label class="form-label">Menge</label>
+            <input class="form-input" id="sbc-menge" placeholder="z.B. 2 oder 500ml"></div>
+          <select class="form-input" id="sbc-kat" style="margin-bottom:14px">
+            <option value="">– Kategorie –</option>${katOpts}
+          </select>
+          <button class="btn btn-primary" id="sbc-add-btn" style="width:100%">🛒 Zum Warenkorb</button>
+        </div>
+
+        <div id="sbc-notfound-view" style="display:none">
+          <div style="background:#fef3c7;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px">
+            ⚠️ Artikel nicht gefunden<br><span id="sbc-code-display" style="font-family:monospace;font-size:12px;color:var(--text-muted)"></span>
+          </div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:14px">Neu anlegen?</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <button id="sbc-ja-btn" style="${_mb};background:var(--primary)">✅ Ja</button>
+            <button id="sbc-nein-btn" style="${_mb};background:#64748b">❌ Nein</button>
+          </div>
+        </div>
+
+        <div id="sbc-neuartikel-view" style="display:none">
+          <div style="font-size:14px;font-weight:700;margin-bottom:10px">📦 Neuen Artikel anlegen</div>
+          <input class="form-input" id="sbc-neu-name" placeholder="Artikelname *" style="margin-bottom:8px">
+          <input class="form-input" id="sbc-neu-scancode" placeholder="Scancode" style="margin-bottom:8px" readonly>
+          <input class="form-input" id="sbc-neu-menge" placeholder="Menge" style="margin-bottom:8px">
+          <select class="form-input" id="sbc-neu-kat" style="margin-bottom:14px">
+            <option value="">– Produktkategorie –</option>${artKatOpts}
+          </select>
+          <button id="sbc-neu-save" style="${_mb};background:var(--primary)">💾 Anlegen & zum Warenkorb</button>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center">ℹ️ Admin/Chef wird zur Vervollständigung benachrichtigt</div>
+        </div>
+
+        <div id="sbc-added-view" style="display:none">
+          <div style="text-align:center;padding:20px 0">
+            <div style="font-size:48px;margin-bottom:8px">✅</div>
+            <div style="font-size:16px;font-weight:700;margin-bottom:4px">Zum Warenkorb hinzugefügt</div>
+            <div id="sbc-added-name" style="font-size:13px;color:var(--text-muted);margin-bottom:24px"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <button id="sbc-weiter-btn" style="${_mb};background:var(--primary)">📷 Weiterer Artikel</button>
+              <button id="sbc-fertig-btn" style="${_mb};background:#64748b">✅ Fertig</button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      let stopCam = null, _currentCode = '', _foundArtikel = null;
+
+      const showView = (id) => {
+        ['sbc-scan-view','sbc-found-view','sbc-notfound-view','sbc-neuartikel-view','sbc-added-view'].forEach(v => {
+          const el = document.getElementById(v); if (el) el.style.display = v === id ? '' : 'none';
+        });
+      };
+
+      const onCode = async (code, stop) => {
+        _playBeep();
+        _currentCode = code;
+        if (stop) { stopCam = null; stop(); }
+        // Server-seitige Suche (berücksichtigt auch gelöschte Artikel korrekt)
+        let art = null;
+        try { art = await apiGet('/api/bestellungen/stammdaten/barcode/' + encodeURIComponent(code)); } catch (e) { art = null; }
+        if (art) {
+          _foundArtikel = art;
+          const info = document.getElementById('sbc-found-info');
+          if (info) info.innerHTML = `✅ <b>${esc(art.name)}</b>${art.lieferant ? ' · ' + esc(art.lieferant) : ''}${art.einheit ? ` · ${esc(art.einheit)}` : ''}`;
+          const katSel = document.getElementById('sbc-kat');
+          if (katSel && art.kategorie_id) katSel.value = art.kategorie_id;
+          showView('sbc-found-view');
+          document.getElementById('sbc-menge')?.focus();
+        } else {
+          _foundArtikel = null;
+          const disp = document.getElementById('sbc-code-display');
+          if (disp) disp.textContent = code;
+          showView('sbc-notfound-view');
+        }
+      };
+
+      const startCam = async () => {
+        showView('sbc-scan-view');
+        stopCam = await _startCamera('sbc-video', 'sbc-status', onCode);
+      };
+
+      await startCam();
+
+      document.getElementById('sbc-close')?.addEventListener('click', () => { if (stopCam) stopCam(); closeModal(); });
+      document.getElementById('sbc-cancel-btn')?.addEventListener('click', () => { if (stopCam) stopCam(); closeModal(); });
+
+      document.getElementById('sbc-add-btn')?.addEventListener('click', () => {
+        if (!_foundArtikel) return;
+        const menge = document.getElementById('sbc-menge')?.value?.trim() || null;
+        const katId = parseInt(document.getElementById('sbc-kat')?.value) || _foundArtikel.kategorie_id || null;
+        onAdd({ stammdaten_id: _foundArtikel.id, bezeichnung: _foundArtikel.name, menge, einheit: _foundArtikel.einheit || null, lieferant: _foundArtikel.lieferant || null, kategorie_id: katId });
+        const an = document.getElementById('sbc-added-name');
+        if (an) an.textContent = _foundArtikel.name + (menge ? ` · ${menge}` : '');
+        showView('sbc-added-view');
+      });
+
+      document.getElementById('sbc-ja-btn')?.addEventListener('click', () => {
+        const sc = document.getElementById('sbc-neu-scancode'); if (sc) sc.value = _currentCode;
+        showView('sbc-neuartikel-view');
+        document.getElementById('sbc-neu-name')?.focus();
+      });
+      document.getElementById('sbc-nein-btn')?.addEventListener('click', () => startCam());
+
+      document.getElementById('sbc-neu-save')?.addEventListener('click', async () => {
+        const name = document.getElementById('sbc-neu-name')?.value?.trim();
+        if (!name) { toast('Name erforderlich', 'err'); return; }
+        const scancode = document.getElementById('sbc-neu-scancode')?.value?.trim() || null;
+        const menge = document.getElementById('sbc-neu-menge')?.value?.trim() || null;
+        const katId = parseInt(document.getElementById('sbc-neu-kat')?.value) || null;
+        try {
+          const neuArtikel = await apiPost('/api/bestellungen/stammdaten', { name, scancode, benoetigt_pruefung: true, kategorie_id: katId });
+          stammdaten.push(neuArtikel);
+          onAdd({ stammdaten_id: neuArtikel.id, bezeichnung: name, menge, kategorie_id: katId });
+          const an = document.getElementById('sbc-added-name');
+          if (an) an.textContent = name + ' (neu angelegt, Admin wird informiert)';
+          showView('sbc-added-view');
+        } catch (e) { toast(e.message, 'err'); }
+      });
+
+      document.getElementById('sbc-weiter-btn')?.addEventListener('click', () => startCam());
+      document.getElementById('sbc-fertig-btn')?.addEventListener('click', () => { if (stopCam) stopCam(); closeModal(); });
+    }
+
+    // ── Artikel-Suche Modal ────────────────────────────────────────────────────
+    async function _openArtikelSuchModal(stammdaten, kategorien, onAdd) {
+      const katOpts = (kategorien || []).filter(k => k.aktiv).map(k => `<option value="${k.id}">${esc(k.icon)} ${esc(k.name)}</option>`).join('');
+      let _artKats = [];
+      try { _artKats = await apiGet('/api/bestellungen/artikel-kategorien'); } catch (e) {}
+      const artKatOpts = _artKats.filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
+      const _mb = 'display:block;width:100%;padding:14px;font-size:15px;font-weight:700;border:none;border-radius:10px;cursor:pointer;color:white;margin-top:0';
+
+      showModal(`
+        <button class="modal-close" id="asm-close">×</button>
+        <div class="modal-title">🔍 Artikel suchen</div>
+        <div id="asm-search-view">
+          <input class="form-input" id="asm-q" placeholder="Suchbegriff…" style="margin-bottom:10px" autofocus>
+          <div id="asm-liste" style="max-height:260px;overflow-y:auto"></div>
+          <div id="asm-neu-hint" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+            <button id="asm-neu-btn" style="${_mb};background:var(--primary)">➕ Neuen Artikel anlegen</button>
+          </div>
+        </div>
+        <div id="asm-detail" style="display:none">
+          <div id="asm-detail-name" style="font-size:16px;font-weight:700;margin-bottom:14px"></div>
+          <div class="form-group"><label class="form-label">Menge</label>
+            <input class="form-input" id="asm-menge" placeholder="z.B. 2"></div>
+          <select class="form-input" id="asm-kat" style="margin-bottom:14px">
+            <option value="">– Kategorie –</option>${katOpts}
+          </select>
+          <button class="btn btn-primary" id="asm-add-btn" style="width:100%;margin-bottom:8px">🛒 Zum Warenkorb</button>
+          <button class="btn btn-outline" id="asm-back-btn" style="width:100%">← Zurück zur Suche</button>
+        </div>
+        <div id="asm-neuartikel-view" style="display:none">
+          <div style="font-size:14px;font-weight:700;margin-bottom:10px">📦 Neuen Artikel anlegen</div>
+          <input class="form-input" id="asm-neu-name" placeholder="Artikelname *" style="margin-bottom:8px">
+          <input class="form-input" id="asm-neu-menge" placeholder="Menge (optional)" style="margin-bottom:8px">
+          <select class="form-input" id="asm-neu-kat" style="margin-bottom:14px">
+            <option value="">– Produktkategorie –</option>${artKatOpts}
+          </select>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <button id="asm-neu-save" style="${_mb};background:var(--primary)">💾 Anlegen & zum Warenkorb</button>
+            <button id="asm-neu-back" style="${_mb};background:#64748b">← Zurück</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center">ℹ️ Admin/Chef wird zur Vervollständigung benachrichtigt</div>
+        </div>
+      `);
+
+      let _sel = null;
+
+      const showView = id => {
+        ['asm-search-view','asm-detail','asm-neuartikel-view'].forEach(v => {
+          const el = document.getElementById(v); if (el) el.style.display = v === id ? '' : 'none';
+        });
+      };
+
+      const renderListe = (q = '') => {
+        const f = q.toLowerCase();
+        const filtered = f ? stammdaten.filter(s => s.name.toLowerCase().includes(f)) : stammdaten;
+        const liste = document.getElementById('asm-liste');
+        const hint = document.getElementById('asm-neu-hint');
+        if (!liste) return;
+        if (filtered.length) {
+          liste.innerHTML = filtered.map(s => `
+            <div class="asm-item" data-id="${s.id}" style="padding:10px 8px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:6px;transition:background .15s">
+              <div style="font-size:14px;font-weight:600">${esc(s.name)}</div>
+              ${s.lieferant ? `<div style="font-size:12px;color:var(--text-muted)">${esc(s.lieferant)}</div>` : ''}
+            </div>`).join('');
+          if (hint) hint.style.display = 'none';
+        } else {
+          liste.innerHTML = `<div style="color:var(--text-muted);font-size:13px;padding:16px;text-align:center">Kein Artikel gefunden</div>`;
+          if (hint) hint.style.display = '';
+        }
+        liste.querySelectorAll('.asm-item').forEach(item => {
+          item.addEventListener('click', () => {
+            _sel = stammdaten.find(s => s.id == item.dataset.id);
+            const n = document.getElementById('asm-detail-name');
+            if (n && _sel) n.textContent = _sel.name;
+            const katSel = document.getElementById('asm-kat');
+            if (katSel && _sel?.kategorie_id) katSel.value = _sel.kategorie_id;
+            showView('asm-detail');
+            document.getElementById('asm-menge')?.focus();
+          });
+          item.addEventListener('mouseenter', () => item.style.background = 'var(--card-bg)');
+          item.addEventListener('mouseleave', () => item.style.background = '');
+        });
+      };
+
+      renderListe();
+      document.getElementById('asm-close')?.addEventListener('click', closeModal);
+      document.getElementById('asm-q')?.addEventListener('input', e => renderListe(e.target.value));
+
+      document.getElementById('asm-neu-btn')?.addEventListener('click', () => {
+        const q = document.getElementById('asm-q')?.value?.trim() || '';
+        const nameInput = document.getElementById('asm-neu-name');
+        if (nameInput && q) nameInput.value = q;
+        showView('asm-neuartikel-view');
+        document.getElementById('asm-neu-name')?.focus();
+      });
+
+      document.getElementById('asm-neu-back')?.addEventListener('click', () => showView('asm-search-view'));
+
+      document.getElementById('asm-neu-save')?.addEventListener('click', async () => {
+        const name = document.getElementById('asm-neu-name')?.value?.trim();
+        if (!name) { toast('Name erforderlich', 'err'); return; }
+        const menge = document.getElementById('asm-neu-menge')?.value?.trim() || null;
+        const katId = parseInt(document.getElementById('asm-neu-kat')?.value) || null;
+        try {
+          const neuArtikel = await apiPost('/api/bestellungen/stammdaten', { name, benoetigt_pruefung: true, artikel_kategorie_id: katId });
+          stammdaten.push(neuArtikel);
+          onAdd({ stammdaten_id: neuArtikel.id, bezeichnung: name, menge, kategorie_id: null });
+          toast(`✅ "${name}" angelegt & zum Warenkorb hinzugefügt`, 'ok');
+          closeModal();
+        } catch (e) { toast(e.message, 'err'); }
+      });
+
+      document.getElementById('asm-back-btn')?.addEventListener('click', () => {
+        _sel = null;
+        showView('asm-search-view');
+        document.getElementById('asm-q')?.focus();
+      });
+      document.getElementById('asm-add-btn')?.addEventListener('click', () => {
+        if (!_sel) return;
+        const menge = document.getElementById('asm-menge')?.value?.trim() || null;
+        const katId = parseInt(document.getElementById('asm-kat')?.value) || _sel.kategorie_id || null;
+        onAdd({ stammdaten_id: _sel.id, bezeichnung: _sel.name, menge, einheit: _sel.einheit || null, lieferant: _sel.lieferant || null, kategorie_id: katId });
+        closeModal();
+      });
+    }
+
+    // Barcode scan modal for Artikelanlage (Admin) – live Kamera mit roter Scanlinie + Beep
+    async function _openArtikelanlageModal(stammdaten, artikelKats, bestKats) {
+      const katOpts = (artikelKats || []).filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${k.name.replace(/</g, '&lt;')}</option>`).join('');
+      const bKatOpts = (bestKats || []).filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${k.name.replace(/</g, '&lt;')}</option>`).join('');
+
+      await _prepScanner();
 
       showModal(`
         <button class="modal-close" id="bc-modal-close" style="position:absolute;top:12px;right:12px;z-index:10">×</button>
         <div class="modal-title">🏷️ Artikel scannen</div>
-        <div id="bc-reader" style="width:100%;border-radius:10px;overflow:hidden;margin-bottom:8px"></div>
+        <div style="position:relative;width:100%;aspect-ratio:16/9;background:#111;border-radius:10px;overflow:hidden;margin-bottom:8px">
+          <video id="bc-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:block"></video>
+          <div style="position:absolute;inset:0;pointer-events:none">
+            <div id="bc-scan-line"></div>
+            <div style="position:absolute;top:10%;left:8%;right:8%;bottom:10%;border:2px solid rgba(255,255,255,0.35);border-radius:6px"></div>
+          </div>
+        </div>
         <div id="bc-scan-status" style="font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:10px">📷 Kamera startet…</div>
         <div style="display:flex;gap:8px;margin-bottom:10px">
           <input class="form-input" id="bc-code" placeholder="Scancode manuell" style="flex:1">
@@ -4257,31 +4846,11 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         }
       }
 
-      let scanner = null; let lastCode = ''; let lastCodeTime = 0;
-      if (window.Html5Qrcode) {
-        try {
-          scanner = new Html5Qrcode('bc-reader');
-          await scanner.start(
-            { facingMode: 'environment' },
-            { fps: 10, qrbox: { width: 260, height: 100 }, aspectRatio: 1.6 },
-            (decodedText) => {
-              const now = Date.now();
-              if (decodedText === lastCode && now - lastCodeTime < 3000) return;
-              lastCode = decodedText; lastCodeTime = now;
-              onCodeDetected(decodedText);
-            },
-            () => { }
-          );
-          const st = document.getElementById('bc-scan-status');
-          if (st) st.textContent = '📷 Barcode in den roten Rahmen halten…';
-        } catch (e) {
-          const st = document.getElementById('bc-scan-status');
-          if (st) st.textContent = '⚠️ Kamera nicht verfügbar – bitte Scancode manuell eingeben';
-        }
-      }
-
-      const stopScanner = () => { if (scanner) { scanner.stop().catch(() => { }); scanner = null; } };
-      document.getElementById('bc-modal-close')?.addEventListener('click', () => { stopScanner(); closeModal(); });
+      let stopScanner = await _startCamera('bc-video', 'bc-scan-status', (code, stop) => {
+        _playBeep(); if (stop) { stopScanner = null; stop(); }
+        onCodeDetected(code);
+      });
+      document.getElementById('bc-modal-close')?.addEventListener('click', () => { if (stopScanner) stopScanner(); closeModal(); });
 
       document.getElementById('bc-lookup-btn')?.addEventListener('click', async () => {
         const code = document.getElementById('bc-code')?.value?.trim(); if (!code) return;
@@ -4291,7 +4860,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       document.getElementById('bc-save-btn')?.addEventListener('click', async () => {
         const name = document.getElementById('bc-name')?.value?.trim();
         if (!name) { toast('Name erforderlich', 'err'); return; }
-        stopScanner();
+        if (stopScanner) stopScanner();
         try {
           await apiPost('/api/bestellungen/stammdaten', {
             name,
@@ -4349,89 +4918,140 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       if (!isManager() && !user?.darf_export) {
         return `<div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Keine Berechtigung</div></div>`;
       }
-      let eintraege = [], artikelKats = [];
+      let eintraege = [], firma = {};
       try {
-        [eintraege, artikelKats] = await Promise.all([
+        [eintraege, firma] = await Promise.all([
           apiGet('/api/bestellungen/export-data'),
-          apiGet('/api/bestellungen/artikel-kategorien'),
+          apiGet('/api/admin/firma').catch(() => ({})),
         ]);
       } catch (e) { eintraege = []; }
 
-      // Group entries by Bestell-Kategorie (= Sparte-Tab)
-      const grouped = {};
-      eintraege.forEach(e => {
-        const key = e.kategorie || 'Ohne Kategorie';
-        if (!grouped[key]) grouped[key] = { icon: e.kategorie_icon || '📦', entries: [] };
-        grouped[key].entries.push(e);
-      });
+      const firmaHeader = firma.name ? `<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1e40af">
+    ${firma.logo_base64 ? `<img src="${firma.logo_base64}" style="max-height:60px;max-width:120px;object-fit:contain">` : ''}
+    <div><div style="font-weight:700;font-size:14px">${esc(firma.name)}</div>${firma.anschrift ? `<div style="white-space:pre-line;font-size:11px;color:#6b7280">${esc(firma.anschrift)}</div>` : ''}${firma.uid_atu ? `<div style="font-size:11px;color:#6b7280">UID: ${esc(firma.uid_atu)}</div>` : ''}</div>
+  </div>` : '';
 
+      // Separate Lager vs Fahrzeug
+      const lagerEintr = eintraege.filter(e => e.ziel !== 'fahrzeug');
+      const fzEintr = eintraege.filter(e => e.ziel === 'fahrzeug');
       const offeneGesamt = eintraege.filter(e => !e.bestellt).length;
       const bestelltGesamt = eintraege.filter(e => e.bestellt).length;
-      const fmtDate = d => d ? new Date(d).toLocaleDateString('de-AT') : '';
 
-      const gruppenHtml = Object.entries(grouped).map(([kat, g]) => {
-        const rows = g.entries.map(e => `
+      const _berichtRow = e => `
           <tr class="${e.bestellt ? 'bericht-bestellt' : ''}">
             <td style="padding:6px 8px;width:28px">
               <input type="checkbox" ${e.bestellt ? 'checked' : ''} class="bericht-cb" data-id="${e.id}" style="width:16px;height:16px;cursor:pointer;accent-color:#16a34a">
             </td>
-            <td style="padding:6px 8px;font-weight:${e.bestellt ? '400' : '600'};${e.bestellt ? 'color:var(--text-muted);text-decoration:line-through' : ''}">${esc(e.bezeichnung)}</td>
+            <td style="padding:6px 8px;font-weight:${e.bestellt ? '400' : '600'};${e.bestellt ? 'color:var(--text-muted)' : ''}">${esc(e.bezeichnung)}${e.ziel === 'fahrzeug' ? ` <span style="font-size:10px;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:8px">🚗 ${esc(e.fahrzeug_kennzeichen || 'FZ')}</span>` : ''}</td>
             <td style="padding:6px 8px;color:var(--text-muted);font-size:13px">${e.menge || ''}${e.einheit ? ' ' + esc(e.einheit) : ''}</td>
             <td style="padding:6px 8px;color:var(--text-muted);font-size:13px">${esc(e.lieferant || '–')}</td>
+            <td style="padding:6px 8px;color:var(--text-muted);font-size:12px">${esc(e.erfasst_von || '–')}</td>
             <td style="padding:6px 8px">
               ${e.bestellt
             ? `<span style="background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px">✅ Bestellt</span>`
             : `<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px">⏳ Offen</span>`}
             </td>
-          </tr>`).join('');
+          </tr>`;
+
+      const _berichtGruppe = (items, sectionLabel, sectionIcon, borderColor) => {
+        if (!items.length) return '';
+        // Group by Bestell-Kategorie within this section
+        const grouped = {};
+        items.forEach(e => {
+          const key = e.kategorie || 'Ohne Kategorie';
+          if (!grouped[key]) grouped[key] = { icon: e.kategorie_icon || '📦', entries: [] };
+          grouped[key].entries.push(e);
+        });
+        const offCount = items.filter(e => !e.bestellt).length;
+        const erlCount = items.filter(e => e.bestellt).length;
         return `
-          <div style="margin-bottom:20px" class="bericht-gruppe">
-            <div style="font-size:15px;font-weight:800;padding:8px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px 8px 0 0;border-bottom:2px solid var(--primary)">
-              ${g.icon} ${esc(kat)}
-              <span style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:8px">${g.entries.filter(e => !e.bestellt).length} offen · ${g.entries.filter(e => e.bestellt).length} bestellt</span>
-            </div>
-            <div style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;overflow:auto">
-              <table style="width:100%;border-collapse:collapse">
-                <thead>
-                  <tr style="background:var(--card-bg);font-size:12px;color:var(--text-muted)">
-                    <th style="padding:6px 8px;text-align:left;width:28px"></th>
-                    <th style="padding:6px 8px;text-align:left">Artikel</th>
-                    <th style="padding:6px 8px;text-align:left">Menge</th>
-                    <th style="padding:6px 8px;text-align:left">Lieferant</th>
-                    <th style="padding:6px 8px;text-align:left">Status</th>
-                  </tr>
-                </thead>
-                <tbody>${rows}</tbody>
-              </table>
-            </div>
+          <div style="border-left:4px solid ${borderColor};padding:12px;margin-bottom:20px;background:${borderColor}08;border-radius:0 8px 8px 0">
+            <div style="font-size:16px;font-weight:800;margin-bottom:12px">${sectionIcon} ${sectionLabel} <span style="font-size:12px;font-weight:400;color:var(--text-muted)">(${offCount} offen, ${erlCount} bestellt)</span></div>
+            ${Object.entries(grouped).map(([kat, g]) => `
+              <div style="margin-bottom:16px" class="bericht-gruppe">
+                <div style="font-size:14px;font-weight:700;padding:6px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px 8px 0 0;border-bottom:2px solid ${borderColor}">
+                  ${g.icon} ${esc(kat)}
+                  <span style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:6px">${g.entries.filter(e => !e.bestellt).length} offen · ${g.entries.filter(e => e.bestellt).length} bestellt</span>
+                </div>
+                <div style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;overflow:auto">
+                  <table style="width:100%;border-collapse:collapse">
+                    <thead>
+                      <tr style="background:${borderColor};color:white;font-size:12px">
+                        <th style="padding:6px 8px;text-align:left;width:28px"></th>
+                        <th style="padding:6px 8px;text-align:left">Artikel</th>
+                        <th style="padding:6px 8px;text-align:left">Menge</th>
+                        <th style="padding:6px 8px;text-align:left">Lieferant</th>
+                        <th style="padding:6px 8px;text-align:left">Erfasst von</th>
+                        <th style="padding:6px 8px;text-align:left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>${g.entries.map(_berichtRow).join('')}</tbody>
+                  </table>
+                </div>
+              </div>`).join('')}
           </div>`;
-      }).join('');
+      };
+
+      const gruppenHtml = _berichtGruppe(lagerEintr, 'Lager', '📦', '#1e40af') + _berichtGruppe(fzEintr, 'Fahrzeugbestückung', '🚗', '#3b82f6');
 
       return `
       <style>
         @media print {
-          .btn-print,.btn-back,.btn-excel-bestell { display:block!important; }
-          .btn-back,.btn-excel-bestell { display:none!important; }
+          .bestell-bericht-noPrint { display:none!important; }
           .header,.sidebar { display:none!important; }
           body { background:white!important; }
           .bericht-bestellt { display:none!important; }
         }
       </style>
       <div style="max-width:800px;margin:0 auto;padding:0 0 60px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <button class="btn btn-outline btn-back" onclick="go('bestellungen')" style="padding:6px 12px;font-size:18px;line-height:1">‹</button>
-          <div style="flex:1">
+        <div class="bestell-bericht-noPrint" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <button onclick="go('admin',{adminTab:'bestellungen'})" style="background:rgba(30,64,175,0.1);color:#1e40af;border:1px solid #1e40af;border-radius:8px;padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0">← Zurück</button>
+          <div style="flex:1;min-width:160px">
             <div style="font-size:20px;font-weight:800">📋 Bestellliste</div>
             <div style="font-size:12px;color:var(--text-muted)">${new Date().toLocaleDateString('de-AT')} · ${offeneGesamt} offen · ${bestelltGesamt} bestellt</div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-primary btn-print" onclick="window.print()">🖨️ Drucken</button>
-            <button class="btn btn-outline btn-excel-bestell" id="bericht-excel-btn">📊 Excel</button>
-          </div>
+          <button onclick="window.print()" style="background:#1e40af;color:white;border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer">🖨️ Drucken</button>
+          <button id="bestell-bericht-excel-btn" style="background:#16a34a;color:white;border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer">📊 Excel</button>
         </div>
+        <div id="bericht-print-area">
+          ${firmaHeader}
+          <div id="bericht-gruppen">${gruppenHtml || '<div style="text-align:center;padding:40px 0;color:var(--text-muted)">📋 Keine Einträge vorhanden</div>'}</div>
         </div>
-        <div id="bericht-gruppen">${gruppenHtml || '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Keine Einträge</div></div>'}</div>
       </div>`;
+    }
+
+    // ── BERICHT VIEWER (in-app) ──────────────────────────────────────────────────
+    function pageBerichtViewer() {
+      const html = window._berichtHtml || '';
+      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/is);
+      const bodyContent = bodyMatch ? bodyMatch[1] : html;
+      const styleMatches = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gis)];
+      const extraStyle = styleMatches.map(m => m[1]).join('\n');
+      return `
+      <style>
+        @media print {
+          .bericht-viewer-topbar, .header, .sidebar, .sidebar-overlay, button { display:none!important; }
+          body { background:white!important; margin:0!important; padding:0!important; }
+          .content { margin:0!important; padding:10px!important; }
+        }
+        ${extraStyle}
+      </style>
+      <div class="bericht-viewer-topbar" style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:#1e40af;color:white;position:sticky;top:0;z-index:100;margin:-16px -16px 16px -16px">
+        <button onclick="go('${window._berichtBackPage || 'admin'}', window._berichtBackData || {})" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:13px">← Zurück</button>
+        <span style="font-weight:700;flex:1;font-size:15px">${esc(window._berichtTitle || 'Bericht')}</span>
+        <button onclick="window.print()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:13px">🖨️ Drucken</button>
+      </div>
+      <div style="max-width:900px;margin:0 auto">
+        ${bodyContent}
+      </div>`;
+    }
+
+    function _openInAppBericht(html, title, backPage, backData) {
+      window._berichtHtml = html;
+      window._berichtTitle = title || 'Bericht';
+      window._berichtBackPage = backPage || 'admin';
+      window._berichtBackData = backData || {};
+      go('bericht-viewer');
     }
 
     // ── PROJEKTE PAGE ─────────────────────────────────────────────────────────────
@@ -4467,7 +5087,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
 
         const phaseBar = phases.map((ph, i) => {
           const active = i === phaseIdx, done = i < phaseIdx;
-          return `< div style = "flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:12px;font-weight:${active ? '700' : '400'};background:${active ? phaseColors[ph] : done ? '#d1fae5' : '#f3f4f6'};color:${active ? 'white' : done ? '#065f46' : '#9ca3af'}" > ${phaseLabels[ph]}</div > `;
+          return `<div style="flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:12px;font-weight:${active ? '700' : '400'};background:${active ? phaseColors[ph] : done ? '#d1fae5' : '#f3f4f6'};color:${active ? 'white' : done ? '#065f46' : '#9ca3af'}">${phaseLabels[ph]}</div>`;
         }).join('');
 
         const phaseStartMap = { fahrt: p.fahrt_start, arbeit: p.ankunft, rueckfahrt: p.abfahrt_zeit };
@@ -4476,10 +5096,10 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const nextBtnLabels = { fahrt: '🔨 Am Ziel – Arbeit beginnen', arbeit: '🏠 Fertig – Rückfahrt / Weiterfahrt starten', rueckfahrt: '✅ Zuhause – Auftrag abschließen' };
         const nextBtnColors = { fahrt: '#16a34a', arbeit: '#d97706', rueckfahrt: '#6b7280' };
         const kmHin = parseFloat(p.km_hin || 0), kmZurueck = parseFloat(p.km_zurueck || 0);
-        const kmInfo = (kmHin || kmZurueck) ? `< div style = "font-size:13px;color:var(--text-muted);margin-top:4px" >🚗 ${kmHin > 0 ? 'Hin: ' + kmHin + ' km' : ''}${kmHin > 0 && kmZurueck > 0 ? ' · ' : ''}${kmZurueck > 0 ? 'Zurück: ' + kmZurueck + ' km' : ''}</div > ` : '';
+        const kmInfo = (kmHin || kmZurueck) ? `<div style="font-size:13px;color:var(--text-muted);margin-top:4px" >🚗 ${kmHin > 0 ? 'Hin: ' + kmHin + ' km' : ''}${kmHin > 0 && kmZurueck > 0 ? ' · ' : ''}${kmZurueck > 0 ? 'Zurück: ' + kmZurueck + ' km' : ''}</div>` : '';
         // Tour-Info
-        const tourInfo = p.tour_id ? `< div style = "font-size:12px;color:#7c3aed;margin-top:4px" >🗺️ Tour · Position ${p.tour_position || 1}</div > ` : '';
-        return `< div class="content" >
+        const tourInfo = p.tour_id ? `<div style="font-size:12px;color:#7c3aed;margin-top:4px" >🗺️ Tour · Position ${p.tour_position || 1}</div>` : '';
+        return `<div class="content">
       <div class="card" style="margin-bottom:16px;border:2px solid ${col}">
         <div class="card-body">
           <div style="display:flex;gap:6px;margin-bottom:14px">${phaseBar}</div>
@@ -4514,7 +5134,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     <button id="btn-proj-next-phase" style="width:100%;padding:16px;background:${nextBtnColors[phase]};color:white;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">${nextBtnLabels[phase]}</button>
       ${phase === 'rueckfahrt' ? `<button id="btn-proj-weiter-auftrag" style="width:100%;padding:14px;background:#7c3aed;color:white;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">➡️ Weiter zum nächsten Auftrag</button>` : ''}
       ${isManager() ? `<button id="btn-proj-delete" style="width:100%;padding:12px;background:transparent;color:#d97706;border:1px solid #d97706;border-radius:12px;font-size:14px;cursor:pointer">↩️ Auftrag abbrechen & zurückstellen</button>` : ''}
-    </div >
+    </div>
       ${laufendAndere.length > 0 ? `<div style="margin-top:16px">
       <div style="font-weight:700;font-size:13px;color:#dc2626;margin-bottom:6px">🔴 Weitere laufende Aufträge (${laufendAndere.length})</div>
       ${laufendAndere.map(p => `
@@ -4549,7 +5169,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
 
       const agOpts = agFehler
         ? '<option value="">⚠️ Laden fehlgeschlagen – neu öffnen</option>'
-        : '<option value="">– Auftraggeber wählen –</option>' + auftraggeber.map(ag => `< option value = "${ag.id}" data - name="${esc(ag.name)}" > ${esc(ag.name)}</option > `).join('');
+        : '<option value="">– Auftraggeber wählen –</option>' + auftraggeber.map(ag => `<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
 
       // Helper: build row for abgeschlossene table
       const buildRecentRow = (p) => {
@@ -4575,7 +5195,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           rapport_erforderlich: p.rapport_erforderlich, rapport_beschreibung: p.rapport_beschreibung,
           einsatz_history: alleSessions
         }));
-        return `< tr style = "cursor:pointer" data - action="recent-view" data - proj="${viewData}" >
+        return `<tr style="cursor:pointer" data-action="recent-view" data-proj="${viewData}">
       <td style="min-width:140px"><div style="font-weight:600">${esc(p.auftraggeber_name || '–')}</div>
           ${p.kundenname ? `<div style="font-size:11px;color:var(--text-muted)">${esc(p.kundenname)}</div>` : ''}
           ${esc(p.auftragsnummer || '') ? `<div style="font-size:11px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>` : ''}
@@ -4589,7 +5209,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             ? `<span style="color:#16a34a;font-weight:700;font-size:12px">✅ €${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`
             : `<span style="color:#d97706;font-size:12px;font-weight:600">⚠️ keine GS</span>`}
       </td>
-    </tr > `;
+    </tr>`;
       };
 
       // Group abgeschlossene by YYYY-MM for collapsible sections
@@ -4633,7 +5253,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           const m = key.slice(5, 7);
           const label = key === '0000-00' ? 'Unbekannt' : `${monthNames2[parseInt(m, 10) - 1]} ${y} `;
           const rows = byMonth[key].map(p => buildRecentRow(p)).join('');
-          return `< div style = "margin-bottom:4px;margin-left:12px" >
+          return `<div style="margin-bottom:4px;margin-left:12px">
         <div class="proj-month-toggle" data-month="${key}" data-open="${isOpen ? '1' : '0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;user-select:none">
           <span style="font-weight:600;font-size:13px">📅 ${label} <span style="font-weight:400;color:var(--text-muted);font-size:12px">(${byMonth[key].length})</span></span>
           <span style="font-size:16px">${isOpen ? '▾' : '▸'}</span>
@@ -4643,21 +5263,21 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             <th>Auftraggeber</th><th>Fahrzeit</th><th>km</th><th>Arbeitszeit</th><th>Gesamt</th><th>Gutschrift</th>
           </tr></thead><tbody>${rows}</tbody></table>
         </div>
-      </div > `;
+      </div>`;
         }).join('');
         const totalInYear = months.reduce((a, k) => a + byMonth[k].length, 0);
-        return `< div style = "margin-bottom:10px" >
+        return `<div style="margin-bottom:10px">
       <div class="proj-year-toggle" data-year="${y}" data-open="${isYearOpen ? '1' : '0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:${isCurrentYear ? '#dbeafe' : 'var(--bg)'};border:2px solid ${isCurrentYear ? '#3b82f6' : 'var(--border)'};border-radius:10px;padding:10px 14px;user-select:none">
         <span style="font-weight:700;font-size:15px">📆 ${y} <span style="font-weight:400;color:var(--text-muted);font-size:13px">(${totalInYear} Aufträge)</span></span>
         <span style="font-size:20px">${isYearOpen ? '▾' : '▸'}</span>
       </div>
       <div id="proj-year-${y}" style="display:${isYearOpen ? 'block' : 'none'};padding-top:6px">${monthsHTML}</div>
-    </div > `;
+    </div>`;
       }).join('');
 
       // Amber section: abgeschlossene ohne Gutschrift
       const laufendAndereHTML = laufendAndere.length > 0 ? `
-      < div style = "margin-bottom:16px" >
+      <div style="margin-bottom:16px">
         <div style="font-weight:700;font-size:15px;margin-bottom:8px;color:#dc2626">🔴 Laufende Aufträge (${laufendAndere.length})</div>
       ${laufendAndere.map(p => `
         <div class="card" style="margin-bottom:8px;border-left:4px solid #dc2626">
@@ -4687,10 +5307,10 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           </div>
         </div>`).join('')
         }
-    </div > `: '';
+    </div>`: '';
 
       const projGeplantSidebarOpen = localStorage.getItem(`projGeplantSidebarOpen_${user?.id || 'x'} `) !== '0';
-      return `< div class="content" >
+      return `<div class="content">
       ${laufendAndereHTML}
     <div class="proj-geplant-sidebar-toggle" data-open="${projGeplantSidebarOpen ? '1' : '0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#dcfce7;border:2px solid #16a34a;border-radius:10px;padding:10px 14px;margin-bottom:6px;user-select:none">
       <span style="font-weight:700;font-size:15px;color:#14532d">📋 Offene Projekte (${geplant.length})</span>
@@ -4728,7 +5348,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <div style="font-weight:700;margin-bottom:8px">Abgeschlossene Aufträge</div>
       ${recentGroupedHTML}` : ``
         }
-  </div > `;
+  </div>`;
     }
 
     // ── ADMIN TAB: PROJEKTE ───────────────────────────────────────────────────────
@@ -4743,7 +5363,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       try { geplant = (await apiGet('/api/projekte/geplant')).filter(p => p.status === 'geplant'); } catch (e) { }
       const kostenProKm = (parseFloat(fzEinst.diesel_preis || 1.80) * parseFloat(fzEinst.verbrauch_100km || 8) / 100) + parseFloat(fzEinst.maut_pro_km || 0) + parseFloat(fzEinst.abnuetzung_pro_km || 0.15);
 
-      const agRows = agList.map(ag => `< tr >
+      const agRows = agList.map(ag => `<tr >
     <td>${esc(ag.name)}</td>
     <td>${ag.gutschrift_prozent ? ag.gutschrift_prozent + '%' : '–'}</td>
     <td>${ag.stundensatz ? `€${parseFloat(ag.stundensatz).toFixed(2)}/h` : '–'}</td>
@@ -4753,12 +5373,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <button class="tbl-btn" data-action="edit-ag" data-id="${ag.id}" data-name="${esc(ag.name)}" data-gp="${ag.gutschrift_prozent || 0}" data-sh="${ag.stundensatz || 0}" data-notiz="${esc(ag.notiz || '')}" data-fzb="${ag.fahrzeit_bezahlt !== false ? '1' : '0'}">Bearbeiten</button>
       ${user?.ist_admin ? `<button class="tbl-btn danger" data-action="del-ag" data-id="${ag.id}">Löschen</button>` : ''}
     </div></td>
-  </tr > `).join('');
+  </tr>`).join('');
 
       const statusBadgeLive = s => ({ fahrt: '<span class="badge badge-blue">🚗 Fahrt</span>', arbeit: '<span class="badge badge-green">🔨 Arbeit</span>', rueckfahrt: '<span class="badge" style="background:#fef3c7;color:#92400e">🏠 Rückfahrt</span>', pausiert: '<span class="badge" style="background:#f3f4f6;color:#6b7280">⏸ Pausiert</span>' }[s] || s);
       const laufendHTML = laufend.length === 0
-        ? `< div style = "color:var(--text-muted);font-size:13px;padding:8px 0" > Keine aktiven Aufträge</div > `
-        : laufend.map(p => `< div style = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f3f4f6" >
+        ? `<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine aktiven Aufträge</div>`
+        : laufend.map(p => `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f3f4f6">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${statusBadgeLive(p.status)}
@@ -4776,9 +5396,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <button class="tbl-btn" data-action="proj-admin-zurueck" data-id="${p.id}" title="Zurückstellen" style="background:#f59e0b;color:white">↩️</button>
         <button class="tbl-btn" data-action="proj-admin-abschliessen" data-id="${p.id}" title="Jetzt abschließen" style="background:#16a34a;color:white">✅</button>
       </div>
-    </div > `).join('');
+    </div>`).join('');
 
-      return `< div class="admin-wrap" >
+      return `<div class="admin-wrap">
     <button class="btn btn-primary btn-sm" id="btn-neuer-auftrag" style="margin-bottom:12px;background:#7c3aed">+ Neuer Auftrag</button>
     <div class="card" style="margin-bottom:12px"><div class="card-body" style="padding:12px">
       <div style="font-weight:700;font-size:14px;margin-bottom:6px">🔴 Laufende Aufträge <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:10px;font-weight:700">${laufend.length}</span></div>
@@ -4824,7 +5444,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <th>Name</th><th>Gutschrift %</th><th>Stundensatz</th><th>🚗 Fahrzeit</th><th>Notiz</th><th></th>
     </tr></thead><tbody>${agRows}</tbody></table></div>
     <div style="font-size:12px;color:var(--text-muted);padding:8px 0">ℹ️ Fahrzeugkosten- und Mitarbeiterkosten-Einstellungen sind jetzt unter <b>🏢 Firma</b> zu finden.</div>
-  </div > `;
+  </div>`;
     }
 
     async function renderTabZeit() {
@@ -4832,14 +5452,14 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const _h = new Date();
       // Default: erster bis letzter des aktuellen Monats (für konsistente Monatsansicht)
       const _heute = _h.toISOString().split('T')[0];
-      const _monatserster = `${_h.getFullYear()} -${String(_h.getMonth() + 1).padStart(2, '0')}-01`;
+      const _monatserster = `${_h.getFullYear()}-${String(_h.getMonth() + 1).padStart(2, '0')}-01`;
       const _monatsletzter = new Date(_h.getFullYear(), _h.getMonth() + 1, 0).toISOString().split('T')[0];
       const von = pageData.zeitVon || _monatserster;
       const bis = pageData.zeitBis || _monatsletzter;
       const maId = pageData.zeitMa || '';
       try {
         [auswertung, maList, eingestempelt, ftRows] = await Promise.all([
-          apiGet(`/ api / zeit / auswertung ? von = ${von}& bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''} `),
+          apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''}`),
           apiGet('/api/mitarbeiter'),
           apiGet('/api/zeit/eingestempelt').catch(() => []),
           apiGet('/api/zeit/feiertage').catch(() => [])
@@ -4855,7 +5475,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         if (r.krankenstand) return '🤒 Krankenstand';
         const dow = new Date(r.datum).getDay();
         const uhr = fUhr(r.kommen) || '–';
-        if (r.ist_feiertag) { const fn = _ftNameMap.get(r.datum) || 'Feiertag'; return `< span style = "color:#15803d;font-weight:600" >🎉</span > ${r.kommen ? ` <span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `; }
+        if (r.ist_feiertag) { const fn = _ftNameMap.get(r.datum) || 'Feiertag'; return `<span style="color:#15803d;font-weight:600" >🎉</span>${r.kommen ? ` <span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `; }
         if (dow === 6) return `${r.kommen ? `<span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `;
         if (dow === 0) return `${r.kommen ? `<span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `;
         return uhr;
@@ -4903,7 +5523,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           const sal = r.saldo_minuten;
           const salCol = sal > 5 ? '#16a34a' : sal < -5 ? '#dc2626' : '#374151';
           const salTxt = (sal >= 0 ? '+' : '-') + fMin(Math.abs(sal));
-          return `< tr style = "${_rowBg(r)}" >
+          return `<tr style="${_rowBg(r)}">
         <td><div style="white-space:nowrap">${fDate(r.datum)}${_rowLabel(r)}</div>${r.notiz ? `<div style="font-size:11px;color:#d97706;margin-top:2px" title="${esc(r.notiz)}">📝 ${esc(r.notiz)}</div>` : ''}</td>
         <td>${typLabel(r)}</td>
         <td>${r.urlaub || r.krankenstand ? '–' : r.ist_feiertag || r.ist_wochenende ? (r.netto_minuten > 0 ? fUhr(r.gehen) || '–' : '–') : r.gehen ? fUhr(r.gehen) : '<span style="color:#16a34a;font-weight:700">läuft</span>'}</td>
@@ -4916,11 +5536,11 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           <button class="tbl-btn danger" data-action="del-zeit-tag" data-mid="${r.mitarbeiter_id}" data-datum="${r.datum}" title="Tag löschen">🗑️</button>
         </div></td>`: ''
             }
-      </tr > `;
+      </tr>`;
         }).join('');
-        return `< tr style = "background:#eff6ff;${gi > 0 ? 'border-top:3px solid #1e40af' : ''}" >
+        return `<tr style="background:#eff6ff;${gi > 0 ? 'border-top:3px solid #1e40af' : ''}">
       <td colspan="${colN}" style="padding:7px 12px;font-weight:700;font-size:14px;color:#1e40af;border-bottom:1px solid #bfdbfe">👷 ${esc(g.name)}</td>
-    </tr > ${maRows} `;
+    </tr>${maRows} `;
       }).join('');
 
       const sumHTML = Object.values(summen).map(s => {
@@ -4929,7 +5549,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const col = sal > 0 ? '#16a34a' : sal < -15 ? '#dc2626' : '#374151';
         const extras = [s.urlaub > 0 ? `${s.urlaub}× Urlaub` : '', s.ks > 0 ? `${s.ks}× KS` : ''].filter(Boolean).join(' · ');
         const sollInfo = isGeringfuegig ? `Geringfügig · ${s.soll_stunden} h / Monat` : `${s.beschaeftigung === 'teilzeit' ? 'Teilzeit' : 'Vollzeit'} · ${s.soll_stunden} h / W · ${_wdCount} Arbeitstage`;
-        return `< div style = "background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px" >
+        return `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px">
       <div style="font-weight:700;font-size:14px">${esc(s.name)} <span style="font-size:11px;font-weight:400;color:#6b7280">${sollInfo}</span></div>
       <div style="display:flex;gap:12px;margin-top:4px;font-size:13px;flex-wrap:wrap">
         <span>Ist: <b>${fMin(s.ist)}</b></span>
@@ -4937,14 +5557,14 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         ${s.sa_so_ft_min > 0 ? `<span style="color:#7c3aed;font-weight:600">🗓️ Sa/So/FT: +${fMin(s.sa_so_ft_min)}</span>` : ''}
         ${extras ? `<span style="color:#6b7280">${extras}</span>` : ''}
       </div>
-    </div > `;
+    </div>`;
       }).join('');
 
       const btnSt = (bg, dis) => dis
         ? `style = "background:#e5e7eb;color:#9ca3af;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:default;padding:0 8px"`
         : `style = "background:${bg};color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 8px"`;
 
-      return `< div class="admin-wrap" >
+      return `<div class="admin-wrap">
       <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="zeit-von" value="${von}"></div>
@@ -4962,7 +5582,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:stretch">
           <button id="btn-zeit-laden" ${btnSt('#1e40af', false)}>🔍 Laden</button>
           <button id="btn-zeit-pdf" ${btnSt('#6b7280', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>🖨️ PDF</button>
-          <button id="btn-zeit-csv" ${btnSt('#16a34a', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>📥 Excel</button>
+          <button id="btn-zeit-csv" ${btnSt('#16a34a', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>📊 Excel</button>
         </div>
       </div></div>
     ${eingestempelt.length > 0 ? `<div class="card" style="margin-bottom:12px;border-left:4px solid #16a34a"><div class="card-body" style="padding:10px 14px">
@@ -4985,7 +5605,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <tbody>${rows || `<tr><td colspan="${isManager() ? 8 : 7}" style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</td></tr>`}</tbody>
       </table>
     </div>
-  </div > `;
+  </div>`;
     }
 
     // ── MONATSAUSWERTUNG ─────────────────────────────────────────────────────────
@@ -4999,7 +5619,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const monthNames = ['Jänner', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
       let von, bis, periodLabel;
       if (modus === 'jahr') {
-        von = `${year}-01-01`; bis = `${year} -12 - 31`; periodLabel = String(year);
+        von = `${year}-01-01`; bis = `${year}-12-31`; periodLabel = String(year);
       } else {
         von = new Date(year, month, 1).toISOString().split('T')[0];
         bis = new Date(year, month + 1, 0).toISOString().split('T')[0];
@@ -5008,7 +5628,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       let auswertung = [], maList = [], ftRowsM = [];
       try {
         [auswertung, maList, ftRowsM] = await Promise.all([
-          apiGet(`/ api / zeit / auswertung ? von = ${von}& bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''} `),
+          apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''}`),
           apiGet('/api/mitarbeiter'),
           apiGet('/api/zeit/feiertage').catch(() => [])
         ]);
@@ -5036,14 +5656,14 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const _bLabel = b => b === 'geringfuegig' ? 'Geringfügig' : b === 'teilzeit' ? 'Teilzeit' : 'Vollzeit';
       // Feiertags-Anzeige im Zeitraum
       const _mnFtNames = { 1: 'Neuj.', 6: 'HL3K', 4: 'Ostermo.', 5: 'Staatsfei./Chr.Hi./Pf.Mo./Fron.', 8: 'Mariä H.', 10: 'NF', 11: 'Allerheil.', 12: 'Mariä E./Christ/Stef.' };
-      const _ftHinweis = _ftInPeriod.length ? `< div style = "font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:6px 10px;margin-bottom:10px;color:#15803d" >🎉 Feiertage im Zeitraum: ${_ftInPeriod.map(f => `<b>${fDate(f.datum)}</b>${f.name ? ` (${esc(f.name)})` : ''}`).join(', ')}</div > ` : '';
+      const _ftHinweis = _ftInPeriod.length ? `<div style="font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:6px 10px;margin-bottom:10px;color:#15803d" >🎉 Feiertage im Zeitraum: ${_ftInPeriod.map(f => `<b>${fDate(f.datum)}</b>${f.name ? ` (${esc(f.name)})` : ''}`).join(', ')}</div>` : '';
       const summaryHTML = Object.values(byMa).map(ma => {
         const sal = ma.ist - ma.soll;
         const salCol = sal >= 0 ? '#16a34a' : '#dc2626';
         const extras = [ma.urlaub > 0 ? `${ma.urlaub}× Urlaub` : '', ma.ks > 0 ? `${ma.ks}× Krankenstand` : ''].filter(Boolean).join(' · ');
         const isGf = ma.beschaeftigung === 'geringfuegig';
         const sollInfo = isGf ? `Geringfügig · ${ma.soll_stunden} h / Monat` : `${_bLabel(ma.beschaeftigung)} · ${ma.soll_stunden} h / Woche · ${_wdCountM} Arbeitstage`;
-        return `< div style = "background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px" >
+        return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;margin-bottom:6px">
         <div style="font-weight:700;font-size:15px">${esc(ma.name)}</div>
         <div style="font-size:12px;color:var(--text-muted)">${sollInfo}</div>
@@ -5054,7 +5674,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         ${ma.sa_so_ft_min > 0 ? `<span style="color:#7c3aed;font-weight:600">🗓️ Sa/So/FT: +${fMin(ma.sa_so_ft_min)}</span>` : ''}
         ${extras ? `<span style="color:var(--text-muted)">${extras}</span>` : ''}
       </div>
-    </div > `;
+    </div>`;
       }).join('');
       const detailHTML = Object.values(byMa).map(ma => {
         const sal = ma.ist - ma.soll;
@@ -5069,11 +5689,11 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           let typL;
           if (r.urlaub) typL = '🏖️ Urlaub';
           else if (r.krankenstand) typL = '🤒 Krankenstand';
-          else if (isFT) { const fn = _ftNameMapML.get(r.datum) || 'Feiertag'; typL = `< span style = "color:#15803d;font-weight:600" >🎉</span > ${r.kommen ? ` <span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `; }
+          else if (isFT) { const fn = _ftNameMapML.get(r.datum) || 'Feiertag'; typL = `<span style="color:#15803d;font-weight:600" >🎉</span>${r.kommen ? ` <span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `; }
           else if (dow === 6) typL = `${r.kommen ? `<span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `;
           else if (dow === 0) typL = `${r.kommen ? `<span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `;
           else typL = fUhr(r.kommen) || '–';
-          return `< tr style = "${rowBg}" >
+          return `<tr style="${rowBg}">
         <td style="white-space:nowrap">${fDate(r.datum)} ${isFT ? '<span style="font-weight:700;color:#15803d">(FT)</span>' : dow === 6 ? '<span style="font-weight:700;color:#92400e">(Sa)</span>' : dow === 0 ? '<span style="font-weight:700;color:#c2410c">(So)</span>' : ''}</td>
         <td>${typL}</td>
         <td>${r.urlaub || r.krankenstand ? '–' : (isWE || isFT) ? (r.netto_minuten > 0 ? fUhr(r.gehen) || '–' : '–') : r.gehen ? fUhr(r.gehen) : '<span style="color:#16a34a;font-weight:700">läuft</span>'}</td>
@@ -5082,7 +5702,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <td style="font-weight:700;color:${(isWE || isFT) ? '#6b7280' : rsCol}">${(isWE || isFT) ? '–' : (rs >= 0 ? '+' : '-') + fMin(Math.abs(rs))}</td>
         ${r.notiz ? `<td style="font-size:12px;color:var(--text-muted)">${esc(r.notiz)}</td>` : '<td></td>'}
     <td><button class="tbl-btn" data-action="monat-korrigier" data-mid="${ma.mitarbeiter_id}" data-name="${esc(ma.name)}" data-datum="${r.datum}" title="Buchungssätze bearbeiten / löschen">✏️</button></td>
-      </tr > `;
+      </tr>`;
         }).join('');
         // Sa/So/Feiertag Arbeit
         const ftRows2 = ma.rows.filter(r => r.ist_wochenende || r.ist_feiertag).filter(r => r.netto_minuten > 0);
@@ -5092,7 +5712,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           const ftName = _ftNameMapM.get(r.datum);
           const typ = r.ist_feiertag ? (ftName ? `🎉 ${ftName} ` : '🎉 Feiertag') : (new Date(r.datum).getDay() === 6 ? '🟡 Samstag' : '🔵 Sonntag');
           const rowBgM = r.ist_feiertag ? 'background:#f0fdf4;border-left:3px solid #16a34a' : new Date(r.datum).getDay() === 6 ? 'background:#fffbeb;border-left:3px solid #f59e0b' : 'background:#fff7ed;border-left:3px solid #f97316';
-          return `< tr style = "${rowBgM}" >
+          return `<tr style="${rowBgM}">
         <td style="white-space:nowrap;font-size:12px;color:#7c3aed;font-weight:600">${fDate(r.datum)} ${dow === 'Sa' ? '(Sa)' : dow === 'So' ? '(So)' : '(FT)'}</td>
         <td style="color:#7c3aed">${typ}</td>
         <td>${fUhr(r.kommen) || '–'}</td>
@@ -5100,9 +5720,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <td>${r.pause_minuten > 0 ? r.pause_minuten + ' min' : '–'}</td>
         <td style="font-weight:700;color:#7c3aed">${fMin(r.netto_minuten)}</td>
         <td><button class="tbl-btn" data-action="monat-korrigier" data-mid="${ma.mitarbeiter_id}" data-name="${esc(ma.name)}" data-datum="${r.datum}" title="Buchungssätze bearbeiten">✏️</button></td>
-      </tr > `;
+      </tr>`;
         }).join('');
-        return `< div style = "margin-bottom:20px" >
+        return `<div style="margin-bottom:20px">
       <div style="font-weight:700;font-size:15px;padding:10px 0 6px;border-bottom:2px solid var(--primary);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
         <span>${esc(ma.name)}</span>
         ${ma.sa_so_ft_min > 0 ? `<span style="font-size:12px;font-weight:400;background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:10px">🗓️ Sa/So/FT: +${fMin(ma.sa_so_ft_min)}</span>` : ''}
@@ -5126,7 +5746,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         </table></div>
       </div>`: ''
           }
-    </div > `;
+    </div>`;
       }).join('');
       const hasData = Object.keys(byMa).length > 0;
       const btnSt = (bg, dis) => dis
@@ -5146,21 +5766,21 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const monthsHTML = archivZeitByYear[y].sort((a, b) => b.monat.localeCompare(a.monat)).map(m => {
           const mn = parseInt(m.monat.slice(5, 7), 10) - 1;
           const yr = parseInt(m.monat.slice(0, 4));
-          return `< div style = "margin-bottom:3px;margin-left:12px" >
+          return `<div style="margin-bottom:3px;margin-left:12px">
       <button class="btn-ghost zeit-archiv-monat" data-month="${mn}" data-year="${yr}" style="width:100%;text-align:left;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600">
         📅 ${monthNames[mn]} ${yr} <span style="font-weight:400;color:var(--text-muted)">(${m.ma_count} MA)</span>
       </button>
-      </div > `;
+      </div>`;
         }).join('');
-        return `< div style = "margin-bottom:10px" >
+        return `<div style="margin-bottom:10px">
       <div class="zeit-archiv-year-toggle" data-year="${y}" data-open="${isYearOpen ? '1' : '0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--bg);border:2px solid var(--border);border-radius:10px;padding:10px 14px;user-select:none">
         <span style="font-weight:700;font-size:15px">📆 ${y}</span>
         <span style="font-size:20px">${isYearOpen ? '▾' : '▸'}</span>
       </div>
       <div id="zeit-archiv-year-${y}" style="display:${isYearOpen ? 'block' : 'none'};padding-top:6px">${monthsHTML}</div>
-    </div > `;
+    </div>`;
       }).join('');
-      return `< div class="admin-wrap" >
+      return `<div class="admin-wrap">
       <div class="card" style="margin-bottom:12px"><div class="card-body">
         <div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px">
           <button id="btn-modus-monat" style="background:${modus === 'monat' ? '#1e40af' : 'var(--bg)'};color:${modus === 'monat' ? 'white' : 'var(--text)'};border:1px solid ${modus === 'monat' ? '#1e40af' : 'var(--border)'};border-radius:8px;padding:6px 18px;font-size:14px;font-weight:600;cursor:pointer">📅 Monat</button>
@@ -5183,7 +5803,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <button id="btn-monat-pdf" ${btnSt('#6b7280', !hasData)} ${!hasData ? 'disabled' : ''}>🖨️ PDF</button>
-          <button id="btn-monat-csv" ${btnSt('#16a34a', !hasData)} ${!hasData ? 'disabled' : ''}>📥 Excel</button>
+          <button id="btn-monat-csv" ${btnSt('#16a34a', !hasData)} ${!hasData ? 'disabled' : ''}>📊 Excel</button>
         </div>
         ${einzel ? `<div style="font-size:12px;color:#7c3aed;margin-top:8px;text-align:center">✓ PDF: jeder Mitarbeiter auf eigener Seite</div>` : ''}
       </div></div>
@@ -5191,7 +5811,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     ${summaryHTML ? `<div style="margin-bottom:12px">${summaryHTML}` + `</div>` : `<div style="text-align:center;padding:32px;color:var(--text-muted)">Keine Daten für ${periodLabel}</div>`}
     ${detailHTML ? `<div class="card"><div class="card-body">${detailHTML}</div></div>` : ''}
     ${archivZeitHTML ? `<div style="margin-top:24px;font-weight:700;font-size:15px;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;gap:8px"><span>🗄️ Archiv</span><div style="flex:1;height:1px;background:var(--border)"></div></div><div id="zeit-archiv">${archivZeitHTML}</div>` : ''}
-  </div > `;
+  </div>`;
     }
 
     // ── ZEITERFASSUNG KORREKTUR MODAL ────────────────────────────────────────────
@@ -5205,21 +5825,21 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const renderKorrektur = async (curDatum) => {
         let eintraege = [];
         try {
-          const r = await apiGet(`/ api / zeit / auswertung ? von = ${curDatum}& bis=${curDatum}& mitarbeiter_id=${maId} `);
+          const r = await apiGet(`/api/zeit/auswertung?von=${curDatum}&bis=${curDatum}&mitarbeiter_id=${maId}`);
           if (r.length > 0) eintraege = r[0].eintraege || [];
         } catch (e) { }
         const byTyp = {}; eintraege.forEach(e => byTyp[e.typ] = e);
 
         const delBtns = eintraege.length > 0 ? `
-      < div style = "border-top:1px solid #e5e7eb;padding-top:10px;margin-top:6px" >
+      <div style="border-top:1px solid #e5e7eb;padding-top:10px;margin-top:6px">
         <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:6px">Einzelne Buchungssätze löschen:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           ${eintraege.map(e => `<button class="tbl-btn danger" data-action="zk-del" data-id="${e.id}" data-datum="${curDatum}" style="font-size:12px">${tL[e.typ] || e.typ} ${getTime(e)}${e.geaendert_von_name ? ` ✏️` : ''} 🗑️</button>`).join('')}
         </div>
-      </div > `: '';
+      </div>`: '';
 
         showModal(`
-      < button class="modal-close" id = "modal-close" >×</button >
+      <button class="modal-close" id="modal-close" >×</button>
       <div class="modal-title">✏️ Korrektur</div>
       <div style="font-size:13px;color:#6b7280;margin-bottom:14px">${esc(name)}</div>
       <div class="form-group"><label class="form-label">Datum</label>
@@ -5246,7 +5866,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           btn.addEventListener('click', async () => {
             if (!confirm('Buchungssatz löschen?')) return;
             try {
-              await apiDel(`/ api / zeit / ${btn.dataset.id} `); toast('Gelöscht', 'ok');
+              await apiDel(`/api/zeit/${btn.dataset.id}`); toast('Gelöscht', 'ok');
               await renderKorrektur(document.getElementById('zk-datum')?.value || curDatum);
             }
             catch (e) { toast(e.message, 'err'); }
@@ -5270,9 +5890,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           try {
             for (const { typ, val } of typen) {
               const ex = byTyp[typ];
-              if (val && ex) await apiPut(`/ api / zeit / korrigieren / ${ex.id} `, { zeitpunkt: mkZp(val), notiz });
+              if (val && ex) await apiPut(`/api/zeit/korrigieren/${ex.id}`, { zeitpunkt: mkZp(val), notiz });
               else if (val && !ex) await apiPost('/api/zeit/eintragen', { mitarbeiter_id: mid, typ, zeitpunkt: mkZp(val), notiz });
-              else if (!val && ex) await apiDel(`/ api / zeit / ${ex.id} `);
+              else if (!val && ex) await apiDel(`/api/zeit/${ex.id}`);
             }
             toast('✅ Gespeichert', 'ok'); closeModal();
             const c = document.getElementById('admin-tab-content');
@@ -5286,8 +5906,8 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     // Manuell-Eintrag Modal (Manager: MA + Datum frei wählbar) – mit Tagesablauf-Modus
     async function modalZeitManuell(maList) {
       const typOpts = ['kommen', 'gehen', 'pause_start', 'pause_ende', 'urlaub', 'krankenstand']
-        .map(v => `< option value = "${v}" > ${{ kommen: '🟢 Kommen', gehen: '🔴 Gehen', pause_start: '⏸ Pause Start', pause_ende: '▶️ Pause Ende', urlaub: '🏖️ Urlaub', krankenstand: '🤒 Krankenstand' }[v]}</option > `).join('');
-      const maOpts = maList.map(m => `< option value = "${m.id}" > ${esc(m.name)}</option > `).join('');
+        .map(v => `<option value="${v}">${{ kommen: '🟢 Kommen', gehen: '🔴 Gehen', pause_start: '⏸ Pause Start', pause_ende: '▶️ Pause Ende', urlaub: '🏖️ Urlaub', krankenstand: '🤒 Krankenstand' }[v]}</option>`).join('');
+      const maOpts = maList.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
       const today = new Date().toISOString().split('T')[0];
       const tabStyle = (active) => active
         ? `style = "background:#1e40af;color:white;border:none;border-radius:8px 8px 0 0;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer"`
@@ -5295,15 +5915,15 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
 
       const renderModal = (modus) => {
         const einzelContent = `
-      < div class="form-group" ><label class="form-label">Typ</label>
-        <select class="form-input" id="zm-typ">${typOpts}</select></div >
+      <div class="form-group" ><label class="form-label">Typ</label>
+        <select class="form-input" id="zm-typ">${typOpts}</select></div>
       <div class="form-group"><label class="form-label">Uhrzeit</label>
         <input type="time" class="form-input" id="zm-zeit" value="08:00"></div>
       <div class="form-group"><label class="form-label">Notiz (optional)</label>
         <input class="form-input" id="zm-notiz" placeholder="Grund der Nacherfassung"></div>
       <button class="btn btn-primary" id="btn-zm-save" style="width:100%">Eintragen</button>`;
         const tagContent = `
-      < div style = "display:grid;grid-template-columns:1fr 1fr;gap:8px" >
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="form-group" style="margin:0"><label class="form-label">🟢 Kommen *</label>
           <input type="time" class="form-input" id="zm-kommen" value="08:00"></div>
         <div class="form-group" style="margin:0"><label class="form-label">🔴 Gehen</label>
@@ -5312,12 +5932,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           <input type="time" class="form-input" id="zm-pausestart" placeholder="optional"></div>
         <div class="form-group" style="margin:0"><label class="form-label">▶️ Pause Ende</label>
           <input type="time" class="form-input" id="zm-pauseende" placeholder="optional"></div>
-      </div >
+      </div>
       <div class="form-group"><label class="form-label">Notiz (optional)</label>
         <input class="form-input" id="zm-notiz-tag" placeholder="Grund der Nacherfassung"></div>
       <button class="btn btn-primary" id="btn-zm-tag-save" style="width:100%">💾 Tagesablauf speichern</button>`;
         return `
-      < button class="modal-close" id = "modal-close" >×</button >
+      <button class="modal-close" id="modal-close" >×</button>
       <div class="modal-title">➕ Manuell eintragen</div>
       <div class="form-group"><label class="form-label">Mitarbeiter</label>
         <select class="form-input" id="zm-ma">${maOpts}</select></div>
@@ -5408,7 +6028,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const bis = new Date(year, month + 1, 0, 23, 59, 59).toISOString().split('T')[0];
 
       let events = [];
-      try { events = await apiGet(`/ api / kalender / events ? von = ${von}& bis=${bis} `); } catch (e) { }
+      try { events = await apiGet(`/api/kalender/events?von=${von}&bis=${bis}`); } catch (e) { }
 
       // Tages-Index
       const byDay = {};
@@ -5426,12 +6046,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const startOffset = (firstDay.getDay() + 6) % 7;
       const todayStr = now.toLocaleDateString('sv-SE');
 
-      let gridHTML = dayNames.map(d => `< div class="kal-head" > ${d}</div > `).join('');
+      let gridHTML = dayNames.map(d => `<div class="kal-head">${d}</div>`).join('');
 
       // Füllzellen Anfang
       for (let i = 0; i < startOffset; i++) {
         const pd = new Date(year, month, 1 - (startOffset - i));
-        gridHTML += `< div class="kal-day other-month" > <div class="kal-day-num">${pd.getDate()}</div></div > `;
+        gridHTML += `<div class="kal-day other-month" > <div class="kal-day-num">${pd.getDate()}</div></div>`;
       }
 
       // Monatstage
@@ -5439,21 +6059,21 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const dateStr = new Date(year, month, day).toLocaleDateString('sv-SE');
         const dayEvs = byDay[dateStr] || [];
         const isToday = dateStr === todayStr;
-        const pills = dayEvs.slice(0, 2).map(ev => `< div class="kal-pill" title = "${esc(ev.titel)}" > ${esc(ev.titel)}</div > `).join('');
-        const more = dayEvs.length > 2 ? `< div style = "font-size:9px;color:var(--text-muted)" > +${dayEvs.length - 2}</div > ` : '';
-        gridHTML += `< div class="kal-day${isToday ? ' today' : ''}${dayEvs.length ? ' has-events' : ''}" data - kal - date="${dateStr}" >
+        const pills = dayEvs.slice(0, 2).map(ev => `<div class="kal-pill" title="${esc(ev.titel)}">${esc(ev.titel)}</div>`).join('');
+        const more = dayEvs.length > 2 ? `<div style="font-size:9px;color:var(--text-muted)">+${dayEvs.length - 2}</div>` : '';
+        gridHTML += `<div class="kal-day${isToday ? ' today' : ''}${dayEvs.length ? ' has-events' : ''}" data-kal-date="${dateStr}">
       <div class="kal-day-num">${day}</div>${pills}${more}
-    </div > `;
+    </div>`;
       }
 
       // Füllzellen Ende
       const totalCells = startOffset + lastDay.getDate();
       const rest = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-      for (let i = 1; i <= rest; i++)gridHTML += `< div class="kal-day other-month" > <div class="kal-day-num">${i}</div></div > `;
+      for (let i = 1; i <= rest; i++)gridHTML += `<div class="kal-day other-month" > <div class="kal-day-num">${i}</div></div>`;
 
-      const syncBtn = isManager() ? `< button class="btn-ghost" id = "btn-kal-sync" style = "font-size:13px;padding:6px 10px" >↺ Sync</button > ` : '';
+      const syncBtn = isManager() ? `<button class="btn-ghost" id="btn-kal-sync" style="font-size:13px;padding:6px 10px" >↺ Sync</button>` : '';
 
-      return `< div class="content" >
+      return `<div class="content">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <button class="btn-ghost" id="btn-kal-prev" style="font-size:20px;padding:4px 12px">‹</button>
       <div style="flex:1;text-align:center;font-size:16px;font-weight:700">${monthNames[month]} ${year}</div>
@@ -5462,7 +6082,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     </div>
     <div class="card" style="padding:8px"><div class="kal-grid">${gridHTML}</div></div>
     <div id="kal-detail" style="margin-top:12px"></div>
-  </div > `;
+  </div>`;
     }
 
     async function renderTabKalender() {
@@ -5470,7 +6090,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       try { settings = await apiGet('/api/kalender/settings'); } catch (e) { }
       const letzterSync = settings.letzter_sync ? new Date(settings.letzter_sync).toLocaleString('de-AT') : 'Noch nie';
 
-      return `< div class="admin-wrap" >
+      return `<div class="admin-wrap">
     <div class="card" style="margin-bottom:16px"><div class="card-body">
       <div style="font-weight:700;font-size:15px;margin-bottom:14px">📅 Exchange Kalender (EWS + Active Directory)</div>
       <div class="form-group"><label class="form-label">Exchange Server URL</label>
@@ -5489,7 +6109,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <button class="btn btn-outline" id="btn-kal-sync-now">↺ Jetzt synchronisieren</button>
       <div id="kal-sync-result" style="margin-top:10px;font-size:13px"></div>
     </div></div>
-  </div > `;
+  </div>`;
     }
 
     // MULTI-VISIT HELPER -> Berechnet die kumulierten Zeiten aus einsatz_history
@@ -5681,7 +6301,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
   <div style="margin-top:16px;font-size:10px;color:#9ca3af">Fahrtkosten-Basis: Variabel nach Einsatzzeitraum · Erstellt: ${new Date().toLocaleString('de-AT')}</div>
   <button onclick="window.print()" style="margin-top:14px;padding:8px 20px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Drucken / Als PDF</button>
   </body></html>`;
-      const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); }
+      _openInAppBericht(html, `Zeiterfassung${von ? ' ' + von : ''}${bis ? ' – ' + bis : ''}`, 'admin', {adminTab:'berichte'});
     }
 
     async function exportZeitCSV(daten, von, bis) {
@@ -5728,7 +6348,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
   <button onclick="window.print()" style="margin-bottom:12px;padding:8px 16px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Drucken / Als PDF</button>
   <table><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Kommen</th><th>Gehen</th><th>Pause</th><th>Stunden</th></tr></thead>
   <tbody>${rows}</tbody></table></body></html>`;
-      const w = window.open('', '_blank'); w.document.write(html); w.document.close();
+      _openInAppBericht(html, `Zeiterfassung${von ? ' ' + von : ''}${bis ? ' – ' + bis : ''}`, 'admin', {adminTab:'berichte'});
     }
 
     async function exportMonatsPDF(daten, periodLabel, einzel = false, von = '', bis = '') {
@@ -5829,16 +6449,15 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     <p style="color:#6b7280;font-size:13px;margin:0 0 16px">Einzelauswertung – ${maArr.length} Mitarbeiter</p>
     <button onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Drucken / Als PDF (${maArr.length} Seiten mind.)</button>
     ${sections}</body></html>`;
-        const w = window.open('', '_blank'); w.document.write(html); w.document.close();
+        _openInAppBericht(html, `Monatsauswertung ${monthLabel} (Einzel)`, 'admin', {adminTab:'berichte'});
       } else {
         // Ohne Einzelauswertung: alles fließend, natürlicher Seitenumbruch
         const sections = maArr.map((ma, i, arr) => _buildMaSection(ma, i, arr, false)).join('');
         const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Zeitauswertung ${monthLabel}</title>${pdfStyle}</head><body>
     ${firmaHeader}
     <h1 style="font-size:20px;margin-bottom:16px">Zeitauswertung – ${monthLabel}</h1>
-    <button onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Drucken / Als PDF</button>
     ${sections}</body></html>`;
-        const w = window.open('', '_blank'); w.document.write(html); w.document.close();
+        _openInAppBericht(html, `Monatsauswertung ${monthLabel}`, 'admin', {adminTab:'berichte'});
       }
     }
 
@@ -5956,9 +6575,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
   <div class="footer">Solano Beschattungsmontagen · app.solano.co.at</div>
   </body></html>`;
 
-      const w = window.open('', '_blank');
-      w.document.write(html);
-      w.document.close();
+      _openInAppBericht(html, titel, 'admin', {adminTab:'berichte'});
     }
 
     // ── BERICHT CSV ──
@@ -6353,21 +6970,35 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             catch (e) { toast(e.message, 'err'); cb.checked = !cb.checked; }
           });
         });
-        const excelBtn = document.getElementById('bericht-excel-btn');
-        if (excelBtn && !excelBtn._bound) {
-          excelBtn._bound = true;
-          excelBtn.addEventListener('click', async () => {
+        const berichtExcelBtn = document.getElementById('bestell-bericht-excel-btn');
+        if (berichtExcelBtn && !berichtExcelBtn._bound) {
+          berichtExcelBtn._bound = true;
+          berichtExcelBtn.addEventListener('click', async () => {
             try {
               const data = await apiGet('/api/bestellungen/export-data');
               if (!window.XLSX) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-              const rows = [['Kategorie', 'Artikel', 'Menge', 'Einheit', 'Lieferant', 'Status', 'Erfasst von', 'Bestellt von']];
-              data.forEach(r => rows.push([r.kategorie || '', r.bezeichnung, r.menge || '', r.einheit || '', r.lieferant || '', r.bestellt ? 'Bestellt' : 'Offen', r.erfasst_von || '', r.bestellt_von_name || '']));
+              const rows = [['Kategorie', 'Artikel', 'Menge', 'Einheit', 'Lieferant', 'Erfasst von', 'Status']];
+              data.forEach(r => rows.push([r.kategorie || '', r.bezeichnung, r.menge || '', r.einheit || '', r.lieferant || '', r.erfasst_von || '', r.bestellt ? 'Bestellt' : 'Offen']));
               const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet(rows); XLSX.utils.book_append_sheet(wb, ws, 'Bestellliste');
               XLSX.writeFile(wb, `Bestellliste_${new Date().toISOString().slice(0, 10)}.xlsx`);
             } catch (e) { toast('Excel Fehler: ' + e.message, 'err'); }
           });
         }
       }
+
+      // Bestellungen Admin – Excel Export
+      const _bestellExcelExport = async () => {
+        try {
+          const data = await apiGet('/api/bestellungen/export-data');
+          if (!window.XLSX) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+          const rows = [['Kategorie', 'Artikel', 'Menge', 'Einheit', 'Lieferant', 'Status', 'Erfasst von', 'Bestellt von']];
+          data.forEach(r => rows.push([r.kategorie || '', r.bezeichnung, r.menge || '', r.einheit || '', r.lieferant || '', r.bestellt ? 'Bestellt' : 'Offen', r.erfasst_von || '', r.bestellt_von_name || '']));
+          const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet(rows); XLSX.utils.book_append_sheet(wb, ws, 'Bestellliste');
+          XLSX.writeFile(wb, `Bestellliste_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        } catch (e) { toast('Excel Fehler: ' + e.message, 'err'); }
+      };
+      const adminExcelBtn = document.getElementById('bestell-admin-excel-btn');
+      if (adminExcelBtn && !adminExcelBtn._bound) { adminExcelBtn._bound = true; adminExcelBtn.addEventListener('click', _bestellExcelExport); }
 
       // Optionen
       o('btn-optionen', 'click', () => {
@@ -7838,6 +8469,57 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
 
     function bindAdminEvents() {
       // Bestellverwaltung Admin-Tab
+      // Fahrzeuge: Hinzufügen + Löschen
+      const newFzBtn = document.getElementById('new-fz-btn');
+      if (newFzBtn && !newFzBtn._bound) {
+        newFzBtn._bound = true; newFzBtn.addEventListener('click', async () => {
+          const kenn = document.getElementById('new-fz-kenn')?.value?.trim();
+          if (!kenn) { toast('Kennzeichen erforderlich', 'err'); return; }
+          try {
+            await apiPost('/api/bestellungen/fahrzeuge', { kennzeichen: kenn, bezeichnung: document.getElementById('new-fz-bez')?.value?.trim() || null });
+            toast('Fahrzeug hinzugefügt ✅', 'ok');
+            const c = document.getElementById('admin-tab-content');
+            if (c) { c.innerHTML = await renderTabBestellverwaltung(); bindAdminEvents(); }
+          } catch (e) { toast(e.message, 'err'); }
+        });
+      }
+      document.querySelectorAll('.adm-fz-del').forEach(btn => {
+        if (btn._bound) return; btn._bound = true;
+        btn.addEventListener('click', async () => {
+          if (!confirm('Fahrzeug löschen?')) return;
+          try {
+            await apiDel(`/api/bestellungen/fahrzeuge/${btn.dataset.id}`);
+            toast('Gelöscht', 'ok');
+            const c = document.getElementById('admin-tab-content');
+            if (c) { c.innerHTML = await renderTabBestellverwaltung(); bindAdminEvents(); }
+          } catch (e) { toast(e.message, 'err'); }
+        });
+      });
+      // Generische Menüband-Toggles (Stammdaten, Kategorien, Bestell-Tabs)
+      document.querySelectorAll('.best-band-toggle').forEach(el => {
+        if (el._bound) return; el._bound = true;
+        el.addEventListener('click', () => {
+          const key = el.dataset.key, isOpen = el.dataset.open === '1';
+          el.dataset.open = isOpen ? '0' : '1';
+          el.querySelector('span:last-child').textContent = isOpen ? '▸' : '▾';
+          const body = document.getElementById('best-band-' + key);
+          if (body) body.style.display = isOpen ? 'none' : 'block';
+          localStorage.setItem(`${key}_${user?.id||'x'}`, isOpen ? '0' : '1');
+        });
+      });
+      // Erledigte Bestellungen toggle
+      document.querySelectorAll('.best-erl-toggle').forEach(el => {
+        if (el._bound) return; el._bound = true;
+        el.addEventListener('click', () => {
+          const key = el.dataset.key;
+          const isOpen = el.dataset.open === '1';
+          el.dataset.open = isOpen ? '0' : '1';
+          el.querySelector('span:last-child').textContent = isOpen ? '▸' : '▾';
+          const body = document.getElementById(`best-erl-${key}`);
+          if (body) body.style.display = isOpen ? 'none' : 'block';
+          localStorage.setItem(`${key}_${user?.id||'x'}`, isOpen ? '0' : '1');
+        });
+      });
       document.querySelectorAll('.adm-bestell-cb').forEach(cb => {
         if (cb._bound) return; cb._bound = true;
         cb.addEventListener('change', async () => {
@@ -7849,7 +8531,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         if (btn._bound) return; btn._bound = true;
         btn.addEventListener('click', async () => {
           if (!confirm('Eintrag löschen?')) return;
-          try { await apiDel(`/api/bestellungen/eintraege/${btn.dataset.id}`); btn.closest('div[style*="border-bottom"]').remove(); toast('Gelöscht', 'ok'); }
+          try { await apiDel(`/api/bestellungen/eintraege/${btn.dataset.id}`); btn.closest('div[style*="border-radius"]')?.remove(); toast('Gelöscht', 'ok'); }
           catch (e) { toast(e.message, 'err'); }
         });
       });
@@ -7908,7 +8590,6 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           const name = document.getElementById('new-sd-name')?.value?.trim();
           if (!name) { toast('Name erforderlich', 'err'); return; }
           const artikelKatId = parseInt(document.getElementById('new-sd-artkat')?.value) || null;
-          const katId = parseInt(document.getElementById('new-sd-bestkat')?.value) || null;
           const lieferant = document.getElementById('new-sd-lieferant')?.value?.trim() || null;
           const einheit = document.getElementById('new-sd-einheit')?.value?.trim() || null;
           const preis_netto = parseFloat(document.getElementById('new-sd-netto')?.value) || null;
@@ -7920,7 +8601,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           const sparte_projekte = document.getElementById('new-sd-p')?.checked || false;
           try {
             await apiPost('/api/bestellungen/stammdaten', {
-              name, artikel_kategorie_id: artikelKatId, kategorie_id: katId, lieferant, einheit,
+              name, artikel_kategorie_id: artikelKatId, lieferant, einheit,
               preis_netto, preis_brutto, scancode,
               sparte_winterdienst, sparte_gebaeudereinigung, sparte_gruenpflege, sparte_projekte,
             });
@@ -7969,7 +8650,6 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
               <div class="modal-title">✏️ Artikel bearbeiten</div>
               <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="edit-sd-name" value="${esc(s.name)}"></div>
               <div class="form-group"><label class="form-label">Artikel-Kategorie</label><select class="form-input" id="edit-sd-artkat"><option value="">–</option>${akOpts}</select></div>
-              <div class="form-group"><label class="form-label">Bestell-Tab</label><select class="form-input" id="edit-sd-bestkat"><option value="">–</option>${bkOpts}</select></div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
                 <div class="form-group"><label class="form-label">Lieferant</label><input class="form-input" id="edit-sd-lieferant" value="${esc(s.lieferant || '')}"></div>
                 <div class="form-group"><label class="form-label">Einheit</label><input class="form-input" id="edit-sd-einheit" value="${esc(s.einheit || '')}"></div>
@@ -7977,11 +8657,11 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
                 <div class="form-group"><label class="form-label">Brutto €</label><input class="form-input" id="edit-sd-brutto" type="number" step="0.01" value="${s.preis_brutto || ''}"></div>
               </div>
               <div class="form-group"><label class="form-label">Scancode</label><input class="form-input" id="edit-sd-scancode" value="${esc(s.scancode || '')}"></div>
-              <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="edit-sd-w" ${s.sparte_winterdienst ? 'checked' : ''}> ❄️</label>
-                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="edit-sd-g" ${s.sparte_gebaeudereinigung ? 'checked' : ''}> 🧹</label>
-                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="edit-sd-gr" ${s.sparte_gruenpflege ? 'checked' : ''}> 🌿</label>
-                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="edit-sd-p" ${s.sparte_projekte ? 'checked' : ''}> 🔨</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600"><input type="checkbox" id="edit-sd-w" ${s.sparte_winterdienst ? 'checked' : ''}> ❄️ Winterdienst</label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600"><input type="checkbox" id="edit-sd-g" ${s.sparte_gebaeudereinigung ? 'checked' : ''}> 🧹 Gebäudereinigung</label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600"><input type="checkbox" id="edit-sd-gr" ${s.sparte_gruenpflege ? 'checked' : ''}> 🌿 Grünpflege</label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600"><input type="checkbox" id="edit-sd-p" ${s.sparte_projekte ? 'checked' : ''}> 🔨 Montage/Projekte</label>
               </div>
               <button class="btn btn-primary" id="edit-sd-save" style="width:100%">Speichern</button>
             `);
@@ -7990,12 +8670,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
                 await apiPut(`/api/bestellungen/stammdaten/${s.id}`, {
                   name: document.getElementById('edit-sd-name')?.value?.trim(),
                   artikel_kategorie_id: parseInt(document.getElementById('edit-sd-artkat')?.value) || null,
-                  kategorie_id: parseInt(document.getElementById('edit-sd-bestkat')?.value) || null,
                   lieferant: document.getElementById('edit-sd-lieferant')?.value?.trim() || null,
                   einheit: document.getElementById('edit-sd-einheit')?.value?.trim() || null,
                   preis_netto: parseFloat(document.getElementById('edit-sd-netto')?.value) || null,
                   preis_brutto: parseFloat(document.getElementById('edit-sd-brutto')?.value) || null,
                   scancode: document.getElementById('edit-sd-scancode')?.value?.trim() || null,
+                  benoetigt_pruefung: false,
                   sparte_winterdienst: document.getElementById('edit-sd-w')?.checked || false,
                   sparte_gebaeudereinigung: document.getElementById('edit-sd-g')?.checked || false,
                   sparte_gruenpflege: document.getElementById('edit-sd-gr')?.checked || false,
@@ -8448,6 +9128,85 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           try { const d = await apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''}`); await exportMonatsCSV(d, label); } catch (e) { toast('Fehler', 'err') }
         })
       }
+      // ── Bestellverlauf events ──
+      const bvLaden = document.getElementById('btn-bv-laden');
+      if (bvLaden && !bvLaden._bound) {
+        bvLaden._bound = true; bvLaden.addEventListener('click', async () => {
+          pageData.bvVon = document.getElementById('bv-von')?.value || '';
+          pageData.bvBis = document.getElementById('bv-bis')?.value || '';
+          pageData.bvKat = document.getElementById('bv-kat')?.value || '';
+          pageData.bvSparten = { w: document.getElementById('bv-sp-w')?.checked||false, g: document.getElementById('bv-sp-g')?.checked||false, gr: document.getElementById('bv-sp-gr')?.checked||false, p: document.getElementById('bv-sp-p')?.checked||false };
+          const c = document.getElementById('admin-tab-content');
+          if (c) { c.innerHTML = `<div class="loading"><div class="spinner"></div></div>`; c.innerHTML = await renderTabBerichte(); bindAdminEvents(); }
+        });
+      }
+      const bvPdf = document.getElementById('btn-bv-pdf');
+      if (bvPdf && !bvPdf._bound) {
+        bvPdf._bound = true; bvPdf.addEventListener('click', async () => {
+          const von = pageData.bvVon||'', bis = pageData.bvBis||'';
+          const sp = pageData.bvSparten||{};
+          const params = new URLSearchParams({ von, bis, ...(sp.w?{sparte_w:'1'}:{}), ...(sp.g?{sparte_g:'1'}:{}), ...(sp.gr?{sparte_gr:'1'}:{}), ...(sp.p?{sparte_p:'1'}:{}), ...(pageData.bvKat?{kategorie_id:pageData.bvKat}:{}) });
+          try {
+            const [data, firma] = await Promise.all([apiGet('/api/bestellungen/verlauf?'+params), apiGet('/api/admin/firma').catch(()=>({}))]);
+            const fH = firma.name ? `<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1e40af">${firma.logo_base64?`<img src="${firma.logo_base64}" style="max-height:60px;max-width:120px;object-fit:contain">`:''}<div><div style="font-weight:700;font-size:14px">${esc(firma.name)}</div>${firma.anschrift?`<div style="white-space:pre-line;font-size:11px;color:#6b7280">${esc(firma.anschrift)}</div>`:''}${firma.uid_atu?`<div style="font-size:11px;color:#6b7280">UID: ${esc(firma.uid_atu)}</div>`:''}</div></div>` : '';
+            const rows = data.map(e=>`<tr><td style="padding:5px 8px">${esc(e.bezeichnung)}</td><td style="padding:5px 8px">${e.menge?esc(e.menge)+(e.einheit?' '+esc(e.einheit):''):'–'}</td><td style="padding:5px 8px">${esc(e.erfasst_von||'–')}</td><td style="padding:5px 8px">${e.bestellt?'✅ Bestellt':'⏳ Offen'}</td><td style="padding:5px 8px;font-size:11px">${new Date(e.erstellt_am).toLocaleDateString('de-AT')}</td></tr>`).join('');
+            const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}table{width:100%;border-collapse:collapse}th{background:#1e40af;color:white;padding:6px 8px;text-align:left}td{padding:5px 8px;border-bottom:1px solid #ddd}tr:nth-child(even) td{background:#f8f8f8}@media print{button{display:none}}</style></head><body>${fH}<h1>Bestellverlauf${von?' von '+von:''}${bis?' bis '+bis:''}</h1><p style="color:#6b7280;font-size:12px">${data.length} Einträge · Erstellt: ${new Date().toLocaleString('de-AT')}</p><table><thead><tr><th>Artikel</th><th>Menge</th><th>Erfasst von</th><th>Status</th><th>Datum</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+            _openInAppBericht(html, 'Bestellverlauf', 'admin', {adminTab:'berichte'});
+          } catch (e) { toast('Fehler: '+e.message, 'err'); }
+        });
+      }
+      const bvExcel = document.getElementById('btn-bv-excel');
+      if (bvExcel && !bvExcel._bound) {
+        bvExcel._bound = true; bvExcel.addEventListener('click', async () => {
+          const von = pageData.bvVon||'', bis = pageData.bvBis||'';
+          const sp = pageData.bvSparten||{};
+          const params = new URLSearchParams({ von, bis, ...(sp.w?{sparte_w:'1'}:{}), ...(sp.g?{sparte_g:'1'}:{}), ...(sp.gr?{sparte_gr:'1'}:{}), ...(sp.p?{sparte_p:'1'}:{}), ...(pageData.bvKat?{kategorie_id:pageData.bvKat}:{}) });
+          try {
+            const data = await apiGet('/api/bestellungen/verlauf?'+params);
+            const csv = 'Artikel;Menge;Einheit;Lieferant;Erfasst von;Status;Datum\n' + data.map(e=>[esc(e.bezeichnung),e.menge||'',e.einheit||'',e.lieferant||'',e.erfasst_von||'',e.bestellt?'Bestellt':'Offen',new Date(e.erstellt_am).toLocaleDateString('de-AT')].join(';')).join('\n');
+            const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Bestellverlauf_${von}_${bis}.csv`; a.click();
+          } catch (e) { toast('Fehler: '+e.message, 'err'); }
+        });
+      }
+      const bvSearch = document.getElementById('bv-search');
+      if (bvSearch && !bvSearch._bound) {
+        bvSearch._bound = true; bvSearch.addEventListener('input', () => {
+          const q = bvSearch.value.toLowerCase().trim();
+          document.querySelectorAll('#bv-results [data-bv-item]').forEach(el => {
+            el.style.display = !q || el.dataset.bvItem.includes(q) ? '' : 'none';
+          });
+        });
+      }
+      document.querySelectorAll('.bv-jahr-toggle').forEach(el => {
+        if (el._bound) return; el._bound = true;
+        el.addEventListener('click', () => {
+          const yr = el.dataset.yr, isOpen = el.dataset.open==='1';
+          el.dataset.open = isOpen?'0':'1';
+          el.style.borderRadius = isOpen?'8px':'8px 8px 0 0';
+          const cont = document.getElementById('bv-yr-'+yr);
+          if (cont) cont.style.display = isOpen?'none':'block';
+          el.querySelector('span:last-child').textContent = isOpen?'▸':'▾';
+          const saved = (()=>{try{return JSON.parse(localStorage.getItem(`bvYearsOpen_${user?.id||'x'}`)||'{}');}catch{return{};}})();
+          saved[yr] = !isOpen;
+          localStorage.setItem(`bvYearsOpen_${user?.id||'x'}`, JSON.stringify(saved));
+        });
+      });
+      document.querySelectorAll('.bv-monat-toggle').forEach(el => {
+        if (el._bound) return; el._bound = true;
+        el.addEventListener('click', () => {
+          const mo = el.dataset.mo, isOpen = el.dataset.open==='1';
+          el.dataset.open = isOpen?'0':'1';
+          el.style.borderRadius = isOpen?'8px':'8px 8px 0 0';
+          const cont = document.getElementById('bv-mo-'+mo);
+          if (cont) cont.style.display = isOpen?'none':'block';
+          el.querySelector('span:last-child').textContent = isOpen?'▸':'▾';
+          const saved = (()=>{try{return JSON.parse(localStorage.getItem(`bvMonthsOpen_${user?.id||'x'}`)||'{}');}catch{return{};}})();
+          saved[mo] = !isOpen;
+          localStorage.setItem(`bvMonthsOpen_${user?.id||'x'}`, JSON.stringify(saved));
+        });
+      });
+
       // Monatsauswertung: Korrektur-Buttons pro Tag
       document.querySelectorAll('[data-action="monat-korrigier"]').forEach(b => {
         if (b._bound) return; b._bound = true;
@@ -9385,7 +10144,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             if (!confirm('Mitarbeiter löschen?')) return;
             try { await apiDel(`/api/mitarbeiter/${id}`); toast('Gelöscht', 'ok'); reloadTab() } catch (e) { toast(e.message, 'err') }
           } else if (action === 'edit-ma') {
-            modalMitarbeiter({ id, name, pin, ist_admin: btn.dataset.admin === 'true', ist_chef: btn.dataset.chef === 'true', zeige_winterdienst: btn.dataset.zw !== 'false', zeige_gebaeudereinigung: btn.dataset.zg !== 'false', zeige_gruenpflege: btn.dataset.zgr !== 'false', zeige_projekte: btn.dataset.zp !== 'false', winterdienst_alarm: btn.dataset.alarm === 'true', soll_stunden: parseFloat(btn.dataset.soll) || 38.5, beschaeftigung: btn.dataset.beschaeftigung || 'vollzeit', darf_nachrichten: btn.dataset.darfNachrichten === 'true', nachricht_verfuegbar: btn.dataset.nachrichtVerfuegbar !== 'false', sieht_aktive_einsaetze: btn.dataset.siehtAktive === 'true', sieht_einsatz_details: btn.dataset.siehtDetails === 'true', kann_einsteigen: btn.dataset.kannEinsteigen === 'true' });
+            modalMitarbeiter({ id, name, pin, ist_admin: btn.dataset.admin === 'true', ist_chef: btn.dataset.chef === 'true', zeige_winterdienst: btn.dataset.zw !== 'false', zeige_gebaeudereinigung: btn.dataset.zg !== 'false', zeige_gruenpflege: btn.dataset.zgr !== 'false', zeige_projekte: btn.dataset.zp !== 'false', winterdienst_alarm: btn.dataset.alarm === 'true', soll_stunden: parseFloat(btn.dataset.soll) || 38.5, beschaeftigung: btn.dataset.beschaeftigung || 'vollzeit', darf_nachrichten: btn.dataset.darfNachrichten === 'true', nachricht_verfuegbar: btn.dataset.nachrichtVerfuegbar !== 'false', sieht_aktive_einsaetze: btn.dataset.siehtAktive === 'true', sieht_einsatz_details: btn.dataset.siehtDetails === 'true', kann_einsteigen: btn.dataset.kannEinsteigen === 'true', darf_bestellen: btn.dataset.darfBestellen === 'true', darf_artikelanlage: btn.dataset.darfArtikelanlage === 'true', darf_export: btn.dataset.darfExport === 'true' });
           } else if (action === 'toggle-todo') {
             try {
               await apiPut(`/api/todos/${id}`, {});
@@ -9623,6 +10382,38 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       go('home');
     }
     init();
+
+    // ── SWIPE NAVIGATION ─────────────────────────────────────────────────────
+    (function () {
+      const SWIPE_MIN_X = 60, SWIPE_MAX_Y = 80;
+      const getNavPages = () => {
+        const pages = ['home', 'bestellungen', 'projekte', 'zeit', 'kalender'];
+        if (user?.darf_einsatz || isManager()) pages.splice(2, 0, 'einsatz');
+        return pages;
+      };
+      let tx = 0, ty = 0, swiping = false;
+      document.addEventListener('touchstart', e => {
+        // Only swipe on main content, not in inputs/scrollable sub-elements
+        const target = e.target;
+        if (target.closest('input,textarea,select,.modal-container,[data-no-swipe]')) return;
+        if (e.touches.length !== 1) return;
+        tx = e.touches[0].clientX; ty = e.touches[0].clientY; swiping = true;
+      }, { passive: true });
+      document.addEventListener('touchend', e => {
+        if (!swiping) return; swiping = false;
+        const dx = e.changedTouches[0].clientX - tx;
+        const dy = e.changedTouches[0].clientY - ty;
+        if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dy) > SWIPE_MAX_Y) return;
+        // Don't swipe while modal is open
+        const modal = document.getElementById('modal-container');
+        if (modal && modal.innerHTML.trim()) return;
+        const navPages = getNavPages();
+        const cur = navPages.indexOf(page);
+        if (cur === -1) return;
+        if (dx < 0 && cur < navPages.length - 1) go(navPages[cur + 1]); // swipe left → next
+        else if (dx > 0 && cur > 0) go(navPages[cur - 1]); // swipe right → prev
+      }, { passive: true });
+    })();
 
     // ── PWA Install Prompt ────────────────────────────────────────────────────
     (function () {
