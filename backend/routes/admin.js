@@ -278,10 +278,24 @@ router.post('/backup/create-full', adminMiddleware, async (req, res) => {
 
 // ── Datensicherung: Download ──────────────────────────────────────────────────
 router.get('/backup/download/:filename', adminMiddleware, (req, res) => {
-  const filename = path.basename(req.params.filename); // security: no path traversal
-  const filepath = path.join(BACKUP_DIR, filename);
-  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  res.download(filepath, filename);
+  try {
+    const filename = path.basename(req.params.filename); // security: no path traversal
+    const filepath = path.join(BACKUP_DIR, filename);
+    console.log(`[DOWNLOAD DEBUG] Request for filename: "${req.params.filename}" => resolved basename: "${filename}"`);
+    console.log(`[DOWNLOAD DEBUG] Full filepath: "${filepath}"`);
+    console.log(`[DOWNLOAD DEBUG] BACKUP_DIR is: "${BACKUP_DIR}"`);
+    if (!fs.existsSync(filepath)) {
+      console.log(`[DOWNLOAD DEBUG] fs.existsSync returned false!`);
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
+    console.log(`[DOWNLOAD DEBUG] File exists, sending via res.download...`);
+    res.download(filepath, filename, (err) => {
+      if (err) console.error(`[DOWNLOAD DEBUG] res.download error:`, err);
+    });
+  } catch (err) {
+    console.error(`[DOWNLOAD DEBUG] Uncaught error:`, err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Datensicherung: Löschen ───────────────────────────────────────────────────
