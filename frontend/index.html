@@ -4182,23 +4182,48 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       });
     }
 
-    // Barcode scan modal for Artikelanlage
-    function _openArtikelanlageModal(stammdaten, artikelKats, bestKats) {
-      const katOpts = (artikelKats || []).filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
-      const bKatOpts = (bestKats || []).filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${esc(k.name)}</option>`).join('');
+    // ── Beep function via Web Audio API (no file needed)
+    function _playBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 1800; osc.type = 'sine';
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.25);
+      } catch (e) { }
+    }
+
+    // Barcode scan modal for Artikelanlage – live Kamera mit roter Scanlinie + Beep
+    async function _openArtikelanlageModal(stammdaten, artikelKats, bestKats) {
+      const katOpts = (artikelKats || []).filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${k.name.replace(/</g, '&lt;')}</option>`).join('');
+      const bKatOpts = (bestKats || []).filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${k.name.replace(/</g, '&lt;')}</option>`).join('');
+
+      // Lade html5-qrcode Library (hat rote Scanlinie eingebaut)
+      if (!window.Html5Qrcode) {
+        try {
+          await new Promise((ok, fail) => {
+            const s = document.createElement('script');
+            s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+            s.onload = ok; s.onerror = fail; document.head.appendChild(s);
+          });
+        } catch (e) { }
+      }
+
       showModal(`
-        <button class="modal-close" id="modal-close">×</button>
-        <div class="modal-title">🏷️ Artikel scannen / anlegen</div>
-        <div style="margin-bottom:10px">
-          <button class="btn btn-primary" id="bc-scan-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px">📷 Barcode / QR-Code fotografieren</button>
-          <input type="file" id="bc-img-input" accept="image/*" capture="environment" style="display:none">
-          <div id="bc-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+        <button class="modal-close" id="bc-modal-close" style="position:absolute;top:12px;right:12px;z-index:10">×</button>
+        <div class="modal-title">🏷️ Artikel scannen</div>
+        <div id="bc-reader" style="width:100%;border-radius:10px;overflow:hidden;margin-bottom:8px"></div>
+        <div id="bc-scan-status" style="font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:10px">📷 Kamera startet…</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <input class="form-input" id="bc-code" placeholder="Scancode manuell" style="flex:1">
+          <button class="btn btn-outline" id="bc-lookup-btn" style="flex-shrink:0">🔍</button>
         </div>
-        <div class="form-group"><label class="form-label">Scancode (manuell)</label><input class="form-input" id="bc-code" placeholder="EAN / QR-Code"></div>
-        <button class="btn btn-outline" id="bc-lookup-btn" style="width:100%;margin-bottom:14px">🔍 Artikel suchen</button>
         <div id="bc-result" style="margin-bottom:10px"></div>
-        <hr style="border:none;border-top:1px solid var(--border);margin:10px 0">
-        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Neuen Artikel anlegen</div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:8px 0">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">📦 Artikel anlegen</div>
         <div class="form-group"><label class="form-label">Artikelname *</label><input class="form-input" id="bc-name" placeholder="z.B. Fettlöser 5L"></div>
         <div class="form-group"><label class="form-label">Artikel-Kategorie</label><select class="form-input" id="bc-artkat"><option value="">– Wählen –</option>${katOpts}</select></div>
         <div class="form-group"><label class="form-label">Bestell-Kategorie</label><select class="form-input" id="bc-bestkat"><option value="">– Wählen –</option>${bKatOpts}</select></div>
@@ -4208,80 +4233,65 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           <div class="form-group"><label class="form-label">Netto €</label><input class="form-input" id="bc-netto" type="number" step="0.01"></div>
           <div class="form-group"><label class="form-label">Brutto €</label><input class="form-input" id="bc-brutto" type="number" step="0.01"></div>
         </div>
-        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-          ${['❄️ Winterdienst', '🧹 Gebäudereinigung', '🌿 Grünpflege', '🔨 Projekte'].map((l, i) => {
-        const ids = ['bc-sp-w', 'bc-sp-g', 'bc-sp-gr', 'bc-sp-p'];
-        return `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="${ids[i]}"> ${l}</label>`;
-      }).join('')}
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="bc-sp-w"> ❄️ Winterdienst</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="bc-sp-g"> 🧹 Gebäudereinigung</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="bc-sp-gr"> 🌿 Grünpflege</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="bc-sp-p"> 🔨 Projekte</label>
         </div>
         <button class="btn btn-primary" id="bc-save-btn" style="width:100%">💾 Artikel speichern</button>
       `);
 
-      // Barcode scan via html5-qrcode (works universally for QR + EAN)
-      async function scanBarcode(file) {
-        const st = document.getElementById('bc-status');
-        if (st) st.textContent = '🔍 Barcode wird erkannt…';
-        // 1. Native BarcodeDetector (Chrome/Android nativ)
+      async function onCodeDetected(code) {
+        _playBeep();
+        const codeEl = document.getElementById('bc-code'); if (codeEl) codeEl.value = code;
+        const st = document.getElementById('bc-scan-status');
+        if (st) st.innerHTML = '<b>' + code + '</b> erkannt…';
+        const res = document.getElementById('bc-result');
         try {
-          if ('BarcodeDetector' in window) {
-            const bmp = await createImageBitmap(file);
-            const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'qr_code', 'code_128', 'upc_a', 'upc_e', 'code_39'] });
-            const codes = await det.detect(bmp);
-            if (codes.length) return codes[0].rawValue;
-          }
-        } catch (e) { /* weiter mit Fallback */ }
-        // 2. ZXing – sehr zuverlässig für EAN/QR aus Fotos
-        try {
-          if (!window.ZXingBrowser) {
-            await new Promise((ok, fail) => {
-              const s = document.createElement('script');
-              s.src = 'https://unpkg.com/@zxing/browser@0.1.1/umd/index.min.js';
-              s.onload = ok; s.onerror = fail; document.head.appendChild(s);
-            });
-          }
-          const reader = new ZXingBrowser.BrowserMultiFormatReader();
-          const url = URL.createObjectURL(file);
-          try {
-            const result = await reader.decodeFromImageUrl(url);
-            return result.getText();
-          } finally {
-            URL.revokeObjectURL(url);
-          }
+          const art = await apiGet('/api/bestellungen/stammdaten/barcode/' + encodeURIComponent(code));
+          if (res) res.innerHTML = '<div style="background:#dcfce7;border-radius:8px;padding:10px;font-size:13px">✅ Gefunden: <b>' + (art.name || '') + '</b>' + (art.lieferant ? ' · ' + art.lieferant : '') + '</div>';
+          const nm = document.getElementById('bc-name'); if (nm) nm.value = art.name || '';
         } catch (e) {
-          if (st) st.textContent = '❌ Kein Code erkannt – bitte manuell eingeben';
-          return null;
+          if (res) res.innerHTML = '<div style="background:#fef3c7;border-radius:8px;padding:10px;font-size:13px">⚠️ Nicht gefunden – als neuen Artikel speichern</div>';
         }
       }
 
-      document.getElementById('bc-scan-btn')?.addEventListener('click', () => document.getElementById('bc-img-input')?.click());
-      document.getElementById('bc-img-input')?.addEventListener('change', async ev => {
-        const file = ev.target.files[0]; if (!file) return;
-        const st = document.getElementById('bc-status');
-        const code = await scanBarcode(file);
-        if (code) {
-          const inp = document.getElementById('bc-code'); if (inp) inp.value = code;
-          if (st) st.textContent = `✅ Erkannt: ${code}`;
-          document.getElementById('bc-lookup-btn')?.click();
+      let scanner = null; let lastCode = ''; let lastCodeTime = 0;
+      if (window.Html5Qrcode) {
+        try {
+          scanner = new Html5Qrcode('bc-reader');
+          await scanner.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: { width: 260, height: 100 }, aspectRatio: 1.6 },
+            (decodedText) => {
+              const now = Date.now();
+              if (decodedText === lastCode && now - lastCodeTime < 3000) return;
+              lastCode = decodedText; lastCodeTime = now;
+              onCodeDetected(decodedText);
+            },
+            () => { }
+          );
+          const st = document.getElementById('bc-scan-status');
+          if (st) st.textContent = '📷 Barcode in den roten Rahmen halten…';
+        } catch (e) {
+          const st = document.getElementById('bc-scan-status');
+          if (st) st.textContent = '⚠️ Kamera nicht verfügbar – bitte Scancode manuell eingeben';
         }
-      });
+      }
 
-      // Lookup
+      const stopScanner = () => { if (scanner) { scanner.stop().catch(() => { }); scanner = null; } };
+      document.getElementById('bc-modal-close')?.addEventListener('click', () => { stopScanner(); closeModal(); });
+
       document.getElementById('bc-lookup-btn')?.addEventListener('click', async () => {
         const code = document.getElementById('bc-code')?.value?.trim(); if (!code) return;
-        const res = document.getElementById('bc-result');
-        try {
-          const art = await apiGet(`/api/bestellungen/stammdaten/barcode/${encodeURIComponent(code)}`);
-          if (res) res.innerHTML = `<div style="background:#dcfce7;border-radius:8px;padding:10px;font-size:13px">✅ Artikel gefunden: <b>${esc(art.name)}</b>${art.lieferant ? ' · ' + esc(art.lieferant) : ''}</div>`;
-          const nameEl = document.getElementById('bc-name'); if (nameEl) nameEl.value = art.name;
-        } catch (e) {
-          if (res) res.innerHTML = `<div style="background:#fef3c7;border-radius:8px;padding:10px;font-size:13px">⚠️ Nicht gefunden – Artikel neu anlegen:</div>`;
-        }
+        await onCodeDetected(code);
       });
 
-      // Save
       document.getElementById('bc-save-btn')?.addEventListener('click', async () => {
         const name = document.getElementById('bc-name')?.value?.trim();
         if (!name) { toast('Name erforderlich', 'err'); return; }
+        stopScanner();
         try {
           await apiPost('/api/bestellungen/stammdaten', {
             name,
@@ -4297,7 +4307,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             sparte_gruenpflege: document.getElementById('bc-sp-gr')?.checked || false,
             sparte_projekte: document.getElementById('bc-sp-p')?.checked || false,
           });
-          closeModal(); toast(`Artikel "${name}" gespeichert ✅`, 'ok');
+          closeModal(); toast('Artikel gespeichert ✅', 'ok');
         } catch (e) { toast(e.message, 'err'); }
       });
     }
@@ -4457,7 +4467,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
 
         const phaseBar = phases.map((ph, i) => {
           const active = i === phaseIdx, done = i < phaseIdx;
-          return `<div style="flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:12px;font-weight:${active ? '700' : '400'};background:${active ? phaseColors[ph] : done ? '#d1fae5' : '#f3f4f6'};color:${active ? 'white' : done ? '#065f46' : '#9ca3af'}">${phaseLabels[ph]}</div>`;
+          return `< div style = "flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:12px;font-weight:${active ? '700' : '400'};background:${active ? phaseColors[ph] : done ? '#d1fae5' : '#f3f4f6'};color:${active ? 'white' : done ? '#065f46' : '#9ca3af'}" > ${phaseLabels[ph]}</div > `;
         }).join('');
 
         const phaseStartMap = { fahrt: p.fahrt_start, arbeit: p.ankunft, rueckfahrt: p.abfahrt_zeit };
@@ -4466,10 +4476,10 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const nextBtnLabels = { fahrt: '🔨 Am Ziel – Arbeit beginnen', arbeit: '🏠 Fertig – Rückfahrt / Weiterfahrt starten', rueckfahrt: '✅ Zuhause – Auftrag abschließen' };
         const nextBtnColors = { fahrt: '#16a34a', arbeit: '#d97706', rueckfahrt: '#6b7280' };
         const kmHin = parseFloat(p.km_hin || 0), kmZurueck = parseFloat(p.km_zurueck || 0);
-        const kmInfo = (kmHin || kmZurueck) ? `<div style="font-size:13px;color:var(--text-muted);margin-top:4px">🚗 ${kmHin > 0 ? 'Hin: ' + kmHin + ' km' : ''}${kmHin > 0 && kmZurueck > 0 ? ' · ' : ''}${kmZurueck > 0 ? 'Zurück: ' + kmZurueck + ' km' : ''}</div>` : '';
+        const kmInfo = (kmHin || kmZurueck) ? `< div style = "font-size:13px;color:var(--text-muted);margin-top:4px" >🚗 ${kmHin > 0 ? 'Hin: ' + kmHin + ' km' : ''}${kmHin > 0 && kmZurueck > 0 ? ' · ' : ''}${kmZurueck > 0 ? 'Zurück: ' + kmZurueck + ' km' : ''}</div > ` : '';
         // Tour-Info
-        const tourInfo = p.tour_id ? `<div style="font-size:12px;color:#7c3aed;margin-top:4px">🗺️ Tour · Position ${p.tour_position || 1}</div>` : '';
-        return `<div class="content">
+        const tourInfo = p.tour_id ? `< div style = "font-size:12px;color:#7c3aed;margin-top:4px" >🗺️ Tour · Position ${p.tour_position || 1}</div > ` : '';
+        return `< div class="content" >
       <div class="card" style="margin-bottom:16px;border:2px solid ${col}">
         <div class="card-body">
           <div style="display:flex;gap:6px;margin-bottom:14px">${phaseBar}</div>
@@ -4499,12 +4509,13 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           <textarea class="form-input" id="proj-rapport-bez" rows="2" placeholder="Rapport-Notizen…" style="margin-top:8px">${esc(p.rapport_beschreibung || '')}</textarea>
         </div>
         <button class="btn btn-outline" id="btn-proj-save-notiz" style="margin-top:8px;font-size:13px">💾 Speichern</button>
-      </div></div>`: ''}
-      <button id="btn-proj-next-phase" style="width:100%;padding:16px;background:${nextBtnColors[phase]};color:white;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">${nextBtnLabels[phase]}</button>
+      </div></div>`: ''
+          }
+    <button id="btn-proj-next-phase" style="width:100%;padding:16px;background:${nextBtnColors[phase]};color:white;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">${nextBtnLabels[phase]}</button>
       ${phase === 'rueckfahrt' ? `<button id="btn-proj-weiter-auftrag" style="width:100%;padding:14px;background:#7c3aed;color:white;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">➡️ Weiter zum nächsten Auftrag</button>` : ''}
       ${isManager() ? `<button id="btn-proj-delete" style="width:100%;padding:12px;background:transparent;color:#d97706;border:1px solid #d97706;border-radius:12px;font-size:14px;cursor:pointer">↩️ Auftrag abbrechen & zurückstellen</button>` : ''}
-    </div>
-    ${laufendAndere.length > 0 ? `<div style="margin-top:16px">
+    </div >
+      ${laufendAndere.length > 0 ? `<div style="margin-top:16px">
       <div style="font-weight:700;font-size:13px;color:#dc2626;margin-bottom:6px">🔴 Weitere laufende Aufträge (${laufendAndere.length})</div>
       ${laufendAndere.map(p => `
         <div style="display:flex;align-items:center;gap:8px;background:white;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:10px;padding:8px 10px;margin-bottom:6px;flex-wrap:wrap">
@@ -4518,7 +4529,8 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             <button class="tbl-btn" data-action="proj-admin-zurueck" data-id="${p.id}" style="background:#f59e0b;color:white">↩️</button>
           </div>
         </div>`).join('')}
-    </div>`: ''}`;
+    </div>`: ''
+          } `;
       }
 
       // Kein aktiver Auftrag – Neuen starten
@@ -4537,7 +4549,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
 
       const agOpts = agFehler
         ? '<option value="">⚠️ Laden fehlgeschlagen – neu öffnen</option>'
-        : '<option value="">– Auftraggeber wählen –</option>' + auftraggeber.map(ag => `<option value="${ag.id}" data-name="${esc(ag.name)}">${esc(ag.name)}</option>`).join('');
+        : '<option value="">– Auftraggeber wählen –</option>' + auftraggeber.map(ag => `< option value = "${ag.id}" data - name="${esc(ag.name)}" > ${esc(ag.name)}</option > `).join('');
 
       // Helper: build row for abgeschlossene table
       const buildRecentRow = (p) => {
@@ -4563,7 +4575,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           rapport_erforderlich: p.rapport_erforderlich, rapport_beschreibung: p.rapport_beschreibung,
           einsatz_history: alleSessions
         }));
-        return `<tr style="cursor:pointer" data-action="recent-view" data-proj="${viewData}">
+        return `< tr style = "cursor:pointer" data - action="recent-view" data - proj="${viewData}" >
       <td style="min-width:140px"><div style="font-weight:600">${esc(p.auftraggeber_name || '–')}</div>
           ${p.kundenname ? `<div style="font-size:11px;color:var(--text-muted)">${esc(p.kundenname)}</div>` : ''}
           ${esc(p.auftragsnummer || '') ? `<div style="font-size:11px;color:var(--text-muted)">Nr. ${esc(p.auftragsnummer)}</div>` : ''}
@@ -4577,7 +4589,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             ? `<span style="color:#16a34a;font-weight:700;font-size:12px">✅ €${parseFloat(p.gutschrift_betrag).toFixed(2)}</span>`
             : `<span style="color:#d97706;font-size:12px;font-weight:600">⚠️ keine GS</span>`}
       </td>
-    </tr>`;
+    </tr > `;
       };
 
       // Group abgeschlossene by YYYY-MM for collapsible sections
@@ -4599,12 +4611,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const monthNames2 = ['Jänner', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
       const _nowD = new Date();
       const nowYearStr = String(_nowD.getFullYear());
-      const nowKey = `${_nowD.getFullYear()}-${String(_nowD.getMonth() + 1).padStart(2, '0')}`;
+      const nowKey = `${_nowD.getFullYear()} -${String(_nowD.getMonth() + 1).padStart(2, '0')} `;
       // Beim ersten Besuch: aktuellen Monat+Jahr als Standard öffnen
-      let openMonths = JSON.parse(localStorage.getItem(`projMonthOpen_${user?.id || 'x'}`) || 'null');
-      if (openMonths === null) { openMonths = [nowKey]; localStorage.setItem(`projMonthOpen_${user?.id || 'x'}`, JSON.stringify(openMonths)); }
-      let openYears = JSON.parse(localStorage.getItem(`projYearOpen_${user?.id || 'x'}`) || 'null');
-      if (openYears === null) { openYears = [nowYearStr]; localStorage.setItem(`projYearOpen_${user?.id || 'x'}`, JSON.stringify(openYears)); }
+      let openMonths = JSON.parse(localStorage.getItem(`projMonthOpen_${user?.id || 'x'} `) || 'null');
+      if (openMonths === null) { openMonths = [nowKey]; localStorage.setItem(`projMonthOpen_${user?.id || 'x'} `, JSON.stringify(openMonths)); }
+      let openYears = JSON.parse(localStorage.getItem(`projYearOpen_${user?.id || 'x'} `) || 'null');
+      if (openYears === null) { openYears = [nowYearStr]; localStorage.setItem(`projYearOpen_${user?.id || 'x'} `, JSON.stringify(openYears)); }
       // Group months by year
       const byYear = {};
       for (const key of Object.keys(byMonth)) {
@@ -4619,9 +4631,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const monthsHTML = months.map(key => {
           const isOpen = openMonths.includes(key); // nur localStorage
           const m = key.slice(5, 7);
-          const label = key === '0000-00' ? 'Unbekannt' : `${monthNames2[parseInt(m, 10) - 1]} ${y}`;
+          const label = key === '0000-00' ? 'Unbekannt' : `${monthNames2[parseInt(m, 10) - 1]} ${y} `;
           const rows = byMonth[key].map(p => buildRecentRow(p)).join('');
-          return `<div style="margin-bottom:4px;margin-left:12px">
+          return `< div style = "margin-bottom:4px;margin-left:12px" >
         <div class="proj-month-toggle" data-month="${key}" data-open="${isOpen ? '1' : '0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;user-select:none">
           <span style="font-weight:600;font-size:13px">📅 ${label} <span style="font-weight:400;color:var(--text-muted);font-size:12px">(${byMonth[key].length})</span></span>
           <span style="font-size:16px">${isOpen ? '▾' : '▸'}</span>
@@ -4631,22 +4643,22 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
             <th>Auftraggeber</th><th>Fahrzeit</th><th>km</th><th>Arbeitszeit</th><th>Gesamt</th><th>Gutschrift</th>
           </tr></thead><tbody>${rows}</tbody></table>
         </div>
-      </div>`;
+      </div > `;
         }).join('');
         const totalInYear = months.reduce((a, k) => a + byMonth[k].length, 0);
-        return `<div style="margin-bottom:10px">
+        return `< div style = "margin-bottom:10px" >
       <div class="proj-year-toggle" data-year="${y}" data-open="${isYearOpen ? '1' : '0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:${isCurrentYear ? '#dbeafe' : 'var(--bg)'};border:2px solid ${isCurrentYear ? '#3b82f6' : 'var(--border)'};border-radius:10px;padding:10px 14px;user-select:none">
         <span style="font-weight:700;font-size:15px">📆 ${y} <span style="font-weight:400;color:var(--text-muted);font-size:13px">(${totalInYear} Aufträge)</span></span>
         <span style="font-size:20px">${isYearOpen ? '▾' : '▸'}</span>
       </div>
       <div id="proj-year-${y}" style="display:${isYearOpen ? 'block' : 'none'};padding-top:6px">${monthsHTML}</div>
-    </div>`;
+    </div > `;
       }).join('');
 
       // Amber section: abgeschlossene ohne Gutschrift
       const laufendAndereHTML = laufendAndere.length > 0 ? `
-    <div style="margin-bottom:16px">
-      <div style="font-weight:700;font-size:15px;margin-bottom:8px;color:#dc2626">🔴 Laufende Aufträge (${laufendAndere.length})</div>
+      < div style = "margin-bottom:16px" >
+        <div style="font-weight:700;font-size:15px;margin-bottom:8px;color:#dc2626">🔴 Laufende Aufträge (${laufendAndere.length})</div>
       ${laufendAndere.map(p => `
         <div class="card" style="margin-bottom:8px;border-left:4px solid #dc2626">
           <div class="card-body" style="padding:12px">
@@ -4673,12 +4685,13 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
               </div>
             </div>
           </div>
-        </div>`).join('')}
-    </div>`: '';
+        </div>`).join('')
+        }
+    </div > `: '';
 
-      const projGeplantSidebarOpen = localStorage.getItem(`projGeplantSidebarOpen_${user?.id || 'x'}`) !== '0';
-      return `<div class="content">
-    ${laufendAndereHTML}
+      const projGeplantSidebarOpen = localStorage.getItem(`projGeplantSidebarOpen_${user?.id || 'x'} `) !== '0';
+      return `< div class="content" >
+      ${laufendAndereHTML}
     <div class="proj-geplant-sidebar-toggle" data-open="${projGeplantSidebarOpen ? '1' : '0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#dcfce7;border:2px solid #16a34a;border-radius:10px;padding:10px 14px;margin-bottom:6px;user-select:none">
       <span style="font-weight:700;font-size:15px;color:#14532d">📋 Offene Projekte (${geplant.length})</span>
       <span style="font-size:20px;color:#14532d">${projGeplantSidebarOpen ? '▾' : '▸'}</span>
@@ -4713,8 +4726,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     </div>
     ${recentAbs.length > 0 ? `
       <div style="font-weight:700;margin-bottom:8px">Abgeschlossene Aufträge</div>
-      ${recentGroupedHTML}` : ``}
-  </div>`;
+      ${recentGroupedHTML}` : ``
+        }
+  </div > `;
     }
 
     // ── ADMIN TAB: PROJEKTE ───────────────────────────────────────────────────────
@@ -4729,7 +4743,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       try { geplant = (await apiGet('/api/projekte/geplant')).filter(p => p.status === 'geplant'); } catch (e) { }
       const kostenProKm = (parseFloat(fzEinst.diesel_preis || 1.80) * parseFloat(fzEinst.verbrauch_100km || 8) / 100) + parseFloat(fzEinst.maut_pro_km || 0) + parseFloat(fzEinst.abnuetzung_pro_km || 0.15);
 
-      const agRows = agList.map(ag => `<tr>
+      const agRows = agList.map(ag => `< tr >
     <td>${esc(ag.name)}</td>
     <td>${ag.gutschrift_prozent ? ag.gutschrift_prozent + '%' : '–'}</td>
     <td>${ag.stundensatz ? `€${parseFloat(ag.stundensatz).toFixed(2)}/h` : '–'}</td>
@@ -4739,12 +4753,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <button class="tbl-btn" data-action="edit-ag" data-id="${ag.id}" data-name="${esc(ag.name)}" data-gp="${ag.gutschrift_prozent || 0}" data-sh="${ag.stundensatz || 0}" data-notiz="${esc(ag.notiz || '')}" data-fzb="${ag.fahrzeit_bezahlt !== false ? '1' : '0'}">Bearbeiten</button>
       ${user?.ist_admin ? `<button class="tbl-btn danger" data-action="del-ag" data-id="${ag.id}">Löschen</button>` : ''}
     </div></td>
-  </tr>`).join('');
+  </tr > `).join('');
 
       const statusBadgeLive = s => ({ fahrt: '<span class="badge badge-blue">🚗 Fahrt</span>', arbeit: '<span class="badge badge-green">🔨 Arbeit</span>', rueckfahrt: '<span class="badge" style="background:#fef3c7;color:#92400e">🏠 Rückfahrt</span>', pausiert: '<span class="badge" style="background:#f3f4f6;color:#6b7280">⏸ Pausiert</span>' }[s] || s);
       const laufendHTML = laufend.length === 0
-        ? `<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine aktiven Aufträge</div>`
-        : laufend.map(p => `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f3f4f6">
+        ? `< div style = "color:var(--text-muted);font-size:13px;padding:8px 0" > Keine aktiven Aufträge</div > `
+        : laufend.map(p => `< div style = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f3f4f6" >
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${statusBadgeLive(p.status)}
@@ -4762,9 +4776,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <button class="tbl-btn" data-action="proj-admin-zurueck" data-id="${p.id}" title="Zurückstellen" style="background:#f59e0b;color:white">↩️</button>
         <button class="tbl-btn" data-action="proj-admin-abschliessen" data-id="${p.id}" title="Jetzt abschließen" style="background:#16a34a;color:white">✅</button>
       </div>
-    </div>`).join('');
+    </div > `).join('');
 
-      return `<div class="admin-wrap">
+      return `< div class="admin-wrap" >
     <button class="btn btn-primary btn-sm" id="btn-neuer-auftrag" style="margin-bottom:12px;background:#7c3aed">+ Neuer Auftrag</button>
     <div class="card" style="margin-bottom:12px"><div class="card-body" style="padding:12px">
       <div style="font-weight:700;font-size:14px;margin-bottom:6px">🔴 Laufende Aufträge <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:10px;font-weight:700">${laufend.length}</span></div>
@@ -4810,7 +4824,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <th>Name</th><th>Gutschrift %</th><th>Stundensatz</th><th>🚗 Fahrzeit</th><th>Notiz</th><th></th>
     </tr></thead><tbody>${agRows}</tbody></table></div>
     <div style="font-size:12px;color:var(--text-muted);padding:8px 0">ℹ️ Fahrzeugkosten- und Mitarbeiterkosten-Einstellungen sind jetzt unter <b>🏢 Firma</b> zu finden.</div>
-  </div>`;
+  </div > `;
     }
 
     async function renderTabZeit() {
@@ -4818,14 +4832,14 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const _h = new Date();
       // Default: erster bis letzter des aktuellen Monats (für konsistente Monatsansicht)
       const _heute = _h.toISOString().split('T')[0];
-      const _monatserster = `${_h.getFullYear()}-${String(_h.getMonth() + 1).padStart(2, '0')}-01`;
+      const _monatserster = `${_h.getFullYear()} -${String(_h.getMonth() + 1).padStart(2, '0')}-01`;
       const _monatsletzter = new Date(_h.getFullYear(), _h.getMonth() + 1, 0).toISOString().split('T')[0];
       const von = pageData.zeitVon || _monatserster;
       const bis = pageData.zeitBis || _monatsletzter;
       const maId = pageData.zeitMa || '';
       try {
         [auswertung, maList, eingestempelt, ftRows] = await Promise.all([
-          apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''}`),
+          apiGet(`/ api / zeit / auswertung ? von = ${von}& bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''} `),
           apiGet('/api/mitarbeiter'),
           apiGet('/api/zeit/eingestempelt').catch(() => []),
           apiGet('/api/zeit/feiertage').catch(() => [])
@@ -4841,9 +4855,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         if (r.krankenstand) return '🤒 Krankenstand';
         const dow = new Date(r.datum).getDay();
         const uhr = fUhr(r.kommen) || '–';
-        if (r.ist_feiertag) { const fn = _ftNameMap.get(r.datum) || 'Feiertag'; return `<span style="color:#15803d;font-weight:600">🎉</span>${r.kommen ? ` <span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'}`; }
-        if (dow === 6) return `${r.kommen ? `<span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'}`;
-        if (dow === 0) return `${r.kommen ? `<span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'}`;
+        if (r.ist_feiertag) { const fn = _ftNameMap.get(r.datum) || 'Feiertag'; return `< span style = "color:#15803d;font-weight:600" >🎉</span > ${r.kommen ? ` <span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `; }
+        if (dow === 6) return `${r.kommen ? `<span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `;
+        if (dow === 0) return `${r.kommen ? `<span style="font-weight:700">${uhr}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `;
         return uhr;
       };
 
@@ -4889,7 +4903,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           const sal = r.saldo_minuten;
           const salCol = sal > 5 ? '#16a34a' : sal < -5 ? '#dc2626' : '#374151';
           const salTxt = (sal >= 0 ? '+' : '-') + fMin(Math.abs(sal));
-          return `<tr style="${_rowBg(r)}">
+          return `< tr style = "${_rowBg(r)}" >
         <td><div style="white-space:nowrap">${fDate(r.datum)}${_rowLabel(r)}</div>${r.notiz ? `<div style="font-size:11px;color:#d97706;margin-top:2px" title="${esc(r.notiz)}">📝 ${esc(r.notiz)}</div>` : ''}</td>
         <td>${typLabel(r)}</td>
         <td>${r.urlaub || r.krankenstand ? '–' : r.ist_feiertag || r.ist_wochenende ? (r.netto_minuten > 0 ? fUhr(r.gehen) || '–' : '–') : r.gehen ? fUhr(r.gehen) : '<span style="color:#16a34a;font-weight:700">läuft</span>'}</td>
@@ -4900,12 +4914,13 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         ${isManager() ? `<td><div style="display:flex;gap:4px">
           <button class="tbl-btn" data-action="korrigier-zeit" data-mid="${r.mitarbeiter_id}" data-name="${esc(r.name)}" data-datum="${r.datum}" title="Korrigieren">✏️</button>
           <button class="tbl-btn danger" data-action="del-zeit-tag" data-mid="${r.mitarbeiter_id}" data-datum="${r.datum}" title="Tag löschen">🗑️</button>
-        </div></td>`: ''}
-      </tr>`;
+        </div></td>`: ''
+            }
+      </tr > `;
         }).join('');
-        return `<tr style="background:#eff6ff;${gi > 0 ? 'border-top:3px solid #1e40af' : ''}">
+        return `< tr style = "background:#eff6ff;${gi > 0 ? 'border-top:3px solid #1e40af' : ''}" >
       <td colspan="${colN}" style="padding:7px 12px;font-weight:700;font-size:14px;color:#1e40af;border-bottom:1px solid #bfdbfe">👷 ${esc(g.name)}</td>
-    </tr>${maRows}`;
+    </tr > ${maRows} `;
       }).join('');
 
       const sumHTML = Object.values(summen).map(s => {
@@ -4913,8 +4928,8 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const sal = s.ist - s.soll;
         const col = sal > 0 ? '#16a34a' : sal < -15 ? '#dc2626' : '#374151';
         const extras = [s.urlaub > 0 ? `${s.urlaub}× Urlaub` : '', s.ks > 0 ? `${s.ks}× KS` : ''].filter(Boolean).join(' · ');
-        const sollInfo = isGeringfuegig ? `Geringfügig · ${s.soll_stunden}h/Monat` : `${s.beschaeftigung === 'teilzeit' ? 'Teilzeit' : 'Vollzeit'} · ${s.soll_stunden}h/W · ${_wdCount} Arbeitstage`;
-        return `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px">
+        const sollInfo = isGeringfuegig ? `Geringfügig · ${s.soll_stunden} h / Monat` : `${s.beschaeftigung === 'teilzeit' ? 'Teilzeit' : 'Vollzeit'} · ${s.soll_stunden} h / W · ${_wdCount} Arbeitstage`;
+        return `< div style = "background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px" >
       <div style="font-weight:700;font-size:14px">${esc(s.name)} <span style="font-size:11px;font-weight:400;color:#6b7280">${sollInfo}</span></div>
       <div style="display:flex;gap:12px;margin-top:4px;font-size:13px;flex-wrap:wrap">
         <span>Ist: <b>${fMin(s.ist)}</b></span>
@@ -4922,34 +4937,34 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         ${s.sa_so_ft_min > 0 ? `<span style="color:#7c3aed;font-weight:600">🗓️ Sa/So/FT: +${fMin(s.sa_so_ft_min)}</span>` : ''}
         ${extras ? `<span style="color:#6b7280">${extras}</span>` : ''}
       </div>
-    </div>`;
+    </div > `;
       }).join('');
 
       const btnSt = (bg, dis) => dis
-        ? `style="background:#e5e7eb;color:#9ca3af;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:default;padding:0 8px"`
-        : `style="background:${bg};color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 8px"`;
+        ? `style = "background:#e5e7eb;color:#9ca3af;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:default;padding:0 8px"`
+        : `style = "background:${bg};color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 8px"`;
 
-      return `<div class="admin-wrap">
-    <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="zeit-von" value="${von}"></div>
-        <div class="form-group" style="margin:0"><label class="form-label">Bis</label><input type="date" class="form-input" id="zeit-bis" value="${bis}"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:${isManager() ? '1fr auto' : '1fr'};gap:10px;align-items:end">
-        <div class="form-group" style="margin:0"><label class="form-label">Mitarbeiter</label>
-          <select class="form-input" id="zeit-ma">
-            <option value="">Alle Mitarbeiter</option>
-            ${maList.map(m => `<option value="${m.id}" ${maId == m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
-          </select>
+      return `< div class="admin-wrap" >
+      <div class="card" style="margin-bottom:12px"><div class="card-body" style="display:grid;gap:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">Von</label><input type="date" class="form-input" id="zeit-von" value="${von}"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">Bis</label><input type="date" class="form-input" id="zeit-bis" value="${bis}"></div>
         </div>
-        ${isManager() ? `<button id="btn-zeit-manuell" style="background:#7c3aed;color:white;border:none;border-radius:10px;padding:0 14px;height:42px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Manuell</button>` : ''}
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:stretch">
-        <button id="btn-zeit-laden" ${btnSt('#1e40af', false)}>🔍 Laden</button>
-        <button id="btn-zeit-pdf"   ${btnSt('#6b7280', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>🖨️ PDF</button>
-        <button id="btn-zeit-csv"   ${btnSt('#16a34a', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>📥 Excel</button>
-      </div>
-    </div></div>
+        <div style="display:grid;grid-template-columns:${isManager() ? '1fr auto' : '1fr'};gap:10px;align-items:end">
+          <div class="form-group" style="margin:0"><label class="form-label">Mitarbeiter</label>
+            <select class="form-input" id="zeit-ma">
+              <option value="">Alle Mitarbeiter</option>
+              ${maList.map(m => `<option value="${m.id}" ${maId == m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
+            </select>
+          </div>
+          ${isManager() ? `<button id="btn-zeit-manuell" style="background:#7c3aed;color:white;border:none;border-radius:10px;padding:0 14px;height:42px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Manuell</button>` : ''}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:stretch">
+          <button id="btn-zeit-laden" ${btnSt('#1e40af', false)}>🔍 Laden</button>
+          <button id="btn-zeit-pdf" ${btnSt('#6b7280', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>🖨️ PDF</button>
+          <button id="btn-zeit-csv" ${btnSt('#16a34a', !auswertung.length)} ${!auswertung.length ? 'disabled' : ''}>📥 Excel</button>
+        </div>
+      </div></div>
     ${eingestempelt.length > 0 ? `<div class="card" style="margin-bottom:12px;border-left:4px solid #16a34a"><div class="card-body" style="padding:10px 14px">
       <div style="font-weight:700;font-size:13px;color:#16a34a;margin-bottom:6px">🟢 Aktuell eingestempelt (${eingestempelt.length})</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
@@ -4958,7 +4973,8 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           <span style="color:#6b7280;font-size:12px"> seit ${new Date(m.kommen_seit).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}</span>
         </div>`).join('')}
       </div>
-    </div></div>`: ''}
+    </div></div>`: ''
+        }
     ${sumHTML ? `<div style="margin-bottom:12px">${sumHTML}</div>` : ''}
     <div class="card" style="overflow:auto">
       <table class="tbl"><thead><tr>
@@ -4966,10 +4982,10 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <th>Pause</th><th>Ist</th><th>Soll</th><th>Saldo</th>
         ${isManager() ? '<th></th>' : ''}
       </tr></thead>
-      <tbody>${rows || `<tr><td colspan="${isManager() ? 8 : 7}" style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="${isManager() ? 8 : 7}" style="text-align:center;color:var(--text-muted);padding:24px">Zeitraum wählen und Laden klicken</td></tr>`}</tbody>
       </table>
     </div>
-  </div>`;
+  </div > `;
     }
 
     // ── MONATSAUSWERTUNG ─────────────────────────────────────────────────────────
@@ -4983,16 +4999,16 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const monthNames = ['Jänner', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
       let von, bis, periodLabel;
       if (modus === 'jahr') {
-        von = `${year}-01-01`; bis = `${year}-12-31`; periodLabel = String(year);
+        von = `${year}-01-01`; bis = `${year} -12 - 31`; periodLabel = String(year);
       } else {
         von = new Date(year, month, 1).toISOString().split('T')[0];
         bis = new Date(year, month + 1, 0).toISOString().split('T')[0];
-        periodLabel = `${monthNames[month]} ${year}`;
+        periodLabel = `${monthNames[month]} ${year} `;
       }
       let auswertung = [], maList = [], ftRowsM = [];
       try {
         [auswertung, maList, ftRowsM] = await Promise.all([
-          apiGet(`/api/zeit/auswertung?von=${von}&bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''}`),
+          apiGet(`/ api / zeit / auswertung ? von = ${von}& bis=${bis}${maId ? '&mitarbeiter_id=' + maId : ''} `),
           apiGet('/api/mitarbeiter'),
           apiGet('/api/zeit/feiertage').catch(() => [])
         ]);
@@ -5020,14 +5036,14 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const _bLabel = b => b === 'geringfuegig' ? 'Geringfügig' : b === 'teilzeit' ? 'Teilzeit' : 'Vollzeit';
       // Feiertags-Anzeige im Zeitraum
       const _mnFtNames = { 1: 'Neuj.', 6: 'HL3K', 4: 'Ostermo.', 5: 'Staatsfei./Chr.Hi./Pf.Mo./Fron.', 8: 'Mariä H.', 10: 'NF', 11: 'Allerheil.', 12: 'Mariä E./Christ/Stef.' };
-      const _ftHinweis = _ftInPeriod.length ? `<div style="font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:6px 10px;margin-bottom:10px;color:#15803d">🎉 Feiertage im Zeitraum: ${_ftInPeriod.map(f => `<b>${fDate(f.datum)}</b>${f.name ? ` (${esc(f.name)})` : ''}`).join(', ')}</div>` : '';
+      const _ftHinweis = _ftInPeriod.length ? `< div style = "font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:6px 10px;margin-bottom:10px;color:#15803d" >🎉 Feiertage im Zeitraum: ${_ftInPeriod.map(f => `<b>${fDate(f.datum)}</b>${f.name ? ` (${esc(f.name)})` : ''}`).join(', ')}</div > ` : '';
       const summaryHTML = Object.values(byMa).map(ma => {
         const sal = ma.ist - ma.soll;
         const salCol = sal >= 0 ? '#16a34a' : '#dc2626';
         const extras = [ma.urlaub > 0 ? `${ma.urlaub}× Urlaub` : '', ma.ks > 0 ? `${ma.ks}× Krankenstand` : ''].filter(Boolean).join(' · ');
         const isGf = ma.beschaeftigung === 'geringfuegig';
-        const sollInfo = isGf ? `Geringfügig · ${ma.soll_stunden}h/Monat` : `${_bLabel(ma.beschaeftigung)} · ${ma.soll_stunden}h/Woche · ${_wdCountM} Arbeitstage`;
-        return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px">
+        const sollInfo = isGf ? `Geringfügig · ${ma.soll_stunden} h / Monat` : `${_bLabel(ma.beschaeftigung)} · ${ma.soll_stunden} h / Woche · ${_wdCountM} Arbeitstage`;
+        return `< div style = "background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px" >
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;margin-bottom:6px">
         <div style="font-weight:700;font-size:15px">${esc(ma.name)}</div>
         <div style="font-size:12px;color:var(--text-muted)">${sollInfo}</div>
@@ -5038,7 +5054,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         ${ma.sa_so_ft_min > 0 ? `<span style="color:#7c3aed;font-weight:600">🗓️ Sa/So/FT: +${fMin(ma.sa_so_ft_min)}</span>` : ''}
         ${extras ? `<span style="color:var(--text-muted)">${extras}</span>` : ''}
       </div>
-    </div>`;
+    </div > `;
       }).join('');
       const detailHTML = Object.values(byMa).map(ma => {
         const sal = ma.ist - ma.soll;
@@ -5053,11 +5069,11 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           let typL;
           if (r.urlaub) typL = '🏖️ Urlaub';
           else if (r.krankenstand) typL = '🤒 Krankenstand';
-          else if (isFT) { const fn = _ftNameMapML.get(r.datum) || 'Feiertag'; typL = `<span style="color:#15803d;font-weight:600">🎉</span>${r.kommen ? ` <span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'}`; }
-          else if (dow === 6) typL = `${r.kommen ? `<span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'}`;
-          else if (dow === 0) typL = `${r.kommen ? `<span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'}`;
+          else if (isFT) { const fn = _ftNameMapML.get(r.datum) || 'Feiertag'; typL = `< span style = "color:#15803d;font-weight:600" >🎉</span > ${r.kommen ? ` <span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `; }
+          else if (dow === 6) typL = `${r.kommen ? `<span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `;
+          else if (dow === 0) typL = `${r.kommen ? `<span style="font-weight:700">${fUhr(r.kommen)}</span>` : '<span style="color:#6b7280"> – kein Eintrag</span>'} `;
           else typL = fUhr(r.kommen) || '–';
-          return `<tr style="${rowBg}">
+          return `< tr style = "${rowBg}" >
         <td style="white-space:nowrap">${fDate(r.datum)} ${isFT ? '<span style="font-weight:700;color:#15803d">(FT)</span>' : dow === 6 ? '<span style="font-weight:700;color:#92400e">(Sa)</span>' : dow === 0 ? '<span style="font-weight:700;color:#c2410c">(So)</span>' : ''}</td>
         <td>${typL}</td>
         <td>${r.urlaub || r.krankenstand ? '–' : (isWE || isFT) ? (r.netto_minuten > 0 ? fUhr(r.gehen) || '–' : '–') : r.gehen ? fUhr(r.gehen) : '<span style="color:#16a34a;font-weight:700">läuft</span>'}</td>
@@ -5065,8 +5081,8 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <td style="font-weight:700${r.netto_minuten > 0 && (isWE || isFT) ? ';color:#7c3aed' : ''}">${fMin(r.netto_minuten)}</td>
         <td style="font-weight:700;color:${(isWE || isFT) ? '#6b7280' : rsCol}">${(isWE || isFT) ? '–' : (rs >= 0 ? '+' : '-') + fMin(Math.abs(rs))}</td>
         ${r.notiz ? `<td style="font-size:12px;color:var(--text-muted)">${esc(r.notiz)}</td>` : '<td></td>'}
-        <td><button class="tbl-btn" data-action="monat-korrigier" data-mid="${ma.mitarbeiter_id}" data-name="${esc(ma.name)}" data-datum="${r.datum}" title="Buchungssätze bearbeiten / löschen">✏️</button></td>
-      </tr>`;
+    <td><button class="tbl-btn" data-action="monat-korrigier" data-mid="${ma.mitarbeiter_id}" data-name="${esc(ma.name)}" data-datum="${r.datum}" title="Buchungssätze bearbeiten / löschen">✏️</button></td>
+      </tr > `;
         }).join('');
         // Sa/So/Feiertag Arbeit
         const ftRows2 = ma.rows.filter(r => r.ist_wochenende || r.ist_feiertag).filter(r => r.netto_minuten > 0);
@@ -5074,9 +5090,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const ftRowsHTML = ftRows2.map(r => {
           const dow = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(r.datum).getDay()];
           const ftName = _ftNameMapM.get(r.datum);
-          const typ = r.ist_feiertag ? (ftName ? `🎉 ${ftName}` : '🎉 Feiertag') : (new Date(r.datum).getDay() === 6 ? '🟡 Samstag' : '🔵 Sonntag');
+          const typ = r.ist_feiertag ? (ftName ? `🎉 ${ftName} ` : '🎉 Feiertag') : (new Date(r.datum).getDay() === 6 ? '🟡 Samstag' : '🔵 Sonntag');
           const rowBgM = r.ist_feiertag ? 'background:#f0fdf4;border-left:3px solid #16a34a' : new Date(r.datum).getDay() === 6 ? 'background:#fffbeb;border-left:3px solid #f59e0b' : 'background:#fff7ed;border-left:3px solid #f97316';
-          return `<tr style="${rowBgM}">
+          return `< tr style = "${rowBgM}" >
         <td style="white-space:nowrap;font-size:12px;color:#7c3aed;font-weight:600">${fDate(r.datum)} ${dow === 'Sa' ? '(Sa)' : dow === 'So' ? '(So)' : '(FT)'}</td>
         <td style="color:#7c3aed">${typ}</td>
         <td>${fUhr(r.kommen) || '–'}</td>
@@ -5084,9 +5100,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         <td>${r.pause_minuten > 0 ? r.pause_minuten + ' min' : '–'}</td>
         <td style="font-weight:700;color:#7c3aed">${fMin(r.netto_minuten)}</td>
         <td><button class="tbl-btn" data-action="monat-korrigier" data-mid="${ma.mitarbeiter_id}" data-name="${esc(ma.name)}" data-datum="${r.datum}" title="Buchungssätze bearbeiten">✏️</button></td>
-      </tr>`;
+      </tr > `;
         }).join('');
-        return `<div style="margin-bottom:20px">
+        return `< div style = "margin-bottom:20px" >
       <div style="font-weight:700;font-size:15px;padding:10px 0 6px;border-bottom:2px solid var(--primary);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
         <span>${esc(ma.name)}</span>
         ${ma.sa_so_ft_min > 0 ? `<span style="font-size:12px;font-weight:400;background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:10px">🗓️ Sa/So/FT: +${fMin(ma.sa_so_ft_min)}</span>` : ''}
@@ -5108,73 +5124,74 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           <tbody>${ftRowsHTML}</tbody>
           <tfoot><tr style="font-weight:700;background:#faf5ff"><td colspan="5" style="padding:8px">Gesamt Sa/So/FT</td><td style="padding:8px;color:#7c3aed">${fMin(ma.sa_so_ft_min)}</td><td></td></tr></tfoot>
         </table></div>
-      </div>`: ''}
-    </div>`;
+      </div>`: ''
+          }
+    </div > `;
       }).join('');
       const hasData = Object.keys(byMa).length > 0;
       const btnSt = (bg, dis) => dis
-        ? `style="background:#e5e7eb;color:#9ca3af;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:default;padding:0 14px"`
-        : `style="background:${bg};color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 14px"`;
+        ? `style = "background:#e5e7eb;color:#9ca3af;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:default;padding:0 14px"`
+        : `style = "background:${bg};color:white;height:42px;font-weight:600;border:none;border-radius:10px;font-size:14px;cursor:pointer;padding:0 14px"`;
       const navW = modus === 'jahr' ? '120px' : '170px';
       // Archiv: vergangene Monate
       let zeitMonate = [];
       try { zeitMonate = await apiGet('/api/zeit/monate'); } catch (e) { }
-      const _nowMnKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const _nowMnKey = `${now.getFullYear()} -${String(now.getMonth() + 1).padStart(2, '0')} `;
       const archivZeitMonate = zeitMonate.filter(m => m.monat < _nowMnKey);
       const archivZeitByYear = {};
       for (const m of archivZeitMonate) { const y = m.monat.slice(0, 4); if (!archivZeitByYear[y]) archivZeitByYear[y] = []; archivZeitByYear[y].push(m); }
-      let openZYears = JSON.parse(localStorage.getItem(`zeitArchivYearOpen_${user?.id || 'x'}`) || '[]');
+      let openZYears = JSON.parse(localStorage.getItem(`zeitArchivYearOpen_${user?.id || 'x'} `) || '[]');
       const archivZeitHTML = Object.keys(archivZeitByYear).sort((a, b) => b.localeCompare(a)).map(y => {
         const isYearOpen = openZYears.includes(y);
         const monthsHTML = archivZeitByYear[y].sort((a, b) => b.monat.localeCompare(a.monat)).map(m => {
           const mn = parseInt(m.monat.slice(5, 7), 10) - 1;
           const yr = parseInt(m.monat.slice(0, 4));
-          return `<div style="margin-bottom:3px;margin-left:12px">
-        <button class="btn-ghost zeit-archiv-monat" data-month="${mn}" data-year="${yr}" style="width:100%;text-align:left;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600">
-          📅 ${monthNames[mn]} ${yr} <span style="font-weight:400;color:var(--text-muted)">(${m.ma_count} MA)</span>
-        </button>
-      </div>`;
+          return `< div style = "margin-bottom:3px;margin-left:12px" >
+      <button class="btn-ghost zeit-archiv-monat" data-month="${mn}" data-year="${yr}" style="width:100%;text-align:left;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600">
+        📅 ${monthNames[mn]} ${yr} <span style="font-weight:400;color:var(--text-muted)">(${m.ma_count} MA)</span>
+      </button>
+      </div > `;
         }).join('');
-        return `<div style="margin-bottom:10px">
+        return `< div style = "margin-bottom:10px" >
       <div class="zeit-archiv-year-toggle" data-year="${y}" data-open="${isYearOpen ? '1' : '0'}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--bg);border:2px solid var(--border);border-radius:10px;padding:10px 14px;user-select:none">
         <span style="font-weight:700;font-size:15px">📆 ${y}</span>
         <span style="font-size:20px">${isYearOpen ? '▾' : '▸'}</span>
       </div>
       <div id="zeit-archiv-year-${y}" style="display:${isYearOpen ? 'block' : 'none'};padding-top:6px">${monthsHTML}</div>
-    </div>`;
+    </div > `;
       }).join('');
-      return `<div class="admin-wrap">
-    <div class="card" style="margin-bottom:12px"><div class="card-body">
-      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px">
-        <button id="btn-modus-monat" style="background:${modus === 'monat' ? '#1e40af' : 'var(--bg)'};color:${modus === 'monat' ? 'white' : 'var(--text)'};border:1px solid ${modus === 'monat' ? '#1e40af' : 'var(--border)'};border-radius:8px;padding:6px 18px;font-size:14px;font-weight:600;cursor:pointer">📅 Monat</button>
-        <button id="btn-modus-jahr" style="background:${modus === 'jahr' ? '#1e40af' : 'var(--bg)'};color:${modus === 'jahr' ? 'white' : 'var(--text)'};border:1px solid ${modus === 'jahr' ? '#1e40af' : 'var(--border)'};border-radius:8px;padding:6px 18px;font-size:14px;font-weight:600;cursor:pointer">📆 Jahr</button>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px">
-        <button id="btn-monat-prev" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 18px;font-size:20px;cursor:pointer;line-height:1">‹</button>
-        <span style="font-size:18px;font-weight:700;min-width:${navW};text-align:center">${periodLabel}</span>
-        <button id="btn-monat-next" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 18px;font-size:20px;cursor:pointer;line-height:1">›</button>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <select class="form-input" id="sel-monat-ma" style="flex:1">
-          <option value="">Alle Mitarbeiter</option>
-          ${maList.map(m => `<option value="${m.id}" ${maId == m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
-        </select>
-        <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">
-          <input type="checkbox" id="chk-monat-einzel" ${einzel ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary)">
-          Einzelauswertung
-        </label>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button id="btn-monat-pdf" ${btnSt('#6b7280', !hasData)} ${!hasData ? 'disabled' : ''}>🖨️ PDF</button>
-        <button id="btn-monat-csv" ${btnSt('#16a34a', !hasData)} ${!hasData ? 'disabled' : ''}>📥 Excel</button>
-      </div>
-      ${einzel ? `<div style="font-size:12px;color:#7c3aed;margin-top:8px;text-align:center">✓ PDF: jeder Mitarbeiter auf eigener Seite</div>` : ''}
-    </div></div>
+      return `< div class="admin-wrap" >
+      <div class="card" style="margin-bottom:12px"><div class="card-body">
+        <div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px">
+          <button id="btn-modus-monat" style="background:${modus === 'monat' ? '#1e40af' : 'var(--bg)'};color:${modus === 'monat' ? 'white' : 'var(--text)'};border:1px solid ${modus === 'monat' ? '#1e40af' : 'var(--border)'};border-radius:8px;padding:6px 18px;font-size:14px;font-weight:600;cursor:pointer">📅 Monat</button>
+          <button id="btn-modus-jahr" style="background:${modus === 'jahr' ? '#1e40af' : 'var(--bg)'};color:${modus === 'jahr' ? 'white' : 'var(--text)'};border:1px solid ${modus === 'jahr' ? '#1e40af' : 'var(--border)'};border-radius:8px;padding:6px 18px;font-size:14px;font-weight:600;cursor:pointer">📆 Jahr</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px">
+          <button id="btn-monat-prev" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 18px;font-size:20px;cursor:pointer;line-height:1">‹</button>
+          <span style="font-size:18px;font-weight:700;min-width:${navW};text-align:center">${periodLabel}</span>
+          <button id="btn-monat-next" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 18px;font-size:20px;cursor:pointer;line-height:1">›</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <select class="form-input" id="sel-monat-ma" style="flex:1">
+            <option value="">Alle Mitarbeiter</option>
+            ${maList.map(m => `<option value="${m.id}" ${maId == m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">
+            <input type="checkbox" id="chk-monat-einzel" ${einzel ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary)">
+              Einzelauswertung
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button id="btn-monat-pdf" ${btnSt('#6b7280', !hasData)} ${!hasData ? 'disabled' : ''}>🖨️ PDF</button>
+          <button id="btn-monat-csv" ${btnSt('#16a34a', !hasData)} ${!hasData ? 'disabled' : ''}>📥 Excel</button>
+        </div>
+        ${einzel ? `<div style="font-size:12px;color:#7c3aed;margin-top:8px;text-align:center">✓ PDF: jeder Mitarbeiter auf eigener Seite</div>` : ''}
+      </div></div>
     ${_ftHinweis}
     ${summaryHTML ? `<div style="margin-bottom:12px">${summaryHTML}` + `</div>` : `<div style="text-align:center;padding:32px;color:var(--text-muted)">Keine Daten für ${periodLabel}</div>`}
     ${detailHTML ? `<div class="card"><div class="card-body">${detailHTML}</div></div>` : ''}
     ${archivZeitHTML ? `<div style="margin-top:24px;font-weight:700;font-size:15px;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;gap:8px"><span>🗄️ Archiv</span><div style="flex:1;height:1px;background:var(--border)"></div></div><div id="zeit-archiv">${archivZeitHTML}</div>` : ''}
-  </div>`;
+  </div > `;
     }
 
     // ── ZEITERFASSUNG KORREKTUR MODAL ────────────────────────────────────────────
@@ -5188,21 +5205,21 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const renderKorrektur = async (curDatum) => {
         let eintraege = [];
         try {
-          const r = await apiGet(`/api/zeit/auswertung?von=${curDatum}&bis=${curDatum}&mitarbeiter_id=${maId}`);
+          const r = await apiGet(`/ api / zeit / auswertung ? von = ${curDatum}& bis=${curDatum}& mitarbeiter_id=${maId} `);
           if (r.length > 0) eintraege = r[0].eintraege || [];
         } catch (e) { }
         const byTyp = {}; eintraege.forEach(e => byTyp[e.typ] = e);
 
         const delBtns = eintraege.length > 0 ? `
-      <div style="border-top:1px solid #e5e7eb;padding-top:10px;margin-top:6px">
+      < div style = "border-top:1px solid #e5e7eb;padding-top:10px;margin-top:6px" >
         <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:6px">Einzelne Buchungssätze löschen:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           ${eintraege.map(e => `<button class="tbl-btn danger" data-action="zk-del" data-id="${e.id}" data-datum="${curDatum}" style="font-size:12px">${tL[e.typ] || e.typ} ${getTime(e)}${e.geaendert_von_name ? ` ✏️` : ''} 🗑️</button>`).join('')}
         </div>
-      </div>`: '';
+      </div > `: '';
 
         showModal(`
-      <button class="modal-close" id="modal-close">×</button>
+      < button class="modal-close" id = "modal-close" >×</button >
       <div class="modal-title">✏️ Korrektur</div>
       <div style="font-size:13px;color:#6b7280;margin-bottom:14px">${esc(name)}</div>
       <div class="form-group"><label class="form-label">Datum</label>
@@ -5220,16 +5237,16 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <div class="form-group"><label class="form-label">Grund / Notiz</label>
         <input class="form-input" id="zk-notiz" placeholder="optional" value="${esc(eintraege.find(e => e.notiz)?.notiz || '')}"></div>
       ${delBtns}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px">
-        <button class="btn" id="btn-zk-cancel" style="background:#e5e7eb;color:#374151">Abbrechen</button>
-        <button class="btn btn-primary" id="btn-zk-save">💾 Speichern</button>
-      </div>`);
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px">
+      <button class="btn" id="btn-zk-cancel" style="background:#e5e7eb;color:#374151">Abbrechen</button>
+      <button class="btn btn-primary" id="btn-zk-save">💾 Speichern</button>
+    </div>`);
 
         document.querySelectorAll('[data-action="zk-del"]').forEach(btn => {
           btn.addEventListener('click', async () => {
             if (!confirm('Buchungssatz löschen?')) return;
             try {
-              await apiDel(`/api/zeit/${btn.dataset.id}`); toast('Gelöscht', 'ok');
+              await apiDel(`/ api / zeit / ${btn.dataset.id} `); toast('Gelöscht', 'ok');
               await renderKorrektur(document.getElementById('zk-datum')?.value || curDatum);
             }
             catch (e) { toast(e.message, 'err'); }
@@ -5253,9 +5270,9 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           try {
             for (const { typ, val } of typen) {
               const ex = byTyp[typ];
-              if (val && ex) await apiPut(`/api/zeit/korrigieren/${ex.id}`, { zeitpunkt: mkZp(val), notiz });
+              if (val && ex) await apiPut(`/ api / zeit / korrigieren / ${ex.id} `, { zeitpunkt: mkZp(val), notiz });
               else if (val && !ex) await apiPost('/api/zeit/eintragen', { mitarbeiter_id: mid, typ, zeitpunkt: mkZp(val), notiz });
-              else if (!val && ex) await apiDel(`/api/zeit/${ex.id}`);
+              else if (!val && ex) await apiDel(`/ api / zeit / ${ex.id} `);
             }
             toast('✅ Gespeichert', 'ok'); closeModal();
             const c = document.getElementById('admin-tab-content');
@@ -5269,24 +5286,24 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     // Manuell-Eintrag Modal (Manager: MA + Datum frei wählbar) – mit Tagesablauf-Modus
     async function modalZeitManuell(maList) {
       const typOpts = ['kommen', 'gehen', 'pause_start', 'pause_ende', 'urlaub', 'krankenstand']
-        .map(v => `<option value="${v}">${{ kommen: '🟢 Kommen', gehen: '🔴 Gehen', pause_start: '⏸ Pause Start', pause_ende: '▶️ Pause Ende', urlaub: '🏖️ Urlaub', krankenstand: '🤒 Krankenstand' }[v]}</option>`).join('');
-      const maOpts = maList.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+        .map(v => `< option value = "${v}" > ${{ kommen: '🟢 Kommen', gehen: '🔴 Gehen', pause_start: '⏸ Pause Start', pause_ende: '▶️ Pause Ende', urlaub: '🏖️ Urlaub', krankenstand: '🤒 Krankenstand' }[v]}</option > `).join('');
+      const maOpts = maList.map(m => `< option value = "${m.id}" > ${esc(m.name)}</option > `).join('');
       const today = new Date().toISOString().split('T')[0];
       const tabStyle = (active) => active
-        ? `style="background:#1e40af;color:white;border:none;border-radius:8px 8px 0 0;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer"`
-        : `style="background:var(--card);color:var(--text);border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;padding:8px 18px;font-size:14px;font-weight:600;cursor:pointer"`;
+        ? `style = "background:#1e40af;color:white;border:none;border-radius:8px 8px 0 0;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer"`
+        : `style = "background:var(--card);color:var(--text);border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;padding:8px 18px;font-size:14px;font-weight:600;cursor:pointer"`;
 
       const renderModal = (modus) => {
         const einzelContent = `
-      <div class="form-group"><label class="form-label">Typ</label>
-        <select class="form-input" id="zm-typ">${typOpts}</select></div>
+      < div class="form-group" ><label class="form-label">Typ</label>
+        <select class="form-input" id="zm-typ">${typOpts}</select></div >
       <div class="form-group"><label class="form-label">Uhrzeit</label>
         <input type="time" class="form-input" id="zm-zeit" value="08:00"></div>
       <div class="form-group"><label class="form-label">Notiz (optional)</label>
         <input class="form-input" id="zm-notiz" placeholder="Grund der Nacherfassung"></div>
       <button class="btn btn-primary" id="btn-zm-save" style="width:100%">Eintragen</button>`;
         const tagContent = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      < div style = "display:grid;grid-template-columns:1fr 1fr;gap:8px" >
         <div class="form-group" style="margin:0"><label class="form-label">🟢 Kommen *</label>
           <input type="time" class="form-input" id="zm-kommen" value="08:00"></div>
         <div class="form-group" style="margin:0"><label class="form-label">🔴 Gehen</label>
@@ -5295,12 +5312,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           <input type="time" class="form-input" id="zm-pausestart" placeholder="optional"></div>
         <div class="form-group" style="margin:0"><label class="form-label">▶️ Pause Ende</label>
           <input type="time" class="form-input" id="zm-pauseende" placeholder="optional"></div>
-      </div>
+      </div >
       <div class="form-group"><label class="form-label">Notiz (optional)</label>
         <input class="form-input" id="zm-notiz-tag" placeholder="Grund der Nacherfassung"></div>
       <button class="btn btn-primary" id="btn-zm-tag-save" style="width:100%">💾 Tagesablauf speichern</button>`;
         return `
-      <button class="modal-close" id="modal-close">×</button>
+      < button class="modal-close" id = "modal-close" >×</button >
       <div class="modal-title">➕ Manuell eintragen</div>
       <div class="form-group"><label class="form-label">Mitarbeiter</label>
         <select class="form-input" id="zm-ma">${maOpts}</select></div>
@@ -5391,7 +5408,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const bis = new Date(year, month + 1, 0, 23, 59, 59).toISOString().split('T')[0];
 
       let events = [];
-      try { events = await apiGet(`/api/kalender/events?von=${von}&bis=${bis}`); } catch (e) { }
+      try { events = await apiGet(`/ api / kalender / events ? von = ${von}& bis=${bis} `); } catch (e) { }
 
       // Tages-Index
       const byDay = {};
@@ -5409,12 +5426,12 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       const startOffset = (firstDay.getDay() + 6) % 7;
       const todayStr = now.toLocaleDateString('sv-SE');
 
-      let gridHTML = dayNames.map(d => `<div class="kal-head">${d}</div>`).join('');
+      let gridHTML = dayNames.map(d => `< div class="kal-head" > ${d}</div > `).join('');
 
       // Füllzellen Anfang
       for (let i = 0; i < startOffset; i++) {
         const pd = new Date(year, month, 1 - (startOffset - i));
-        gridHTML += `<div class="kal-day other-month"><div class="kal-day-num">${pd.getDate()}</div></div>`;
+        gridHTML += `< div class="kal-day other-month" > <div class="kal-day-num">${pd.getDate()}</div></div > `;
       }
 
       // Monatstage
@@ -5422,21 +5439,21 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const dateStr = new Date(year, month, day).toLocaleDateString('sv-SE');
         const dayEvs = byDay[dateStr] || [];
         const isToday = dateStr === todayStr;
-        const pills = dayEvs.slice(0, 2).map(ev => `<div class="kal-pill" title="${esc(ev.titel)}">${esc(ev.titel)}</div>`).join('');
-        const more = dayEvs.length > 2 ? `<div style="font-size:9px;color:var(--text-muted)">+${dayEvs.length - 2}</div>` : '';
-        gridHTML += `<div class="kal-day${isToday ? ' today' : ''}${dayEvs.length ? ' has-events' : ''}" data-kal-date="${dateStr}">
+        const pills = dayEvs.slice(0, 2).map(ev => `< div class="kal-pill" title = "${esc(ev.titel)}" > ${esc(ev.titel)}</div > `).join('');
+        const more = dayEvs.length > 2 ? `< div style = "font-size:9px;color:var(--text-muted)" > +${dayEvs.length - 2}</div > ` : '';
+        gridHTML += `< div class="kal-day${isToday ? ' today' : ''}${dayEvs.length ? ' has-events' : ''}" data - kal - date="${dateStr}" >
       <div class="kal-day-num">${day}</div>${pills}${more}
-    </div>`;
+    </div > `;
       }
 
       // Füllzellen Ende
       const totalCells = startOffset + lastDay.getDate();
       const rest = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-      for (let i = 1; i <= rest; i++)gridHTML += `<div class="kal-day other-month"><div class="kal-day-num">${i}</div></div>`;
+      for (let i = 1; i <= rest; i++)gridHTML += `< div class="kal-day other-month" > <div class="kal-day-num">${i}</div></div > `;
 
-      const syncBtn = isManager() ? `<button class="btn-ghost" id="btn-kal-sync" style="font-size:13px;padding:6px 10px">↺ Sync</button>` : '';
+      const syncBtn = isManager() ? `< button class="btn-ghost" id = "btn-kal-sync" style = "font-size:13px;padding:6px 10px" >↺ Sync</button > ` : '';
 
-      return `<div class="content">
+      return `< div class="content" >
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <button class="btn-ghost" id="btn-kal-prev" style="font-size:20px;padding:4px 12px">‹</button>
       <div style="flex:1;text-align:center;font-size:16px;font-weight:700">${monthNames[month]} ${year}</div>
@@ -5445,7 +5462,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     </div>
     <div class="card" style="padding:8px"><div class="kal-grid">${gridHTML}</div></div>
     <div id="kal-detail" style="margin-top:12px"></div>
-  </div>`;
+  </div > `;
     }
 
     async function renderTabKalender() {
@@ -5453,7 +5470,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       try { settings = await apiGet('/api/kalender/settings'); } catch (e) { }
       const letzterSync = settings.letzter_sync ? new Date(settings.letzter_sync).toLocaleString('de-AT') : 'Noch nie';
 
-      return `<div class="admin-wrap">
+      return `< div class="admin-wrap" >
     <div class="card" style="margin-bottom:16px"><div class="card-body">
       <div style="font-weight:700;font-size:15px;margin-bottom:14px">📅 Exchange Kalender (EWS + Active Directory)</div>
       <div class="form-group"><label class="form-label">Exchange Server URL</label>
@@ -5472,7 +5489,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       <button class="btn btn-outline" id="btn-kal-sync-now">↺ Jetzt synchronisieren</button>
       <div id="kal-sync-result" style="margin-top:10px;font-size:13px"></div>
     </div></div>
-  </div>`;
+  </div > `;
     }
 
     // MULTI-VISIT HELPER -> Berechnet die kumulierten Zeiten aus einsatz_history
@@ -5537,8 +5554,8 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const eurStd = maStd > 0 && (gut + sv + rapport) > 0 ? (netto / maStd).toFixed(2) : '';
         sumFahrtMin += fahrtMin; sumArbMin += arbMin; sumKm += totKm; sumFk += fk; sumGut += gut; sumSv += sv; sumRapp += rapport; sumMaStd += maStd;
 
-        let histStr = sessions.map((s, i) => `V${i + 1} (${fDate(s.datum)}): ${s.arbeitszeit_min}m Arb, ${parseFloat(s.km_hin || 0) + parseFloat(s.km_zurueck || 0)}km`).join(' | ');
-        if (sessions.length > 0) histStr += ` | V${sessions.length + 1} (${fDate(p.abgeschlossen_am || p.erstellt_am)}): ${(parseInt(p.arbeitszeit_min) || 0) + (parseInt(p.arbeitszeit_manuell_min) || 0)}m Arb, ${(parseFloat(p.km_hin) || 0) + (parseFloat(p.km_zurueck) || 0)}km`;
+        let histStr = sessions.map((s, i) => `V${i + 1} (${fDate(s.datum)}): ${s.arbeitszeit_min}m Arb, ${parseFloat(s.km_hin || 0) + parseFloat(s.km_zurueck || 0)} km`).join(' | ');
+        if (sessions.length > 0) histStr += ` | V${sessions.length + 1} (${fDate(p.abgeschlossen_am || p.erstellt_am)}): ${(parseInt(p.arbeitszeit_min) || 0) + (parseInt(p.arbeitszeit_manuell_min) || 0)}m Arb, ${(parseFloat(p.km_hin) || 0) + (parseFloat(p.km_zurueck) || 0)} km`;
         const besonderheitenStr = p.besonderheiten ? p.besonderheiten + (histStr ? ' [' + histStr + ']' : '') : histStr;
 
         return [fDate(p.erstellt_am), p.auftraggeber_name || '', p.auftragsnummer || '', anzahl, p.status || '',
