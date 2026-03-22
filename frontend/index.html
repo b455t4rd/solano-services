@@ -1974,6 +1974,7 @@
         case 'zeit': return pageZeit();
         case 'privtodos': return pagePrivTodos();
         case 'bestellungen': return pageBestellungen();
+        case 'bestellungen-bericht': return pageBestellungenBericht();
         case 'projekte': return pageProjekte();
         case 'kalender': return pageKalender();
         default: return `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Seite nicht gefunden</div></div>`;
@@ -2393,28 +2394,202 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     }
 
     async function renderTabBestellverwaltung() {
-      let kategorien = [], eintraege = [], stammdaten = [];
+      let kategorien = [], eintraege = [], stammdaten = [], artikelKats = [];
       try {
-        [kategorien, eintraege, stammdaten] = await Promise.all([
+        [kategorien, eintraege, stammdaten, artikelKats] = await Promise.all([
           apiGet('/api/bestellungen/kategorien'),
           apiGet('/api/bestellungen/eintraege'),
           apiGet('/api/bestellungen/stammdaten'),
+          apiGet('/api/bestellungen/artikel-kategorien'),
         ]);
       } catch (e) { }
 
       const fmtDate = d => d ? new Date(d).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      const offene = eintraege.filter(e => !e.bestellt).length;
 
-      // Alle Einträge nach Kategorie gruppiert
+      // ── EINTRÄGE grouped by bestell-kategorie ──
       const katMap = {};
       kategorien.forEach(k => { katMap[k.id] = k; });
       const grouped = {};
       eintraege.forEach(e => {
-        const katName = (e.kategorie_id && katMap[e.kategorie_id]) ? katMap[e.kategorie_id].name : 'Ohne Kategorie';
-        if (!grouped[katName]) grouped[katName] = [];
-        grouped[katName].push(e);
+        const key = e.kategorie_id || '__none__';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(e);
       });
 
-      const eintraegeHtml = Object.entries(grouped).map(([kat, items]) => `
+      const eintragRows = Object.entries(grouped).map(([katId, items]) => {
+        const k = katId !== '__none__' ? katMap[parseInt(katId)] : null;
+        return `
+          <div style="margin-bottom:12px">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px">
+              ${k ? k.icon + ' ' + esc(k.name) : 'Ohne Kategorie'}
+            </div>
+            ${items.map(e => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-light,var(--border))">
+              <input type="checkbox" class="adm-bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer;accent-color:#16a34a;flex-shrink:0">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600">${esc(e.bezeichnung)}
+                  <span style="font-weight:400;color:var(--text-muted)">${e.menge ? '× ' + esc(e.menge) + (e.einheit ? ' ' + esc(e.einheit) : '') : ''}</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted)">${e.lieferant ? esc(e.lieferant) + ' · ' : ''}von ${esc(e.erstellt_von_name || '?')} · ${fmtDate(e.erstellt_am)}
+                  ${e.bestellt ? ` · <span style="color:#15803d">✅ ${esc(e.bestellt_von_name || '')}</span>` : `<span style="color:#92400e"> · ⏳ Offen</span>`}
+                </div>
+              </div>
+              <button class="tbl-btn danger adm-bestell-del" data-id="${e.id}" style="font-size:11px;margin:0;padding:3px 8px;flex-shrink:0">🗑️</button>
+            </div>`).join('')}
+          </div>`;
+      }).join('') || `<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine Einträge</div>`;
+
+      // ── STAMMDATEN grouped by artikel-kategorie ──
+      const akMap = {};
+      artikelKats.forEach(k => { akMap[k.id] = k; });
+      const sdGrouped = {};
+      stammdaten.forEach(s => {
+        const key = s.artikel_kategorie_id ? esc(s.artikel_kategorie_name || akMap[s.artikel_kategorie_id]?.name || 'Sonstige') : 'Ohne Kategorie';
+        if (!sdGrouped[key]) sdGrouped[key] = [];
+        sdGrouped[key].push(s);
+      });
+
+      const sdAccordion = Object.entries(sdGrouped).map(([grp, items]) => {
+        const safeId = grp.replace(/\W/g, '_');
+        return `
+          <details style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
+            <summary style="padding:10px 12px;cursor:pointer;font-weight:700;font-size:13px;list-style:none;display:flex;align-items:center;justify-content:space-between">
+              📁 ${grp} <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${items.length} Artikel</span>
+            </summary>
+            <div style="padding:8px 12px">
+              ${items.map(s => `
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:600">${esc(s.name)}
+                    ${s.scancode ? `<span style="background:var(--card-bg);border:1px solid var(--border);border-radius:4px;font-size:10px;padding:1px 4px;margin-left:4px;font-family:monospace">${esc(s.scancode)}</span>` : ''}
+                  </div>
+                  <div style="font-size:11px;color:var(--text-muted)">
+                    ${s.lieferant ? esc(s.lieferant) + ' · ' : ''}${s.einheit ? esc(s.einheit) + ' · ' : ''}
+                    ${s.preis_netto ? '€' + s.preis_netto + ' netto · ' : ''}${s.preis_brutto ? '€' + s.preis_brutto + ' brutto · ' : ''}
+                    ${[s.sparte_winterdienst && '❄️', s.sparte_gebaeudereinigung && '🧹', s.sparte_gruenpflege && '🌿', s.sparte_projekte && '🔨'].filter(Boolean).join(' ')}
+                  </div>
+                </div>
+                <button class="tbl-btn adm-sd-edit" data-id="${s.id}" style="font-size:11px;margin:0;padding:3px 8px">✏️</button>
+                <button class="tbl-btn danger adm-sd-del" data-id="${s.id}" style="font-size:11px;margin:0;padding:3px 8px">🗑️</button>
+              </div>`).join('')}
+            </div>
+          </details>`;
+      }).join('');
+
+      // Options for selects
+      const akOpts = artikelKats.filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
+      const bkOpts = kategorien.filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${esc(k.name)}</option>`).join('');
+
+      return `<div class="admin-wrap">
+        <div style="font-size:16px;font-weight:800;margin-bottom:16px">🛒 Bestellverwaltung</div>
+
+        <!-- Einträge -->
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:14px;font-weight:700">📋 Einträge <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${offene} offen</span></div>
+            <button class="btn btn-primary btn-sm" onclick="go('bestellungen-bericht')">📋 Bericht öffnen</button>
+          </div>
+          ${eintragRows}
+        </div>
+
+        <!-- Artikel-Stammdaten -->
+        <div class="card" style="margin-bottom:16px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px">📦 Artikel-Stammdaten</div>
+          <!-- Neuer Artikel -->
+          <details style="border:1px solid var(--primary);border-radius:8px;margin-bottom:12px" id="new-sd-details">
+            <summary style="padding:10px 12px;cursor:pointer;font-weight:700;font-size:13px;color:var(--primary);list-style:none">+ Neuen Artikel anlegen</summary>
+            <div style="padding:12px;border-top:1px solid var(--border)">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+                <input class="form-input" id="new-sd-name" placeholder="Artikelname *" style="grid-column:1/-1">
+                <select class="form-input" id="new-sd-artkat"><option value="">Artikel-Kategorie</option>${akOpts}</select>
+                <select class="form-input" id="new-sd-bestkat"><option value="">Bestell-Tab</option>${bkOpts}</select>
+                <input class="form-input" id="new-sd-lieferant" placeholder="Lieferant (opt.)">
+                <input class="form-input" id="new-sd-einheit" placeholder="Einheit (opt.)">
+                <input class="form-input" id="new-sd-netto" type="number" step="0.01" placeholder="Netto € (opt.)">
+                <input class="form-input" id="new-sd-brutto" type="number" step="0.01" placeholder="Brutto € (opt.)">
+                <input class="form-input" id="new-sd-scancode" placeholder="Scancode (opt.)" style="grid-column:1/-1">
+              </div>
+              <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="new-sd-w"> ❄️ Winterdienst</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="new-sd-g"> 🧹 Gebäudereinigung</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="new-sd-gr"> 🌿 Grünpflege</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="new-sd-p"> 🔨 Projekte</label>
+              </div>
+              <button id="new-sd-btn" class="btn btn-primary btn-sm">+ Artikel anlegen</button>
+            </div>
+          </details>
+          ${sdAccordion || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Keine Stammdaten</div>'}
+        </div>
+
+        <!-- Bestell-Kategorien (Tabs) -->
+        <div class="card" style="margin-bottom:16px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px">🏷️ Bestell-Tabs verwalten</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <input class="form-input" id="new-kat-name" placeholder="Name *" style="max-width:140px">
+            <input class="form-input" id="new-kat-icon" placeholder="Icon" style="max-width:70px">
+            <input class="form-input" id="new-kat-farbe" type="color" value="#6366f1" style="max-width:48px;padding:2px;height:38px">
+            <button id="new-kat-btn" class="btn btn-primary btn-sm">+ Hinzufügen</button>
+          </div>
+          <table class="tbl">
+            <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              ${kategorien.map(k => `<tr>
+                <td>${k.icon} ${esc(k.name)}</td>
+                <td>${k.aktiv ? '<span style="color:#16a34a;font-size:12px">✅ Aktiv</span>' : '<span style="color:#9ca3af;font-size:12px">⏸ Inaktiv</span>'}</td>
+                <td class="tbl-actions">
+                  <button class="tbl-btn adm-kat-toggle" data-id="${k.id}" data-aktiv="${k.aktiv}" style="font-size:12px">${k.aktiv ? 'Deakt.' : 'Aktivieren'}</button>
+                  <button class="tbl-btn danger adm-kat-del" data-id="${k.id}" style="font-size:12px">🗑️</button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Artikel-Kategorien -->
+        <div class="card">
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px">📁 Artikel-Kategorien verwalten</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <input class="form-input" id="new-ak-name" placeholder="Name *" style="max-width:200px">
+            <button id="new-ak-btn" class="btn btn-primary btn-sm">+ Hinzufügen</button>
+          </div>
+          <table class="tbl">
+            <thead><tr><th>Name</th><th></th></tr></thead>
+            <tbody>
+              ${artikelKats.map(k => `<tr>
+                <td style="font-size:13px">${esc(k.name)}</td>
+                <td class="tbl-actions">
+                  <button class="tbl-btn danger adm-ak-del" data-id="${k.id}" style="font-size:12px">🗑️</button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    }
+
+
+    try {
+      [kategorien, eintraege, stammdaten] = await Promise.all([
+        apiGet('/api/bestellungen/kategorien'),
+        apiGet('/api/bestellungen/eintraege'),
+        apiGet('/api/bestellungen/stammdaten'),
+      ]);
+    } catch (e) { }
+
+    const fmtDate = d => d ? new Date(d).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+
+    // Alle Einträge nach Kategorie gruppiert
+    const katMap = {};
+    kategorien.forEach(k => { katMap[k.id] = k; });
+    const grouped = {};
+    eintraege.forEach(e => {
+      const katName = (e.kategorie_id && katMap[e.kategorie_id]) ? katMap[e.kategorie_id].name : 'Ohne Kategorie';
+      if (!grouped[katName]) grouped[katName] = [];
+      grouped[katName].push(e);
+    });
+
+    const eintraegeHtml = Object.entries(grouped).map(([kat, items]) => `
         <div style="font-size:14px;font-weight:800;margin:14px 0 6px;color:var(--primary)">${kat}</div>
         ${items.map(e => `
           <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
@@ -2427,8 +2602,8 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           </div>`).join('')}
       `).join('');
 
-      // Kategorien-Liste
-      const katRows = kategorien.map(k => `
+    // Kategorien-Liste
+    const katRows = kategorien.map(k => `
         <tr>
           <td style="font-size:14px">${k.icon} ${esc(k.name)}</td>
           <td>${k.aktiv ? '<span style="color:#16a34a;font-size:12px">✅ Aktiv</span>' : '<span style="color:#9ca3af;font-size:12px">⏸ Inaktiv</span>'}</td>
@@ -2438,63 +2613,7 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           </td>
         </tr>`).join('');
 
-      // Stammdaten-Liste
-      const sdRows = stammdaten.map(s => `
-        <tr>
-          <td style="font-size:13px;font-weight:600">${esc(s.name)}</td>
-          <td style="font-size:12px;color:var(--text-muted)">${s.kategorie_name ? esc(s.kategorie_name) : '–'}</td>
-          <td style="font-size:12px;color:var(--text-muted)">${esc(s.lieferant || '–')}</td>
-          <td style="font-size:12px;color:var(--text-muted)">${esc(s.einheit || '–')}</td>
-          <td><button class="tbl-btn danger adm-sd-del" data-id="${s.id}" style="font-size:12px">🗑️</button></td>
-        </tr>`).join('');
-
-      const katOptsSd = kategorien.filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${esc(k.name)}</option>`).join('');
-
-      return `<div class="admin-wrap">
-        <div style="font-size:16px;font-weight:800;margin-bottom:12px">🛒 Bestellverwaltung</div>
-
-        <!-- Einträge -->
-        <div class="card" style="margin-bottom:16px">
-          <div style="font-size:14px;font-weight:700;margin-bottom:8px">Aktuelle Einträge</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px">
-            <button id="adm-pdf" class="btn btn-outline" style="font-size:13px">📄 PDF</button>
-            <button id="adm-excel" class="btn btn-outline" style="font-size:13px">📊 Excel</button>
-          </div>
-          ${eintraegeHtml || '<div style="color:var(--text-muted);font-size:13px">Keine Einträge</div>'}
-        </div>
-
-        <!-- Kategorien -->
-        <div class="card" style="margin-bottom:16px">
-          <div style="font-size:14px;font-weight:700;margin-bottom:8px">📂 Kategorien verwalten</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-            <input class="form-input" id="new-kat-name" placeholder="Name" style="max-width:140px">
-            <input class="form-input" id="new-kat-icon" placeholder="Icon (Emoji)" style="max-width:80px">
-            <input class="form-input" id="new-kat-farbe" type="color" value="#6366f1" style="max-width:50px;padding:2px">
-            <button id="new-kat-btn" class="btn btn-primary btn-sm">+ Kategorie</button>
-          </div>
-          <table class="tbl">
-            <thead><tr><th>Name</th><th>Status</th><th>Aktionen</th></tr></thead>
-            <tbody>${katRows}</tbody>
-          </table>
-        </div>
-
-        <!-- Stammdaten -->
-        <div class="card">
-          <div style="font-size:14px;font-weight:700;margin-bottom:8px">📦 Artikel-Stammdaten</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-            <input class="form-input" id="new-sd-name" placeholder="Artikelname *" style="max-width:160px">
-            <select class="form-input" id="new-sd-kat" style="max-width:160px"><option value="">– Kategorie –</option>${katOptsSd}</select>
-            <input class="form-input" id="new-sd-lieferant" placeholder="Lieferant (opt.)" style="max-width:140px">
-            <input class="form-input" id="new-sd-einheit" placeholder="Einheit (opt.)" style="max-width:100px">
-            <button id="new-sd-btn" class="btn btn-primary btn-sm">+ Artikel</button>
-          </div>
-          <table class="tbl">
-            <thead><tr><th>Name</th><th>Kategorie</th><th>Lieferant</th><th>Einheit</th><th></th></tr></thead>
-            <tbody>${sdRows}</tbody>
-          </table>
-        </div>
-      </div>`;
-    }
+    // Stammdaten-Liste
 
     async function renderTabFirma() {
       let firma = {}, fzEinst = { diesel_preis: 1.80, verbrauch_100km: 8, maut_pro_km: 0, abnuetzung_pro_km: 0.15 };
@@ -3313,8 +3432,14 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     </div>
     <div class="form-group">
       <label class="form-label">Bestellungen</label>
-      <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;margin-bottom:6px">
         <input type="checkbox" id="m-ma-darf-bestellen" ${m?.darf_bestellen ? 'checked' : ''} style="width:18px;height:18px"> 🛒 Darf Bestellungen eingeben
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" id="m-ma-darf-export" ${m?.darf_export ? 'checked' : ''} style="width:18px;height:18px"> 📊 Darf PDF/Excel exportieren
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+        <input type="checkbox" id="m-ma-darf-artikelanlage" ${m?.darf_artikelanlage ? 'checked' : ''} style="width:18px;height:18px"> 🏷️ Darf Artikel scannen/anlegen
       </label>
     </div>
     <button class="btn btn-primary" id="btn-save-ma" data-id="${m?.id || ''}">${m ? 'Speichern' : 'Anlegen'}</button>`);
@@ -3842,181 +3967,173 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
     }
 
     // ── BESTELLUNGEN PAGE ─────────────────────────────────────────────────────
-    let _bestellungenData = null; // { kategorien, eintraege, stammdaten }
+    let _bestellungenData = null;
     async function pageBestellungen() {
-      let kategorien = [], eintraege = [], stammdaten = [];
+      // Permission gate
+      if (!user?.ist_admin && !user?.ist_chef && !user?.darf_bestellen) {
+        return `<div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Keine Berechtigung für Bestellungen</div></div>`;
+      }
+      let kategorien = [], eintraege = [], stammdaten = [], artikelKats = [];
       try {
-        [kategorien, eintraege, stammdaten] = await Promise.all([
+        [kategorien, eintraege, stammdaten, artikelKats] = await Promise.all([
           apiGet('/api/bestellungen/kategorien'),
           apiGet('/api/bestellungen/eintraege'),
           apiGet('/api/bestellungen/stammdaten'),
+          apiGet('/api/bestellungen/artikel-kategorien'),
         ]);
       } catch (e) { }
-      _bestellungenData = { kategorien, eintraege, stammdaten };
+      _bestellungenData = { kategorien, eintraege, stammdaten, artikelKats };
 
-      const aktKats = kategorien.filter(k => k.aktiv);
+      const canExport = isManager() || user?.darf_export;
+      const canArtikel = isManager() || user?.darf_artikelanlage;
       const isManager_ = isManager();
+      const aktKats = kategorien.filter(k => k.aktiv);
+      const firstKatId = aktKats[0]?.id || null;
       const fmtDate = d => d ? new Date(d).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
 
-      function renderEintraege(katId) {
-        const list = eintraege.filter(e => e.kategorie_id == katId || (!katId && !e.kategorie_id));
-        if (!list.length) return `<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Keine Einträge in dieser Kategorie</div>`;
-        return list.map(e => {
-          const bestelltBadge = e.bestellt
-            ? `<span style="background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;white-space:nowrap">✅ Bestellt${e.bestellt_von_name ? ' · ' + esc(e.bestellt_von_name) : ''}</span>`
-            : `<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px">⏳ Offen</span>`;
-          const bestelltCb = isManager_
-            ? `<input type="checkbox" class="bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;accent-color:#16a34a;flex-shrink:0" title="${e.bestellt ? 'Als unbestellt markieren' : 'Als bestellt markieren'}">`
-            : `<input type="checkbox" ${e.bestellt ? 'checked' : ''} disabled style="width:20px;height:20px;flex-shrink:0;opacity:0.5">`;
-          return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-            ${bestelltCb}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:14px;font-weight:600">${esc(e.bezeichnung)}</div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
-                ${e.menge ? `Menge: <b>${esc(e.menge)}</b>${e.einheit ? ' ' + esc(e.einheit) : ''}` : ''}
-                ${e.lieferant ? ` · Lieferant: <b>${esc(e.lieferant)}</b>` : ''}
-                ${e.erfasst_von_name || e.erstellt_von_name ? ` · von ${esc(e.erstellt_von_name || '')}` : ''}
-                · ${fmtDate(e.erstellt_am)}
-              </div>
-              <div style="margin-top:4px">${bestelltBadge}</div>
+      function renderEintragRow(e) {
+        const bestelltBadge = e.bestellt
+          ? `<span class="badge" style="background:#dcfce7;color:#15803d">✅ Bestellt${e.bestellt_von_name ? ' · ' + esc(e.bestellt_von_name) : ''}</span>`
+          : `<span class="badge" style="background:#fef3c7;color:#92400e">⏳ Offen</span>`;
+        const cb = isManager_
+          ? `<input type="checkbox" class="bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;accent-color:#16a34a;flex-shrink:0" title="Bestellt-Status ändern">`
+          : `<input type="checkbox" ${e.bestellt ? 'checked' : ''} disabled style="width:20px;height:20px;flex-shrink:0;opacity:0.5">`;
+        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          ${cb}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600">${esc(e.bezeichnung)}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+              ${e.menge ? `${esc(e.menge)}${e.einheit ? ' ' + esc(e.einheit) : ''}` : ''}
+              ${e.lieferant ? ` · ${esc(e.lieferant)}` : ''}
+              · ${esc(e.erstellt_von_name || '?')} · ${fmtDate(e.erstellt_am)}
             </div>
-            ${isManager_ ? `<button class="tbl-btn danger bestell-del" data-id="${e.id}" style="font-size:12px;flex-shrink:0;margin:0">🗑️</button>` : ''}
-          </div>`;
-        }).join('');
+            <div style="margin-top:4px">${bestelltBadge}</div>
+          </div>
+          ${isManager_ ? `<button class="tbl-btn danger bestell-del" data-id="${e.id}" style="font-size:12px;flex-shrink:0;margin:0;padding:4px 8px">🗑️</button>` : ''}
+        </div>`;
       }
 
+      // Category tabs
       const katTabs = aktKats.map((k, i) => {
-        const cnt = eintraege.filter(e => e.kategorie_id == k.id).length;
         const offene = eintraege.filter(e => e.kategorie_id == k.id && !e.bestellt).length;
-        return `<button class="bestell-tab-btn" data-katid="${k.id}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;border:2px solid ${k.farbe};background:${i === 0 ? k.farbe : 'transparent'};color:${i === 0 ? 'white' : k.farbe};font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s">
-          ${k.icon} ${esc(k.name)} ${offene > 0 ? `<span style="background:${i === 0 ? 'rgba(255,255,255,.3)' : k.farbe};color:${i === 0 ? 'white' : 'white'};font-size:11px;border-radius:10px;padding:1px 6px">${offene}</span>` : ''}
+        const isFirst = i === 0;
+        return `<button class="bestell-tab-btn" data-katid="${k.id}"
+          style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;
+          border:2px solid ${k.farbe};background:${isFirst ? k.farbe : 'transparent'};
+          color:${isFirst ? 'white' : k.farbe};font-size:13px;font-weight:700;cursor:pointer;
+          white-space:nowrap;transition:all .2s">
+          ${k.icon} ${esc(k.name)}${offene > 0 ? ` <span style="background:rgba(255,255,255,.25);border-radius:10px;padding:1px 7px;font-size:11px">${offene}</span>` : ''}
         </button>`;
       }).join('');
 
-      const firstKatId = aktKats[0]?.id || null;
-      const firstKatColor = aktKats[0]?.farbe || '#6366f1';
-
-      // Autocomplete-Optionen als datalist
-      const datalistOpts = stammdaten.map(s => `<option value="${esc(s.name)}" data-kat="${s.kategorie_id || ''}" data-lieferant="${esc(s.lieferant || '')}" data-einheit="${esc(s.einheit || '')}">`).join('');
-
+      // Select options
       const katOptions = aktKats.map(k => `<option value="${k.id}">${k.icon} ${esc(k.name)}</option>`).join('');
+      const datalistOpts = stammdaten.map(s => `<option value="${esc(s.name)}">`).join('');
 
-      const exportButtons = isManager_ ? `
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button id="bestell-pdf" class="btn btn-outline" style="font-size:13px">📄 PDF</button>
-          <button id="bestell-excel" class="btn btn-outline" style="font-size:13px">📊 Excel</button>
-        </div>` : '';
+      // Entry list for first tab
+      const firstList = eintraege.filter(e => e.kategorie_id == firstKatId);
+      const firstHtml = firstList.length
+        ? firstList.map(renderEintragRow).join('')
+        : `<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Keine Einträge in dieser Kategorie</div>`;
+
+      const artikelBtn = canArtikel
+        ? `<button class="btn btn-outline" id="bestell-artikelanlage-btn" style="display:flex;align-items:center;gap:6px">🏷️ Artikel scannen</button>`
+        : '';
+      const berichtBtn = canExport
+        ? `<button class="btn btn-outline" id="bestell-bericht-btn" style="display:flex;align-items:center;gap:6px">📋 Bericht</button>`
+        : '';
 
       return `
       <div style="max-width:700px;margin:0 auto;padding:0 0 80px">
         <div style="font-size:20px;font-weight:800;margin-bottom:4px">🛒 Bestellungen</div>
-        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Klick auf ✅ markiert einen Artikel als bestellt (nur Admin/Chef)</div>
+        ${canArtikel || canExport ? `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">${artikelBtn}${berichtBtn}</div>` : '<div style="margin-bottom:14px"></div>'}
 
         <!-- Kategorie-Tabs -->
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="bestell-tabs">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;overflow-x:auto;padding-bottom:4px" id="bestell-tabs">
           ${katTabs}
         </div>
 
         <!-- Eintrag hinzufügen -->
-        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px">
+        <div class="card" style="margin-bottom:14px;padding:14px">
           <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text-muted)">+ Neuer Eintrag</div>
           <datalist id="bestell-vorschlaege">${datalistOpts}</datalist>
+          <select class="form-input" id="bestell-kat-select" style="margin-bottom:8px">${katOptions}</select>
+          <input class="form-input" id="bestell-bezeichnung" list="bestell-vorschlaege" placeholder="Bezeichnung *" style="margin-bottom:8px">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <select class="form-input" id="bestell-kat-select" style="grid-column:1/-1">${katOptions}</select>
-            <input class="form-input" id="bestell-bezeichnung" list="bestell-vorschlaege" placeholder="Bezeichnung / Artikel *" style="grid-column:1/-1">
-            <input class="form-input" id="bestell-menge" placeholder="Menge" type="text">
-            <input class="form-input" id="bestell-einheit" placeholder="Einheit (z.B. Stk, Pkg)">
-            <input class="form-input" id="bestell-lieferant" placeholder="Lieferant (optional)" style="grid-column:1/-1">
+            <input class="form-input" id="bestell-menge" placeholder="Menge">
+            <input class="form-input" id="bestell-einheit" placeholder="Einheit (Stk, Pkg…)">
           </div>
+          <input class="form-input" id="bestell-lieferant" placeholder="Lieferant (optional)" style="margin-bottom:10px">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button id="bestell-add-btn" class="btn btn-primary" style="flex:1;min-width:120px">✅ Hinzufügen</button>
-            <button id="bestell-ocr-btn" class="btn btn-outline" style="flex:1;min-width:120px;display:flex;align-items:center;justify-content:center;gap:6px">📷 Foto scannen (OCR)</button>
+            <button class="btn btn-primary" id="bestell-add-btn" style="flex:1;min-width:120px">+ Hinzufügen</button>
+            <button class="btn btn-outline" id="bestell-ocr-btn" style="flex:1;min-width:120px">📷 OCR Scan</button>
           </div>
           <input type="file" id="bestell-ocr-input" accept="image/*" capture="environment" style="display:none">
           <div id="bestell-ocr-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
         </div>
 
         <!-- Eintrags-Liste -->
-        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:14px" id="bestell-liste-wrap">
-          <div id="bestell-liste">${renderEintraege(firstKatId)}</div>
+        <div class="card" style="padding:14px" id="bestell-liste-wrap">
+          <div id="bestell-liste">${firstHtml}</div>
         </div>
-
-        ${exportButtons}
-
       </div>`;
     }
 
-    function _initBestellungenEvents(kategorien, eintraege, stammdaten) {
+    async function _initBestellungenEvents(kategorien, eintraege, stammdaten, artikelKats) {
       const isManager_ = isManager();
+      const canArtikel = isManager_ || user?.darf_artikelanlage;
       let activeKatId = kategorien.filter(k => k.aktiv)[0]?.id || null;
 
-      // Tab-Wechsel
+      // Preset first tab's category in form
+      const selEl = document.getElementById('bestell-kat-select');
+      if (selEl && activeKatId) selEl.value = activeKatId;
+
+      // Tab switching
       document.querySelectorAll('.bestell-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           activeKatId = parseInt(btn.dataset.katid) || null;
           document.querySelectorAll('.bestell-tab-btn').forEach(b => {
             const kat = kategorien.find(k => k.id == b.dataset.katid);
-            b.style.background = 'transparent'; b.style.color = kat?.farbe || '#6366f1';
+            b.style.background = 'transparent'; b.style.color = kat?.farbe || 'var(--primary)';
           });
-          const aktKat = kategorien.find(k => k.id == activeKatId);
-          btn.style.background = aktKat?.farbe || '#6366f1'; btn.style.color = 'white';
-          // Re-render liste
-          const liste = document.getElementById('bestell-liste');
-          if (liste) liste.innerHTML = (() => {
-            const list = eintraege.filter(e => e.kategorie_id == activeKatId);
-            if (!list.length) return `<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Keine Einträge</div>`;
-            return list.map(e => {
-              const badge = e.bestellt
-                ? `<span style="background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px">✅ Bestellt${e.bestellt_von_name ? ' · ' + esc(e.bestellt_von_name) : ''}</span>`
-                : `<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px">⏳ Offen</span>`;
-              const cb = isManager_
-                ? `<input type="checkbox" class="bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;accent-color:#16a34a;flex-shrink:0">`
-                : `<input type="checkbox" ${e.bestellt ? 'checked' : ''} disabled style="width:20px;height:20px;flex-shrink:0;opacity:0.5">`;
-              return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-                ${cb}
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:14px;font-weight:600">${esc(e.bezeichnung)}</div>
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${e.menge ? `Menge: <b>${esc(e.menge)}</b>${e.einheit ? ' ' + esc(e.einheit) : ''}` : ''}${e.lieferant ? ` · ${esc(e.lieferant)}` : ''} · ${e.erstellt_von_name || ''}</div>
-                  <div style="margin-top:4px">${badge}</div>
-                </div>
-                ${isManager_ ? `<button class="tbl-btn danger bestell-del" data-id="${e.id}" style="font-size:12px;flex-shrink:0;margin:0">🗑️</button>` : ''}
-              </div>`;
-            }).join('');
-          })();
-          // Re-wire events
+          const k = kategorien.find(k => k.id == activeKatId);
+          btn.style.background = k?.farbe || 'var(--primary)'; btn.style.color = 'white';
+          // Render filtered list
+          const list = eintraege.filter(e => e.kategorie_id == activeKatId);
+          const getRow = e => {
+            const badge = e.bestellt
+              ? `<span class="badge" style="background:#dcfce7;color:#15803d">✅ Bestellt${e.bestellt_von_name ? ' · ' + esc(e.bestellt_von_name) : ''}</span>`
+              : `<span class="badge" style="background:#fef3c7;color:#92400e">⏳ Offen</span>`;
+            const cb = isManager_
+              ? `<input type="checkbox" class="bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;accent-color:#16a34a;flex-shrink:0">`
+              : `<input type="checkbox" ${e.bestellt ? 'checked' : ''} disabled style="width:20px;height:20px;flex-shrink:0;opacity:0.5">`;
+            return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+              ${cb}<div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:600">${esc(e.bezeichnung)}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${e.menge || ''}${e.einheit ? ' ' + esc(e.einheit) : ''} ${e.lieferant ? '· ' + esc(e.lieferant) : ''}</div>
+                <div style="margin-top:4px">${badge}</div>
+              </div>${isManager_ ? `<button class="tbl-btn danger bestell-del" data-id="${e.id}" style="font-size:12px;flex-shrink:0;margin:0;padding:4px 8px">🗑️</button>` : ''}
+            </div>`;
+          };
+          const listeEl = document.getElementById('bestell-liste');
+          if (listeEl) listeEl.innerHTML = list.length ? list.map(getRow).join('') : `<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Keine Einträge</div>`;
           _wireBestellCbDel(eintraege, isManager_);
-          // Kategorie im Formular vorauswählen
-          const sel = document.getElementById('bestell-kat-select');
-          if (sel) sel.value = activeKatId;
+          if (selEl) selEl.value = activeKatId;
         });
       });
 
-      // Kategorie im Formular vorauswählen
-      const sel = document.getElementById('bestell-kat-select');
-      if (sel && activeKatId) sel.value = activeKatId;
+      // Autocomplete fill-in
+      document.getElementById('bestell-bezeichnung')?.addEventListener('input', e => {
+        const val = e.target.value.trim().toLowerCase();
+        const match = stammdaten.find(s => s.name.toLowerCase() === val);
+        if (match) {
+          if (match.lieferant && !document.getElementById('bestell-lieferant').value) document.getElementById('bestell-lieferant').value = match.lieferant;
+          if (match.einheit && !document.getElementById('bestell-einheit').value) document.getElementById('bestell-einheit').value = match.einheit;
+          if (match.kategorie_id) { const s = document.getElementById('bestell-kat-select'); if (s) s.value = match.kategorie_id; }
+        }
+      });
 
-      // Autocomplete: lieferant/einheit automatisch füllen
-      const bezInput = document.getElementById('bestell-bezeichnung');
-      if (bezInput) {
-        bezInput.addEventListener('input', () => {
-          const val = bezInput.value.trim().toLowerCase();
-          const match = stammdaten.find(s => s.name.toLowerCase() === val);
-          if (match) {
-            if (match.lieferant && !document.getElementById('bestell-lieferant').value) {
-              document.getElementById('bestell-lieferant').value = match.lieferant;
-            }
-            if (match.einheit && !document.getElementById('bestell-einheit').value) {
-              document.getElementById('bestell-einheit').value = match.einheit;
-            }
-            if (match.kategorie_id) {
-              const s = document.getElementById('bestell-kat-select');
-              if (s) s.value = match.kategorie_id;
-            }
-          }
-        });
-      }
-
-      // Eintrag hinzufügen
+      // Add entry
       document.getElementById('bestell-add-btn')?.addEventListener('click', async () => {
         const bez = document.getElementById('bestell-bezeichnung')?.value?.trim();
         if (!bez) { toast('Bezeichnung erforderlich', 'err'); return; }
@@ -4024,150 +4141,293 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         const menge = document.getElementById('bestell-menge')?.value?.trim() || null;
         const einheit = document.getElementById('bestell-einheit')?.value?.trim() || null;
         const lieferant = document.getElementById('bestell-lieferant')?.value?.trim() || null;
-        // Prüfen ob Artikel in Stammdaten → Admin fragen ob anlegen
         const existiert = stammdaten.some(s => s.name.toLowerCase() === bez.toLowerCase());
         try {
-          const neuerEintrag = await apiPost('/api/bestellungen/eintraege', { kategorie_id: katId, bezeichnung: bez, menge, einheit, lieferant });
-          eintraege.unshift(neuerEintrag);
-          toast('Eintrag hinzugefügt', 'ok');
+          const neu = await apiPost('/api/bestellungen/eintraege', { kategorie_id: katId, bezeichnung: bez, menge, einheit, lieferant });
+          eintraege.unshift(neu);
+          toast('Eintrag hinzugefügt ✅', 'ok');
           ['bestell-bezeichnung', 'bestell-menge', 'bestell-einheit', 'bestell-lieferant'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-          // Admin: Als Stammdaten anlegen?
-          if (isManager_ && !existiert) {
-            if (confirm(`"${bez}" ist noch nicht in den Stammdaten. Jetzt als Artikel anlegen?`)) {
-              _openStammdatenModal({ name: bez, kategorie_id: katId, lieferant: lieferant, einheit: einheit });
+          if (canArtikel && !existiert) {
+            if (confirm(`"${bez}" ist noch nicht als Artikel angelegt. Jetzt anlegen?`)) {
+              _openStammdatenModal({ name: bez, kategorie_id: katId, lieferant, einheit, artikelKats });
             }
           }
-          // Refresh
           go('bestellungen');
-        } catch (e) { toast(e.message, 'err'); }
+        } catch (ex) { toast(ex.message, 'err'); }
       });
 
-      // OCR
-      document.getElementById('bestell-ocr-btn')?.addEventListener('click', () => {
-        document.getElementById('bestell-ocr-input')?.click();
-      });
-      document.getElementById('bestell-ocr-input')?.addEventListener('change', async (ev) => {
-        const file = ev.target.files[0];
-        if (!file) return;
-        const statusEl = document.getElementById('bestell-ocr-status');
-        if (statusEl) statusEl.textContent = '🔍 OCR läuft… bitte warten';
+      // OCR scan (Tesseract.js)
+      document.getElementById('bestell-ocr-btn')?.addEventListener('click', () => document.getElementById('bestell-ocr-input')?.click());
+      document.getElementById('bestell-ocr-input')?.addEventListener('change', async ev => {
+        const file = ev.target.files[0]; if (!file) return;
+        const st = document.getElementById('bestell-ocr-status');
+        if (st) st.textContent = '🔍 OCR läuft…';
         try {
-          if (!window.Tesseract) await new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-            s.onload = resolve; s.onerror = reject;
-            document.head.appendChild(s);
-          });
-          const result = await Tesseract.recognize(file, 'deu+eng', { logger: () => { } });
-          const text = result.data.text.trim().split(/\n/)[0].replace(/[^\w\s\-\.äöüÄÖÜ]/g, '').trim();
+          if (!window.Tesseract) {
+            await new Promise((ok, fail) => {
+              const s = document.createElement('script');
+              s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+              s.onload = ok; s.onerror = fail; document.head.appendChild(s);
+            });
+          }
+          const worker = await Tesseract.createWorker('deu+eng');
+          const { data: { text } } = await worker.recognize(file);
+          await worker.terminate();
+          const firstLine = text.trim().split('\n')[0].replace(/[^\w\s\-\.äöüÄÖÜß]/g, '').trim();
           const bezEl = document.getElementById('bestell-bezeichnung');
-          if (bezEl) bezEl.value = text;
-          if (statusEl) statusEl.textContent = `✅ Erkannt: "${text}"`;
-          // Admin: Als Stammdaten anlegen?
-          if (isManager_ && text) {
-            const existiert = stammdaten.some(s => s.name.toLowerCase() === text.toLowerCase());
-            if (!existiert && confirm(`"${text}" als neuen Artikel in Stammdaten anlegen?`)) {
-              const katId = parseInt(document.getElementById('bestell-kat-select')?.value) || null;
-              _openStammdatenModal({ name: text, kategorie_id: katId });
+          if (bezEl) bezEl.value = firstLine;
+          if (st) st.textContent = `✅ Erkannt: "${firstLine}"`;
+          if (canArtikel && firstLine) {
+            const ex = stammdaten.some(s => s.name.toLowerCase() === firstLine.toLowerCase());
+            if (!ex && confirm(`"${firstLine}" als neuen Artikel anlegen?`)) {
+              _openStammdatenModal({ name: firstLine, kategorie_id: parseInt(document.getElementById('bestell-kat-select')?.value) || null, artikelKats });
             }
           }
-        } catch (e) {
-          if (statusEl) statusEl.textContent = '❌ OCR fehlgeschlagen: ' + e.message;
-        }
+        } catch (e) { if (st) st.textContent = '❌ OCR Fehler: ' + e.message; }
       });
+
+      // Barcode/Artikelanlage button
+      document.getElementById('bestell-artikelanlage-btn')?.addEventListener('click', () => _openArtikelanlageModal(stammdaten, artikelKats, kategorien));
+
+      // Bericht button
+      document.getElementById('bestell-bericht-btn')?.addEventListener('click', () => go('bestellungen-bericht'));
 
       _wireBestellCbDel(eintraege, isManager_);
-
-      // PDF Export
-      document.getElementById('bestell-pdf')?.addEventListener('click', async () => {
-        try {
-          const data = await apiGet('/api/bestellungen/export-data');
-          if (!window.jspdf) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-          const { jsPDF } = window.jspdf;
-          const doc = new jsPDF();
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
-          doc.text('Bestellliste – SolanoServices', 14, 18);
-          doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-          doc.text(new Date().toLocaleDateString('de-AT'), 14, 26);
-          let y = 34;
-          let lastKat = '';
-          data.forEach(row => {
-            if (row.kategorie !== lastKat) {
-              if (y > 270) { doc.addPage(); y = 14; }
-              doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
-              doc.text(`${row.kategorie_icon || ''} ${row.kategorie || 'Sonstige'}`, 14, y); y += 7;
-              doc.setFont('helvetica', 'normal'); doc.setFontSize(10); lastKat = row.kategorie;
-            }
-            if (y > 275) { doc.addPage(); y = 14; }
-            const status = row.bestellt ? '[✓]' : '[ ]';
-            const line = `${status} ${row.bezeichnung}${row.menge ? ' – ' + row.menge + (row.einheit ? ' ' + row.einheit : '') : ''}${row.lieferant ? ' (' + row.lieferant + ')' : ''}`;
-            doc.text(line, 20, y); y += 6;
-          });
-          doc.save(`Bestellliste_${new Date().toISOString().slice(0, 10)}.pdf`);
-        } catch (e) { toast('PDF Fehler: ' + e.message, 'err'); }
-      });
-
-      // Excel Export
-      document.getElementById('bestell-excel')?.addEventListener('click', async () => {
-        try {
-          const data = await apiGet('/api/bestellungen/export-data');
-          if (!window.XLSX) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-          const rows = [['Kategorie', 'Bezeichnung', 'Menge', 'Einheit', 'Lieferant', 'Bestellt', 'Erfasst von', 'Erfasst am', 'Bestellt von', 'Bestellt am']];
-          data.forEach(r => rows.push([r.kategorie, r.bezeichnung, r.menge || '', r.einheit || '', r.lieferant || '', r.bestellt ? 'Ja' : 'Nein', r.erfasst_von || '', r.erstellt_am ? new Date(r.erstellt_am).toLocaleString('de-AT') : '', r.bestellt_von_name || '', r.bestellt_am ? new Date(r.bestellt_am).toLocaleString('de-AT') : '']));
-          const wb = XLSX.utils.book_new();
-          const ws = XLSX.utils.aoa_to_sheet(rows);
-          XLSX.utils.book_append_sheet(wb, ws, 'Bestellliste');
-          XLSX.writeFile(wb, `Bestellliste_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        } catch (e) { toast('Excel Fehler: ' + e.message, 'err'); }
-      });
     }
 
     function _wireBestellCbDel(eintraege, isManager_) {
       document.querySelectorAll('.bestell-cb').forEach(cb => {
+        if (cb._bound) return; cb._bound = true;
         cb.addEventListener('change', async () => {
           try {
-            await apiPatch(`/api/bestellungen/eintraege/${cb.dataset.id}/bestellt`, { bestellt: cb.checked });
+            const r = await apiPatch(`/api/bestellungen/eintraege/${cb.dataset.id}/bestellt`, { bestellt: cb.checked });
             const e = eintraege.find(x => x.id == cb.dataset.id);
-            if (e) e.bestellt = cb.checked;
+            if (e) { e.bestellt = cb.checked; e.bestellt_von_name = r?.bestellt_von_name || ''; }
           } catch (ex) { toast(ex.message, 'err'); cb.checked = !cb.checked; }
         });
       });
       document.querySelectorAll('.bestell-del').forEach(btn => {
+        if (btn._bound) return; btn._bound = true;
         btn.addEventListener('click', async () => {
           if (!confirm('Eintrag löschen?')) return;
-          try {
-            await apiDel(`/api/bestellungen/eintraege/${btn.dataset.id}`);
-            btn.closest('div[style*="border-bottom"]').remove();
-            toast('Gelöscht', 'ok');
-          } catch (e) { toast(e.message, 'err'); }
+          try { await apiDel(`/api/bestellungen/eintraege/${btn.dataset.id}`); btn.closest('div[style*="border-bottom"]').remove(); toast('Gelöscht', 'ok'); }
+          catch (e) { toast(e.message, 'err'); }
         });
       });
     }
 
-    function _openStammdatenModal({ name = '', kategorie_id = null, lieferant = '', einheit = '' }) {
-      // Simple inline stammdaten form in a modal
-      const katOptions = '';
+    // Barcode scan modal for Artikelanlage
+    function _openArtikelanlageModal(stammdaten, artikelKats, bestKats) {
+      const katOpts = (artikelKats || []).filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
+      const bKatOpts = (bestKats || []).filter(k => k.aktiv).map(k => `<option value="${k.id}">${k.icon} ${esc(k.name)}</option>`).join('');
+      const hasBarcodeDetector = 'BarcodeDetector' in window;
+      showModal(`
+        <button class="modal-close" id="modal-close">×</button>
+        <div class="modal-title">🏷️ Artikel scannen / anlegen</div>
+        ${hasBarcodeDetector ? `
+          <div style="margin-bottom:10px">
+            <button class="btn btn-primary" id="bc-scan-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px">📷 Barcode fotografieren</button>
+            <input type="file" id="bc-img-input" accept="image/*" capture="environment" style="display:none">
+            <div id="bc-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+          </div>` : `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">⚠️ Barcode-Scan nicht unterstützt – Scancode manuell eingeben</div>`}
+        <div class="form-group"><label class="form-label">Scancode</label><input class="form-input" id="bc-code" placeholder="EAN / QR-Code"></div>
+        <button class="btn btn-outline" id="bc-lookup-btn" style="width:100%;margin-bottom:14px">🔍 Artikel suchen</button>
+        <div id="bc-result" style="margin-bottom:10px"></div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:10px 0">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Neuen Artikel anlegen</div>
+        <div class="form-group"><label class="form-label">Artikelname *</label><input class="form-input" id="bc-name" placeholder="z.B. Fettlöser 5L"></div>
+        <div class="form-group"><label class="form-label">Artikel-Kategorie</label><select class="form-input" id="bc-artkat"><option value="">– Wählen –</option>${katOpts}</select></div>
+        <div class="form-group"><label class="form-label">Bestell-Kategorie</label><select class="form-input" id="bc-bestkat"><option value="">– Wählen –</option>${bKatOpts}</select></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label class="form-label">Lieferant</label><input class="form-input" id="bc-lieferant"></div>
+          <div class="form-group"><label class="form-label">Einheit</label><input class="form-input" id="bc-einheit" placeholder="Stk, Pkg, L"></div>
+          <div class="form-group"><label class="form-label">Netto €</label><input class="form-input" id="bc-netto" type="number" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Brutto €</label><input class="form-input" id="bc-brutto" type="number" step="0.01"></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          ${['❄️ Winterdienst', '🧹 Gebäudereinigung', '🌿 Grünpflege', '🔨 Projekte'].map((l, i) => {
+        const ids = ['bc-sp-w', 'bc-sp-g', 'bc-sp-gr', 'bc-sp-p'];
+        return `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="${ids[i]}"> ${l}</label>`;
+      }).join('')}
+        </div>
+        <button class="btn btn-primary" id="bc-save-btn" style="width:100%">💾 Artikel speichern</button>
+      `);
+
+      // Barcode scan
+      if (hasBarcodeDetector) {
+        document.getElementById('bc-scan-btn')?.addEventListener('click', () => document.getElementById('bc-img-input')?.click());
+        document.getElementById('bc-img-input')?.addEventListener('change', async ev => {
+          const file = ev.target.files[0]; if (!file) return;
+          const st = document.getElementById('bc-status');
+          if (st) st.textContent = '🔍 Barcode wird erkannt…';
+          try {
+            const bmp = await createImageBitmap(file);
+            const det = new BarcodeDetector();
+            const codes = await det.detect(bmp);
+            if (codes.length) {
+              const code = codes[0].rawValue;
+              const inp = document.getElementById('bc-code'); if (inp) inp.value = code;
+              if (st) st.textContent = `✅ Barcode: ${code}`;
+              document.getElementById('bc-lookup-btn')?.click();
+            } else { if (st) st.textContent = '❌ Kein Barcode erkannt'; }
+          } catch (e) { if (st) st.textContent = '❌ Fehler: ' + e.message; }
+        });
+      }
+
+      // Lookup
+      document.getElementById('bc-lookup-btn')?.addEventListener('click', async () => {
+        const code = document.getElementById('bc-code')?.value?.trim(); if (!code) return;
+        const res = document.getElementById('bc-result');
+        try {
+          const art = await apiGet(`/api/bestellungen/stammdaten/barcode/${encodeURIComponent(code)}`);
+          if (res) res.innerHTML = `<div style="background:#dcfce7;border-radius:8px;padding:10px;font-size:13px">✅ Artikel gefunden: <b>${esc(art.name)}</b>${art.lieferant ? ' · ' + esc(art.lieferant) : ''}</div>`;
+          const nameEl = document.getElementById('bc-name'); if (nameEl) nameEl.value = art.name;
+        } catch (e) {
+          if (res) res.innerHTML = `<div style="background:#fef3c7;border-radius:8px;padding:10px;font-size:13px">⚠️ Nicht gefunden – Artikel neu anlegen:</div>`;
+        }
+      });
+
+      // Save
+      document.getElementById('bc-save-btn')?.addEventListener('click', async () => {
+        const name = document.getElementById('bc-name')?.value?.trim();
+        if (!name) { toast('Name erforderlich', 'err'); return; }
+        try {
+          await apiPost('/api/bestellungen/stammdaten', {
+            name,
+            artikel_kategorie_id: parseInt(document.getElementById('bc-artkat')?.value) || null,
+            kategorie_id: parseInt(document.getElementById('bc-bestkat')?.value) || null,
+            lieferant: document.getElementById('bc-lieferant')?.value?.trim() || null,
+            einheit: document.getElementById('bc-einheit')?.value?.trim() || null,
+            preis_netto: parseFloat(document.getElementById('bc-netto')?.value) || null,
+            preis_brutto: parseFloat(document.getElementById('bc-brutto')?.value) || null,
+            scancode: document.getElementById('bc-code')?.value?.trim() || null,
+            sparte_winterdienst: document.getElementById('bc-sp-w')?.checked || false,
+            sparte_gebaeudereinigung: document.getElementById('bc-sp-g')?.checked || false,
+            sparte_gruenpflege: document.getElementById('bc-sp-gr')?.checked || false,
+            sparte_projekte: document.getElementById('bc-sp-p')?.checked || false,
+          });
+          closeModal(); toast(`Artikel "${name}" gespeichert ✅`, 'ok');
+        } catch (e) { toast(e.message, 'err'); }
+      });
+    }
+
+    function _openStammdatenModal({ name = '', kategorie_id = null, lieferant = '', einheit = '', artikelKats = [] }) {
+      const katOpts = artikelKats.filter(k => k.aktiv !== false).map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
       showModal(`
         <button class="modal-close" id="modal-close">×</button>
         <div class="modal-title">📦 Neuer Artikel</div>
         <div class="form-group"><label class="form-label">Artikelname *</label><input class="form-input" id="sd-name" value="${esc(name)}"></div>
+        <div class="form-group"><label class="form-label">Artikel-Kategorie</label><select class="form-input" id="sd-artkat"><option value="">– Wählen –</option>${katOpts}</select></div>
         <div class="form-group"><label class="form-label">Lieferant</label><input class="form-input" id="sd-lieferant" value="${esc(lieferant)}" placeholder="optional"></div>
         <div class="form-group"><label class="form-label">Einheit</label><input class="form-input" id="sd-einheit" value="${esc(einheit)}" placeholder="z.B. Stk, Pkg, Liter"></div>
-        <button class="btn btn-primary" id="sd-save">Speichern</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label class="form-label">Netto €</label><input class="form-input" id="sd-netto" type="number" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Brutto €</label><input class="form-input" id="sd-brutto" type="number" step="0.01"></div>
+        </div>
+        <button class="btn btn-primary" id="sd-save" style="width:100%">Speichern</button>
       `);
       document.getElementById('sd-save')?.addEventListener('click', async () => {
         const n = document.getElementById('sd-name')?.value?.trim();
         if (!n) { toast('Name erforderlich', 'err'); return; }
         try {
           await apiPost('/api/bestellungen/stammdaten', {
-            name: n,
-            kategorie_id: kategorie_id || null,
+            name: n, kategorie_id: kategorie_id || null,
+            artikel_kategorie_id: parseInt(document.getElementById('sd-artkat')?.value) || null,
             lieferant: document.getElementById('sd-lieferant')?.value?.trim() || null,
             einheit: document.getElementById('sd-einheit')?.value?.trim() || null,
+            preis_netto: parseFloat(document.getElementById('sd-netto')?.value) || null,
+            preis_brutto: parseFloat(document.getElementById('sd-brutto')?.value) || null,
           });
-          closeModal(); toast('Artikel gespeichert', 'ok');
+          closeModal(); toast('Artikel gespeichert ✅', 'ok');
         } catch (e) { toast(e.message, 'err'); }
       });
+    }
+
+    // ── BESTELLUNGEN BERICHT ──────────────────────────────────────────────────
+    async function pageBestellungenBericht() {
+      if (!isManager() && !user?.darf_export) {
+        return `<div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Keine Berechtigung</div></div>`;
+      }
+      let eintraege = [], artikelKats = [];
+      try {
+        [eintraege, artikelKats] = await Promise.all([
+          apiGet('/api/bestellungen/export-data'),
+          apiGet('/api/bestellungen/artikel-kategorien'),
+        ]);
+      } catch (e) { eintraege = []; }
+
+      // Group entries by Bestell-Kategorie (= Sparte-Tab)
+      const grouped = {};
+      eintraege.forEach(e => {
+        const key = e.kategorie || 'Ohne Kategorie';
+        if (!grouped[key]) grouped[key] = { icon: e.kategorie_icon || '📦', entries: [] };
+        grouped[key].entries.push(e);
+      });
+
+      const offeneGesamt = eintraege.filter(e => !e.bestellt).length;
+      const bestelltGesamt = eintraege.filter(e => e.bestellt).length;
+      const fmtDate = d => d ? new Date(d).toLocaleDateString('de-AT') : '';
+
+      const gruppenHtml = Object.entries(grouped).map(([kat, g]) => {
+        const rows = g.entries.map(e => `
+          <tr class="${e.bestellt ? 'bericht-bestellt' : ''}">
+            <td style="padding:6px 8px;width:28px">
+              <input type="checkbox" ${e.bestellt ? 'checked' : ''} class="bericht-cb" data-id="${e.id}" style="width:16px;height:16px;cursor:pointer;accent-color:#16a34a">
+            </td>
+            <td style="padding:6px 8px;font-weight:${e.bestellt ? '400' : '600'};${e.bestellt ? 'color:var(--text-muted);text-decoration:line-through' : ''}">${esc(e.bezeichnung)}</td>
+            <td style="padding:6px 8px;color:var(--text-muted);font-size:13px">${e.menge || ''}${e.einheit ? ' ' + esc(e.einheit) : ''}</td>
+            <td style="padding:6px 8px;color:var(--text-muted);font-size:13px">${esc(e.lieferant || '–')}</td>
+            <td style="padding:6px 8px">
+              ${e.bestellt
+            ? `<span style="background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px">✅ Bestellt</span>`
+            : `<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px">⏳ Offen</span>`}
+            </td>
+          </tr>`).join('');
+        return `
+          <div style="margin-bottom:20px" class="bericht-gruppe">
+            <div style="font-size:15px;font-weight:800;padding:8px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px 8px 0 0;border-bottom:2px solid var(--primary)">
+              ${g.icon} ${esc(kat)}
+              <span style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:8px">${g.entries.filter(e => !e.bestellt).length} offen · ${g.entries.filter(e => e.bestellt).length} bestellt</span>
+            </div>
+            <div style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;overflow:auto">
+              <table style="width:100%;border-collapse:collapse">
+                <thead>
+                  <tr style="background:var(--card-bg);font-size:12px;color:var(--text-muted)">
+                    <th style="padding:6px 8px;text-align:left;width:28px"></th>
+                    <th style="padding:6px 8px;text-align:left">Artikel</th>
+                    <th style="padding:6px 8px;text-align:left">Menge</th>
+                    <th style="padding:6px 8px;text-align:left">Lieferant</th>
+                    <th style="padding:6px 8px;text-align:left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </div>`;
+      }).join('');
+
+      return `
+      <style>
+        @media print {
+          .header,.sidebar,.btn-print,.btn-back,.btn-excel-bestell,.bericht-bestellt td { display:block!important; }
+          .header,.sidebar { display:none!important; }
+          body { background:white!important; }
+          .bericht-bestellt { display:none!important; }
+        }
+      </style>
+      <div style="max-width:800px;margin:0 auto;padding:0 0 60px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <div>
+            <div style="font-size:20px;font-weight:800">📋 Bestellliste</div>
+            <div style="font-size:12px;color:var(--text-muted)">${new Date().toLocaleDateString('de-AT')} · ${offeneGesamt} offen · ${bestelltGesamt} bestellt</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-print" onclick="window.print()">🖨️ Drucken</button>
+            <button class="btn btn-outline btn-excel-bestell" id="bericht-excel-btn">📊 Excel</button>
+          </div>
+        </div>
+        <div id="bericht-gruppen">${gruppenHtml || '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Keine Einträge</div></div>'}</div>
+      </div>`;
     }
 
     // ── PROJEKTE PAGE ─────────────────────────────────────────────────────────────
@@ -6066,7 +6326,36 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
 
       // Bestellungen
       if (page === 'bestellungen' && _bestellungenData) {
-        _initBestellungenEvents(_bestellungenData.kategorien, _bestellungenData.eintraege, _bestellungenData.stammdaten);
+        _initBestellungenEvents(
+          _bestellungenData.kategorien,
+          _bestellungenData.eintraege,
+          _bestellungenData.stammdaten,
+          _bestellungenData.artikelKats
+        );
+      }
+      // Bestellungen-Bericht: Bestellt-Checkboxen + Excel
+      if (page === 'bestellungen-bericht') {
+        document.querySelectorAll('.bericht-cb').forEach(cb => {
+          if (cb._bound) return; cb._bound = true;
+          cb.addEventListener('change', async () => {
+            try { await apiPatch(`/api/bestellungen/eintraege/${cb.dataset.id}/bestellt`, { bestellt: cb.checked }); }
+            catch (e) { toast(e.message, 'err'); cb.checked = !cb.checked; }
+          });
+        });
+        const excelBtn = document.getElementById('bericht-excel-btn');
+        if (excelBtn && !excelBtn._bound) {
+          excelBtn._bound = true;
+          excelBtn.addEventListener('click', async () => {
+            try {
+              const data = await apiGet('/api/bestellungen/export-data');
+              if (!window.XLSX) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+              const rows = [['Kategorie', 'Artikel', 'Menge', 'Einheit', 'Lieferant', 'Status', 'Erfasst von', 'Bestellt von']];
+              data.forEach(r => rows.push([r.kategorie || '', r.bezeichnung, r.menge || '', r.einheit || '', r.lieferant || '', r.bestellt ? 'Bestellt' : 'Offen', r.erfasst_von || '', r.bestellt_von_name || '']));
+              const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet(rows); XLSX.utils.book_append_sheet(wb, ws, 'Bestellliste');
+              XLSX.writeFile(wb, `Bestellliste_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            } catch (e) { toast('Excel Fehler: ' + e.message, 'err'); }
+          });
+        }
       }
 
       // Optionen
@@ -7607,16 +7896,108 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
         newSdBtn.addEventListener('click', async () => {
           const name = document.getElementById('new-sd-name')?.value?.trim();
           if (!name) { toast('Name erforderlich', 'err'); return; }
-          const katId = parseInt(document.getElementById('new-sd-kat')?.value) || null;
+          const artikelKatId = parseInt(document.getElementById('new-sd-artkat')?.value) || null;
+          const katId = parseInt(document.getElementById('new-sd-bestkat')?.value) || null;
           const lieferant = document.getElementById('new-sd-lieferant')?.value?.trim() || null;
           const einheit = document.getElementById('new-sd-einheit')?.value?.trim() || null;
+          const preis_netto = parseFloat(document.getElementById('new-sd-netto')?.value) || null;
+          const preis_brutto = parseFloat(document.getElementById('new-sd-brutto')?.value) || null;
+          const scancode = document.getElementById('new-sd-scancode')?.value?.trim() || null;
+          const sparte_winterdienst = document.getElementById('new-sd-w')?.checked || false;
+          const sparte_gebaeudereinigung = document.getElementById('new-sd-g')?.checked || false;
+          const sparte_gruenpflege = document.getElementById('new-sd-gr')?.checked || false;
+          const sparte_projekte = document.getElementById('new-sd-p')?.checked || false;
           try {
-            await apiPost('/api/bestellungen/stammdaten', { name, kategorie_id: katId, lieferant, einheit });
+            await apiPost('/api/bestellungen/stammdaten', {
+              name, artikel_kategorie_id: artikelKatId, kategorie_id: katId, lieferant, einheit,
+              preis_netto, preis_brutto, scancode,
+              sparte_winterdienst, sparte_gebaeudereinigung, sparte_gruenpflege, sparte_projekte,
+            });
             const c = document.getElementById('admin-tab-content');
             if (c) { c.innerHTML = await renderTabBestellverwaltung(); bindAdminEvents(); }
           } catch (e) { toast(e.message, 'err'); }
         });
       }
+      // Artikel-Kategorien (neue Tabelle)
+      const newAkBtn = document.getElementById('new-ak-btn');
+      if (newAkBtn && !newAkBtn._bound) {
+        newAkBtn._bound = true;
+        newAkBtn.addEventListener('click', async () => {
+          const name = document.getElementById('new-ak-name')?.value?.trim();
+          if (!name) { toast('Name erforderlich', 'err'); return; }
+          try {
+            await apiPost('/api/bestellungen/artikel-kategorien', { name });
+            const c = document.getElementById('admin-tab-content');
+            if (c) { c.innerHTML = await renderTabBestellverwaltung(); bindAdminEvents(); }
+          } catch (e) { toast(e.message, 'err'); }
+        });
+      }
+      document.querySelectorAll('.adm-ak-del').forEach(btn => {
+        if (btn._bound) return; btn._bound = true;
+        btn.addEventListener('click', async () => {
+          if (!confirm('Artikel-Kategorie löschen?')) return;
+          try {
+            await apiDel(`/api/bestellungen/artikel-kategorien/${btn.dataset.id}`);
+            const c = document.getElementById('admin-tab-content');
+            if (c) { c.innerHTML = await renderTabBestellverwaltung(); bindAdminEvents(); }
+          } catch (e) { toast(e.message, 'err'); }
+        });
+      });
+      document.querySelectorAll('.adm-sd-edit').forEach(btn => {
+        if (btn._bound) return; btn._bound = true;
+        btn.addEventListener('click', async () => {
+          try {
+            const allSd = await apiGet('/api/bestellungen/stammdaten');
+            const allAk = await apiGet('/api/bestellungen/artikel-kategorien');
+            const allBk = await apiGet('/api/bestellungen/kategorien');
+            const s = allSd.find(x => x.id == btn.dataset.id); if (!s) return;
+            const akOpts = allAk.filter(k => k.aktiv !== false).map(k => `<option value="${k.id}" ${s.artikel_kategorie_id == k.id ? 'selected' : ''}>${esc(k.name)}</option>`).join('');
+            const bkOpts = allBk.filter(k => k.aktiv).map(k => `<option value="${k.id}" ${s.kategorie_id == k.id ? 'selected' : ''}>${k.icon} ${esc(k.name)}</option>`).join('');
+            showModal(`
+              <button class="modal-close" id="modal-close">×</button>
+              <div class="modal-title">✏️ Artikel bearbeiten</div>
+              <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="edit-sd-name" value="${esc(s.name)}"></div>
+              <div class="form-group"><label class="form-label">Artikel-Kategorie</label><select class="form-input" id="edit-sd-artkat"><option value="">–</option>${akOpts}</select></div>
+              <div class="form-group"><label class="form-label">Bestell-Tab</label><select class="form-input" id="edit-sd-bestkat"><option value="">–</option>${bkOpts}</select></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+                <div class="form-group"><label class="form-label">Lieferant</label><input class="form-input" id="edit-sd-lieferant" value="${esc(s.lieferant || '')}"></div>
+                <div class="form-group"><label class="form-label">Einheit</label><input class="form-input" id="edit-sd-einheit" value="${esc(s.einheit || '')}"></div>
+                <div class="form-group"><label class="form-label">Netto €</label><input class="form-input" id="edit-sd-netto" type="number" step="0.01" value="${s.preis_netto || ''}"></div>
+                <div class="form-group"><label class="form-label">Brutto €</label><input class="form-input" id="edit-sd-brutto" type="number" step="0.01" value="${s.preis_brutto || ''}"></div>
+              </div>
+              <div class="form-group"><label class="form-label">Scancode</label><input class="form-input" id="edit-sd-scancode" value="${esc(s.scancode || '')}"></div>
+              <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="edit-sd-w" ${s.sparte_winterdienst ? 'checked' : ''}> ❄️</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="edit-sd-g" ${s.sparte_gebaeudereinigung ? 'checked' : ''}> 🧹</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="edit-sd-gr" ${s.sparte_gruenpflege ? 'checked' : ''}> 🌿</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="edit-sd-p" ${s.sparte_projekte ? 'checked' : ''}> 🔨</label>
+              </div>
+              <button class="btn btn-primary" id="edit-sd-save" style="width:100%">Speichern</button>
+            `);
+            document.getElementById('edit-sd-save')?.addEventListener('click', async () => {
+              try {
+                await apiPut(`/api/bestellungen/stammdaten/${s.id}`, {
+                  name: document.getElementById('edit-sd-name')?.value?.trim(),
+                  artikel_kategorie_id: parseInt(document.getElementById('edit-sd-artkat')?.value) || null,
+                  kategorie_id: parseInt(document.getElementById('edit-sd-bestkat')?.value) || null,
+                  lieferant: document.getElementById('edit-sd-lieferant')?.value?.trim() || null,
+                  einheit: document.getElementById('edit-sd-einheit')?.value?.trim() || null,
+                  preis_netto: parseFloat(document.getElementById('edit-sd-netto')?.value) || null,
+                  preis_brutto: parseFloat(document.getElementById('edit-sd-brutto')?.value) || null,
+                  scancode: document.getElementById('edit-sd-scancode')?.value?.trim() || null,
+                  sparte_winterdienst: document.getElementById('edit-sd-w')?.checked || false,
+                  sparte_gebaeudereinigung: document.getElementById('edit-sd-g')?.checked || false,
+                  sparte_gruenpflege: document.getElementById('edit-sd-gr')?.checked || false,
+                  sparte_projekte: document.getElementById('edit-sd-p')?.checked || false,
+                });
+                closeModal(); toast('Gespeichert ✅', 'ok');
+                const c = document.getElementById('admin-tab-content');
+                if (c) { c.innerHTML = await renderTabBestellverwaltung(); bindAdminEvents(); }
+              } catch (e) { toast(e.message, 'err'); }
+            });
+          } catch (e) { toast(e.message, 'err'); }
+        });
+      });
       // Export-Buttons im Admin-Tab
       const admPdf = document.getElementById('adm-pdf');
       if (admPdf && !admPdf._bound) {
@@ -9154,6 +9535,8 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
           sieht_einsatz_details: document.getElementById('m-ma-sieht-details')?.checked || false,
           kann_einsteigen: document.getElementById('m-ma-kann-einsteigen')?.checked || false,
           darf_bestellen: document.getElementById('m-ma-darf-bestellen')?.checked || false,
+          darf_export: document.getElementById('m-ma-darf-export')?.checked || false,
+          darf_artikelanlage: document.getElementById('m-ma-darf-artikelanlage')?.checked || false,
         };
         if (!body.name || !body.pin) { toast('Name und PIN erforderlich', 'err'); return }
         try { if (id) { await apiPut(`/api/mitarbeiter/${id}`, body) } else { await apiPost('/api/mitarbeiter', body) }; closeModal(); toast(id ? 'Gespeichert' : 'Angelegt', 'ok'); reloadTab() }

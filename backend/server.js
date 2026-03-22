@@ -167,15 +167,35 @@ app.listen(PORT, async () => {
         bestellt_am TIMESTAMPTZ
       );
     `);
-    // Default-Kategorien anlegen wenn noch keine vorhanden
+    // Default-Kategorien (Bestell-Tabs) anlegen wenn noch keine vorhanden
     const katCheck = await pool.query('SELECT COUNT(*) FROM bestelllisten_kategorien');
     if (parseInt(katCheck.rows[0].count) === 0) {
       await pool.query(`INSERT INTO bestelllisten_kategorien (name, icon, farbe, sort_order) VALUES
-        ('Gebäudereinigung', '🧴', '#0891b2', 1),
-        ('Winterdienst', '🧂', '#7c3aed', 2),
+        ('Gebäudereinigung', '🧹', '#0891b2', 1),
+        ('Winterdienst', '❄️', '#7c3aed', 2),
         ('Grünpflege', '🌿', '#16a34a', 3),
-        ('Projekte', '🔩', '#ea580c', 4)`);
+        ('Projekte', '🔨', '#ea580c', 4)`);
     }
+    // v1.9.1 – Neue Migrations
+    await pool.query(`ALTER TABLE mitarbeiter ADD COLUMN IF NOT EXISTS darf_export boolean DEFAULT false;`);
+    await pool.query(`ALTER TABLE mitarbeiter ADD COLUMN IF NOT EXISTS darf_artikelanlage boolean DEFAULT false;`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS bestelllisten_artikel_kategorien (
+      id SERIAL PRIMARY KEY, name TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, aktiv BOOLEAN NOT NULL DEFAULT true
+    );`);
+    const akCheck = await pool.query('SELECT COUNT(*) FROM bestelllisten_artikel_kategorien');
+    if (parseInt(akCheck.rows[0].count) === 0) {
+      await pool.query(`INSERT INTO bestelllisten_artikel_kategorien (name, sort_order) VALUES
+        ('Reinigungsmittel', 1), ('Montagematerial', 2), ('Schrauben & Befestigung', 3),
+        ('Kleber & Dichtstoffe', 4), ('Salz & Streumittel', 5), ('Ersatzteile', 6), ('Sonstiges', 99)`);
+    }
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS artikel_kategorie_id INTEGER REFERENCES bestelllisten_artikel_kategorien(id) ON DELETE SET NULL;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS preis_netto NUMERIC(10,2);`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS preis_brutto NUMERIC(10,2);`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS scancode TEXT;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS sparte_winterdienst BOOLEAN DEFAULT false;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS sparte_gebaeudereinigung BOOLEAN DEFAULT false;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS sparte_gruenpflege BOOLEAN DEFAULT false;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS sparte_projekte BOOLEAN DEFAULT false;`);
     console.log('Sequences korrigiert ✓');
   } catch (e) { console.warn('Sequence-Fix Fehler:', e.message); }
   // Server-Start ins System-Log schreiben
