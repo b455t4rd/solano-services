@@ -4208,31 +4208,34 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       async function scanBarcode(file) {
         const st = document.getElementById('bc-status');
         if (st) st.textContent = '🔍 Barcode wird erkannt…';
+        // 1. Native BarcodeDetector (Chrome/Android nativ)
         try {
-          // Try native BarcodeDetector first
           if ('BarcodeDetector' in window) {
             const bmp = await createImageBitmap(file);
-            const det = new BarcodeDetector();
+            const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'qr_code', 'code_128', 'upc_a', 'upc_e', 'code_39'] });
             const codes = await det.detect(bmp);
             if (codes.length) return codes[0].rawValue;
           }
-          // Fallback: html5-qrcode
-          if (!window.Html5Qrcode) {
+        } catch (e) { /* weiter mit Fallback */ }
+        // 2. ZXing – sehr zuverlässig für EAN/QR aus Fotos
+        try {
+          if (!window.ZXingBrowser) {
             await new Promise((ok, fail) => {
               const s = document.createElement('script');
-              s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+              s.src = 'https://unpkg.com/@zxing/browser@0.1.1/umd/index.min.js';
               s.onload = ok; s.onerror = fail; document.head.appendChild(s);
             });
           }
-          // html5-qrcode needs a dummy div in DOM
-          let helper = document.getElementById('_qr_helper');
-          if (!helper) { helper = document.createElement('div'); helper.id = '_qr_helper'; helper.style.display = 'none'; document.body.appendChild(helper); }
-          const scanner = new Html5Qrcode('_qr_helper');
-          const result = await scanner.scanFileV2(file, false);
-          scanner.clear().catch(() => { });
-          return result.decodedText;
+          const reader = new ZXingBrowser.BrowserMultiFormatReader();
+          const url = URL.createObjectURL(file);
+          try {
+            const result = await reader.decodeFromImageUrl(url);
+            return result.getText();
+          } finally {
+            URL.revokeObjectURL(url);
+          }
         } catch (e) {
-          if (st) st.textContent = '❌ Kein Barcode erkannt: ' + e.message;
+          if (st) st.textContent = '❌ Kein Code erkannt – bitte manuell eingeben';
           return null;
         }
       }
