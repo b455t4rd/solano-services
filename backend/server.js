@@ -31,6 +31,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/zeit', require('./routes/zeit'));
 app.use('/api/kalender', require('./routes/kalender'));
 app.use('/api/projekte', require('./routes/projekte'));
+app.use('/api/bestellungen', require('./routes/bestellungen'));
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -129,6 +130,52 @@ app.listen(PORT, async () => {
     await pool.query(`SELECT setval('auftraggeber_id_seq', COALESCE((SELECT MAX(id) FROM auftraggeber), 1))`);
     await pool.query(`SELECT setval('projekt_auftraege_id_seq', COALESCE((SELECT MAX(id) FROM projekt_auftraege), 1))`);
     await pool.query(`ALTER TABLE backup_schedule ADD COLUMN IF NOT EXISTS voll_wochentage jsonb DEFAULT '[]'::jsonb;`);
+    await pool.query(`ALTER TABLE mitarbeiter ADD COLUMN IF NOT EXISTS darf_bestellen boolean DEFAULT false;`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bestelllisten_kategorien (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        icon TEXT NOT NULL DEFAULT '📦',
+        farbe TEXT NOT NULL DEFAULT '#6366f1',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        aktiv BOOLEAN NOT NULL DEFAULT true
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bestelllisten_stammdaten (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        kategorie_id INTEGER REFERENCES bestelllisten_kategorien(id) ON DELETE SET NULL,
+        lieferant TEXT,
+        einheit TEXT,
+        aktiv BOOLEAN NOT NULL DEFAULT true
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bestelllisten_eintraege (
+        id SERIAL PRIMARY KEY,
+        kategorie_id INTEGER REFERENCES bestelllisten_kategorien(id) ON DELETE SET NULL,
+        bezeichnung TEXT NOT NULL,
+        menge TEXT,
+        einheit TEXT,
+        lieferant TEXT,
+        stammdaten_id INTEGER REFERENCES bestelllisten_stammdaten(id) ON DELETE SET NULL,
+        erstellt_von INTEGER REFERENCES mitarbeiter(id) ON DELETE SET NULL,
+        erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        bestellt BOOLEAN NOT NULL DEFAULT false,
+        bestellt_von INTEGER REFERENCES mitarbeiter(id) ON DELETE SET NULL,
+        bestellt_am TIMESTAMPTZ
+      );
+    `);
+    // Default-Kategorien anlegen wenn noch keine vorhanden
+    const katCheck = await pool.query('SELECT COUNT(*) FROM bestelllisten_kategorien');
+    if (parseInt(katCheck.rows[0].count) === 0) {
+      await pool.query(`INSERT INTO bestelllisten_kategorien (name, icon, farbe, sort_order) VALUES
+        ('Gebäudereinigung', '🧴', '#0891b2', 1),
+        ('Winterdienst', '🧂', '#7c3aed', 2),
+        ('Grünpflege', '🌿', '#16a34a', 3),
+        ('Projekte', '🔩', '#ea580c', 4)`);
+    }
     console.log('Sequences korrigiert ✓');
   } catch (e) { console.warn('Sequence-Fix Fehler:', e.message); }
   // Server-Start ins System-Log schreiben
