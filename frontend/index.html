@@ -2568,53 +2568,6 @@ ${(user?.ist_admin || user?.ist_chef || user?.darf_bestellen) ? `<button class="
       </div>`;
     }
 
-
-    try {
-      [kategorien, eintraege, stammdaten] = await Promise.all([
-        apiGet('/api/bestellungen/kategorien'),
-        apiGet('/api/bestellungen/eintraege'),
-        apiGet('/api/bestellungen/stammdaten'),
-      ]);
-    } catch (e) { }
-
-    const fmtDate = d => d ? new Date(d).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-
-    // Alle Einträge nach Kategorie gruppiert
-    const katMap = {};
-    kategorien.forEach(k => { katMap[k.id] = k; });
-    const grouped = {};
-    eintraege.forEach(e => {
-      const katName = (e.kategorie_id && katMap[e.kategorie_id]) ? katMap[e.kategorie_id].name : 'Ohne Kategorie';
-      if (!grouped[katName]) grouped[katName] = [];
-      grouped[katName].push(e);
-    });
-
-    const eintraegeHtml = Object.entries(grouped).map(([kat, items]) => `
-        <div style="font-size:14px;font-weight:800;margin:14px 0 6px;color:var(--primary)">${kat}</div>
-        ${items.map(e => `
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
-            <input type="checkbox" class="adm-bestell-cb" data-id="${e.id}" ${e.bestellt ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer;accent-color:#16a34a">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600">${esc(e.bezeichnung)}${e.menge ? ' <span style="font-weight:400;color:var(--text-muted)">× ' + esc(e.menge) + (e.einheit ? ' ' + esc(e.einheit) : '') + ' </span>' : ''} ${e.bestellt ? '<span style="background:#dcfce7;color:#15803d;font-size:10px;border-radius:8px;padding:1px 6px">✅ Bestellt</span>' : '<span style="background:#fef3c7;color:#92400e;font-size:10px;border-radius:8px;padding:1px 6px">⏳ Offen</span>'}</div>
-              <div style="font-size:11px;color:var(--text-muted)">${e.lieferant ? esc(e.lieferant) + ' · ' : ''}von ${esc(e.erstellt_von_name || '?')} · ${fmtDate(e.erstellt_am)}</div>
-            </div>
-            <button class="tbl-btn danger adm-bestell-del" data-id="${e.id}" style="font-size:11px;margin:0;padding:2px 8px">🗑️</button>
-          </div>`).join('')}
-      `).join('');
-
-    // Kategorien-Liste
-    const katRows = kategorien.map(k => `
-        <tr>
-          <td style="font-size:14px">${k.icon} ${esc(k.name)}</td>
-          <td>${k.aktiv ? '<span style="color:#16a34a;font-size:12px">✅ Aktiv</span>' : '<span style="color:#9ca3af;font-size:12px">⏸ Inaktiv</span>'}</td>
-          <td>
-            <button class="tbl-btn adm-kat-toggle" data-id="${k.id}" data-aktiv="${k.aktiv}" style="font-size:12px">${k.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
-            <button class="tbl-btn danger adm-kat-del" data-id="${k.id}" style="font-size:12px">🗑️</button>
-          </td>
-        </tr>`).join('');
-
-    // Stammdaten-Liste
-
     async function renderTabFirma() {
       let firma = {}, fzEinst = { diesel_preis: 1.80, verbrauch_100km: 8, maut_pro_km: 0, abnuetzung_pro_km: 0.15 };
       let maKosten = { stundensatz_fa: 55, stundensatz_ha: 45, stundensatz_gf: 35, warnschwelle: 55 };
