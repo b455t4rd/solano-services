@@ -5324,8 +5324,11 @@
           <div style="font-size:11px;color:var(--text-muted)">${fSize(b.size)} · ${new Date(b.created).toLocaleString('de-AT')}</div>
         </div>
         <div style="display:grid;grid-template-columns:105px 140px 36px;gap:8px;align-items:center">
-          <a href="/api/admin/backup/download/${encodeURIComponent(b.name)}?token=${encodeURIComponent(localStorage.getItem('solano_token') || '')}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:4px;background:#f3f4f6;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);text-decoration:none;cursor:pointer;height:30px;width:100%;box-sizing:border-box">⬇️ Download</a>
-          ${isSql ? `<button class="tbl-btn" data-action="backup-restore" data-name="${esc(b.name)}" style="font-size:12px;background:#1e40af;color:white;border:none;margin:0;height:30px;width:100%">🔄 Wiederherst.</button>` : '<div></div>'}
+          <a href="/api/admin/backup/download/${encodeURIComponent(b.name)}?token=${encodeURIComponent(user?.token || '')}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:4px;background:#f3f4f6;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);text-decoration:none;cursor:pointer;height:30px;width:100%;box-sizing:border-box">⬇️ Download</a>
+          ${isSql
+              ? `<button class="tbl-btn" data-action="backup-restore" data-name="${esc(b.name)}" style="font-size:12px;background:#1e40af;color:white;border:none;margin:0;height:30px;width:100%">🔄 Wiederherst.</button>`
+              : `<button class="tbl-btn" disabled title="Vollbackup kann nicht automatisch wiederhergestellt werden. Bitte manuell auf neuem Server entpacken." style="font-size:12px;background:#e5e7eb;color:#9ca3af;border:none;margin:0;height:30px;width:100%;cursor:not-allowed;opacity:0.6">🔄 Wiederherst.</button>`
+            }
           <button class="tbl-btn danger" data-action="backup-delete" data-name="${esc(b.name)}" style="font-size:12px;margin:0;height:30px;width:100%;padding:0">🗑️</button>
         </div>
       </div>`;
