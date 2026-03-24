@@ -123,7 +123,15 @@ router.get('/:id', authMiddleware, async (req, res) => {
       'SELECT * FROM aufgaben WHERE anlage_id=$1 ORDER BY reihenfolge',
       [req.params.id]
     );
-    res.json({ ...anlage.rows[0], aufgaben: aufgaben.rows });
+    // Letzten abgeschlossenen Einsatz mit Dauer laden
+    const letzterEinsatz = await pool.query(`
+      SELECT id, mitarbeiter, start_zeit, end_zeit, sparte,
+        ROUND(EXTRACT(EPOCH FROM (end_zeit - start_zeit))/60) as dauer_minuten
+      FROM einsaetze
+      WHERE anlage_id=$1 AND end_zeit IS NOT NULL
+      ORDER BY end_zeit DESC LIMIT 5
+    `, [req.params.id]);
+    res.json({ ...anlage.rows[0], aufgaben: aufgaben.rows, letzte_einsaetze: letzterEinsatz.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -10,15 +10,23 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY
 );
 
-// Alle Nachrichten abrufen (Manager: alle; Mitarbeiter: eigene)
+// Alle Nachrichten abrufen
 router.get('/', authMiddleware, async (req, res) => {
   try {
     let result;
     if (req.user.ist_admin || req.user.ist_chef) {
+      // Manager: alle Nachrichten
       result = await pool.query(
         'SELECT * FROM nachrichten ORDER BY gesendet_am DESC LIMIT 200'
       );
+    } else if (req.user.darf_nachrichten) {
+      // darf_nachrichten: eigene gesendete + empfangene
+      result = await pool.query(
+        'SELECT * FROM nachrichten WHERE von_id=$1 OR an_id=$1 ORDER BY gesendet_am DESC',
+        [req.user.id]
+      );
     } else {
+      // normaler MA: nur eigene empfangene
       result = await pool.query(
         'SELECT * FROM nachrichten WHERE an_id=$1 ORDER BY gesendet_am DESC',
         [req.user.id]
@@ -43,39 +51,70 @@ router.get('/ungelesen', authMiddleware, async (req, res) => {
   }
 });
 
-// Nachricht senden + Push auslösen (Manager only)
-router.post('/', managerMiddleware, async (req, res) => {
-  const { an_id, an_name, text } = req.body;
-  if (!an_id || !text) return res.status(400).json({ error: 'Empfänger und Text erforderlich' });
+// Nachricht senden + Push auslösen (Manager oder darf_nachrichten)
+router.post('/', authMiddleware, async (req, res) => {
+  const canSend = req.user.ist_admin || req.user.ist_chef || req.user.darf_nachrichten;
+  if (!canSend) return res.status(403).json({ error: 'Keine Berechtigung zum Senden' });
+
+  const { an_id, an_name, text, ist_arbeitsanweisung } = req.body;
+  if (!text) return res.status(400).json({ error: 'Text erforderlich' });
+  // Nur Admin/Chef dürfen Arbeitsanweisungen senden
+  const isAA = (req.user.ist_admin || req.user.ist_chef) && !!ist_arbeitsanweisung;
+
   try {
+    // "Alle" → Nachricht an alle nachricht_verfuegbar Mitarbeiter senden
+    if (an_id === 'alle') {
+      const maResult = await pool.query(
+        'SELECT id, name FROM mitarbeiter WHERE nachricht_verfuegbar=true AND aktiv=true AND id!=$1',
+        [req.user.id]
+      );
+      const sent = [];
+      for (const m of maResult.rows) {
+        const r = await pool.query(
+          `INSERT INTO nachrichten (von_id, von_name, an_id, an_name, text, ist_arbeitsanweisung)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+          [req.user.id, req.user.name, m.id, m.name, text, isAA]
+        );
+        sent.push(r.rows[0]);
+        // Push senden
+        const subs = await pool.query(
+          'SELECT subscription_json FROM push_subscriptions WHERE mitarbeiter_id=$1', [m.id]
+        );
+        const payload = JSON.stringify({
+          title: `Nachricht von ${req.user.name}`,
+          body: text, icon: '/Logo.png',
+          data: { url: '/?page=nachrichten' }
+        });
+        for (const row of subs.rows) {
+          try { await webpush.sendNotification(JSON.parse(row.subscription_json), payload); }
+          catch (e) { if (e.statusCode === 410) await pool.query('DELETE FROM push_subscriptions WHERE subscription_json=$1', [row.subscription_json]); }
+        }
+      }
+      return res.json({ success: true, count: sent.length });
+    }
+
+    // Einzelne Nachricht
+    if (!an_id) return res.status(400).json({ error: 'Empfänger erforderlich' });
     const result = await pool.query(
-      `INSERT INTO nachrichten (von_id, von_name, an_id, an_name, text)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [req.user.id, req.user.name, an_id, an_name, text]
+      `INSERT INTO nachrichten (von_id, von_name, an_id, an_name, text, ist_arbeitsanweisung)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.id, req.user.name, an_id, an_name, text, isAA]
     );
     const nachricht = result.rows[0];
 
     // Push senden
     const subs = await pool.query(
-      'SELECT subscription_json FROM push_subscriptions WHERE mitarbeiter_id=$1',
-      [an_id]
+      'SELECT subscription_json FROM push_subscriptions WHERE mitarbeiter_id=$1', [an_id]
     );
     const payload = JSON.stringify({
       title: `Nachricht von ${req.user.name}`,
-      body: text,
-      icon: '/Logo.png',
+      body: text, icon: '/Logo.png',
       data: { url: '/?page=nachrichten' }
     });
     for (const row of subs.rows) {
-      try {
-        await webpush.sendNotification(JSON.parse(row.subscription_json), payload);
-      } catch (e) {
-        if (e.statusCode === 410) {
-          await pool.query('DELETE FROM push_subscriptions WHERE subscription_json=$1', [row.subscription_json]);
-        }
-      }
+      try { await webpush.sendNotification(JSON.parse(row.subscription_json), payload); }
+      catch (e) { if (e.statusCode === 410) await pool.query('DELETE FROM push_subscriptions WHERE subscription_json=$1', [row.subscription_json]); }
     }
-
     res.json(nachricht);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -84,7 +123,7 @@ router.post('/', managerMiddleware, async (req, res) => {
 
 // Nachricht beantworten: ja oder nein (eigene Nachrichten)
 router.put('/:id/antwort', authMiddleware, async (req, res) => {
-  const { antwort } = req.body; // 'ja' oder 'nein'
+  const { antwort } = req.body;
   if (!['ja', 'nein'].includes(antwort)) return res.status(400).json({ error: 'Antwort muss "ja" oder "nein" sein' });
   try {
     const result = await pool.query(
@@ -99,14 +138,15 @@ router.put('/:id/antwort', authMiddleware, async (req, res) => {
   }
 });
 
-// Nachricht löschen (Admin: alle; Mitarbeiter: eigene empfangene)
+// Nachricht löschen
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     let result;
     if (req.user.ist_admin || req.user.ist_chef) {
       result = await pool.query('DELETE FROM nachrichten WHERE id=$1 RETURNING id', [req.params.id]);
     } else {
-      result = await pool.query('DELETE FROM nachrichten WHERE id=$1 AND an_id=$2 RETURNING id', [req.params.id, req.user.id]);
+      // darf_nachrichten kann eigene gesendete + empfangene löschen
+      result = await pool.query('DELETE FROM nachrichten WHERE id=$1 AND (an_id=$2 OR von_id=$2) RETURNING id', [req.params.id, req.user.id]);
     }
     if (!result.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
     res.json({ success: true });

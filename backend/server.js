@@ -24,13 +24,14 @@ app.use('/api/einsaetze', require('./routes/einsaetze'));
 app.use('/api/gps', require('./routes/gps'));
 app.use('/api/fotos', require('./routes/fotos'));
 app.use('/api/todos', require('./routes/todos'));
-app.use('/api/push',  require('./routes/push'));
+app.use('/api/push', require('./routes/push'));
 app.use('/api/nachrichten', require('./routes/nachrichten'));
-app.use('/api/alarm',      require('./routes/alarm'));
-app.use('/api/admin',      require('./routes/admin'));
-app.use('/api/zeit',       require('./routes/zeit'));
-app.use('/api/kalender',   require('./routes/kalender'));
-app.use('/api/projekte',   require('./routes/projekte'));
+app.use('/api/alarm', require('./routes/alarm'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/zeit', require('./routes/zeit'));
+app.use('/api/kalender', require('./routes/kalender'));
+app.use('/api/projekte', require('./routes/projekte'));
+app.use('/api/bestellungen', require('./routes/bestellungen'));
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -45,6 +46,90 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(frontendDir, 'index.html'));
 });
 
+// ── Automatische Datensicherung (Cron) ───────────────────────────────────────
+try {
+  const cron = require('node-cron');
+  const fsB = require('fs');
+  const pathB = require('path');
+  const { execSync: execB } = require('child_process');
+  const BACKUP_DIR_C = pathB.resolve(__dirname, '..', 'backups');
+  const PROJECT_ROOT_C = pathB.resolve(__dirname, '..');
+  console.log(`Auto-Backup Verzeichnis: ${BACKUP_DIR_C}`);
+  // Jede Minute prüfen ob ein geplantes Backup fällig ist
+  cron.schedule('* * * * *', async () => {
+    try {
+      const pool = require('./db');
+      const r = await pool.query('SELECT * FROM backup_schedule WHERE aktiv=true LIMIT 1');
+      if (!r.rows.length) return;
+      const cfg = r.rows[0];
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      const nowDay = String(now.getDay()); // 0=So,1=Mo,...,6=Sa
+      const tage = Array.isArray(cfg.wochentage) ? cfg.wochentage.map(String) : [];
+      const fullTage = Array.isArray(cfg.voll_wochentage) ? cfg.voll_wochentage.map(String) : [];
+      if (nowTime !== cfg.uhrzeit) return;
+      if (!tage.includes(nowDay) && !fullTage.includes(nowDay)) return;
+      // Bereits zur gleichen Uhrzeit heute gelaufen? (Prüfe Uhrzeit, nicht nur Datum)
+      // So kann ein erneutes Backup laufen wenn die Uhrzeit geändert wurde
+      if (cfg.letzte_ausfuehrung) {
+        const letzt = new Date(cfg.letzte_ausfuehrung);
+        const letztTime = `${pad(letzt.getHours())}:${pad(letzt.getMinutes())}`;
+        if (letzt.toDateString() === now.toDateString() && letztTime === nowTime) return;
+      }
+
+      if (!fsB.existsSync(BACKUP_DIR_C)) fsB.mkdirSync(BACKUP_DIR_C, { recursive: true });
+      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}00`;
+
+      const { logEvent } = require('./utils/logger');
+
+      // 1. Normales DB Backup
+      if (tage.includes(nowDay)) {
+        const dbFile = pathB.join(BACKUP_DIR_C, `solano_db_auto_${ts}.sql`);
+        console.log(`Auto-Backup starte: ${dbFile}`);
+        execB(
+          `PGPASSWORD="${process.env.DB_PASSWORD || ''}" pg_dump --clean --if-exists -h ${process.env.DB_HOST || 'localhost'} -U ${process.env.DB_USER || 'solano'} ${process.env.DB_NAME || 'winterdienst'} > "${dbFile}"`,
+          { shell: '/bin/bash', timeout: 60000 }
+        );
+        if (fsB.existsSync(dbFile)) {
+          const stat = fsB.statSync(dbFile);
+          if (stat.size > 0) {
+            await logEvent({ level: 'info', aktion: 'auto-backup', ausgeloest_von: 'system', details: { datei: pathB.basename(dbFile), groesse: stat.size } });
+            console.log(`Auto-Backup erstellt: ${pathB.basename(dbFile)} (${(stat.size/1024).toFixed(0)} KB)`);
+          } else {
+            console.error('Auto-Backup FEHLER: Datei ist leer!', dbFile);
+          }
+        } else {
+          console.error('Auto-Backup FEHLER: Datei wurde nicht erstellt!', dbFile);
+        }
+      }
+
+      // 2. Voll-Backup
+      if (fullTage.includes(nowDay)) {
+        const dbFileTemp = pathB.join(PROJECT_ROOT_C, `solano_db_temp_auto_${ts}.sql`);
+        execB(
+          `PGPASSWORD="${process.env.DB_PASSWORD || ''}" pg_dump --clean --if-exists -h ${process.env.DB_HOST || 'localhost'} -U ${process.env.DB_USER || 'solano'} ${process.env.DB_NAME || 'winterdienst'} > "${dbFileTemp}"`,
+          { shell: '/bin/bash', timeout: 60000 }
+        );
+        const tarFile = pathB.join(BACKUP_DIR_C, `solano_full_auto_${ts}.tar.gz`);
+        execB(
+          `tar --exclude="node_modules" --exclude=".git" --exclude="backups" --exclude=".DS_Store" -czf "${tarFile}" .`,
+          { shell: '/bin/bash', cwd: PROJECT_ROOT_C, timeout: 300000 }
+        );
+        if (fsB.existsSync(dbFileTemp)) fsB.unlinkSync(dbFileTemp);
+        if (fsB.existsSync(tarFile)) {
+          const statTar = fsB.statSync(tarFile);
+          await logEvent({ level: 'info', aktion: 'auto-voll-backup', ausgeloest_von: 'system', details: { datei: pathB.basename(tarFile), groesse: statTar.size } });
+          console.log(`Auto Voll-Backup erstellt: ${pathB.basename(tarFile)} (${(statTar.size/1024/1024).toFixed(1)} MB)`);
+        }
+      }
+
+      await pool.query('UPDATE backup_schedule SET letzte_ausfuehrung=NOW()');
+    } catch (e) { console.error('Auto-Backup Fehler:', e.message, e.stack); }
+  });
+  console.log('Auto-Backup Cron-Job gestartet ✓');
+} catch (e) { console.warn('Cron-Job konnte nicht gestartet werden:', e.message); }
+
 app.listen(PORT, async () => {
   console.log(`SolanoServices Backend läuft auf Port ${PORT}`);
   console.log(`Frontend: http://localhost:${PORT}`);
@@ -58,6 +143,79 @@ app.listen(PORT, async () => {
     await pool.query(`SELECT setval('einsaetze_id_seq', COALESCE((SELECT MAX(id) FROM einsaetze), 1))`);
     await pool.query(`SELECT setval('auftraggeber_id_seq', COALESCE((SELECT MAX(id) FROM auftraggeber), 1))`);
     await pool.query(`SELECT setval('projekt_auftraege_id_seq', COALESCE((SELECT MAX(id) FROM projekt_auftraege), 1))`);
+    await pool.query(`ALTER TABLE backup_schedule ADD COLUMN IF NOT EXISTS voll_wochentage jsonb DEFAULT '[]'::jsonb;`);
+    await pool.query(`ALTER TABLE mitarbeiter ADD COLUMN IF NOT EXISTS darf_bestellen boolean DEFAULT false;`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bestelllisten_kategorien (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        icon TEXT NOT NULL DEFAULT '📦',
+        farbe TEXT NOT NULL DEFAULT '#6366f1',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        aktiv BOOLEAN NOT NULL DEFAULT true
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bestelllisten_stammdaten (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        kategorie_id INTEGER REFERENCES bestelllisten_kategorien(id) ON DELETE SET NULL,
+        lieferant TEXT,
+        einheit TEXT,
+        aktiv BOOLEAN NOT NULL DEFAULT true
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bestelllisten_eintraege (
+        id SERIAL PRIMARY KEY,
+        kategorie_id INTEGER REFERENCES bestelllisten_kategorien(id) ON DELETE SET NULL,
+        bezeichnung TEXT NOT NULL,
+        menge TEXT,
+        einheit TEXT,
+        lieferant TEXT,
+        stammdaten_id INTEGER REFERENCES bestelllisten_stammdaten(id) ON DELETE SET NULL,
+        erstellt_von INTEGER REFERENCES mitarbeiter(id) ON DELETE SET NULL,
+        erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        bestellt BOOLEAN NOT NULL DEFAULT false,
+        bestellt_von INTEGER REFERENCES mitarbeiter(id) ON DELETE SET NULL,
+        bestellt_am TIMESTAMPTZ
+      );
+    `);
+    // Default-Kategorien (Bestell-Tabs) anlegen wenn noch keine vorhanden
+    const katCheck = await pool.query('SELECT COUNT(*) FROM bestelllisten_kategorien');
+    if (parseInt(katCheck.rows[0].count) === 0) {
+      await pool.query(`INSERT INTO bestelllisten_kategorien (name, icon, farbe, sort_order) VALUES
+        ('Gebäudereinigung', '🧹', '#0891b2', 1),
+        ('Winterdienst', '❄️', '#7c3aed', 2),
+        ('Grünpflege', '🌿', '#16a34a', 3),
+        ('Projekte', '🔨', '#ea580c', 4)`);
+    }
+    // v1.9.1 – Neue Migrations
+    await pool.query(`ALTER TABLE mitarbeiter ADD COLUMN IF NOT EXISTS darf_export boolean DEFAULT false;`);
+    await pool.query(`ALTER TABLE mitarbeiter ADD COLUMN IF NOT EXISTS darf_artikelanlage boolean DEFAULT false;`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS bestelllisten_artikel_kategorien (
+      id SERIAL PRIMARY KEY, name TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, aktiv BOOLEAN NOT NULL DEFAULT true
+    );`);
+    const akCheck = await pool.query('SELECT COUNT(*) FROM bestelllisten_artikel_kategorien');
+    if (parseInt(akCheck.rows[0].count) === 0) {
+      await pool.query(`INSERT INTO bestelllisten_artikel_kategorien (name, sort_order) VALUES
+        ('Reinigungsmittel', 1), ('Montagematerial', 2), ('Schrauben & Befestigung', 3),
+        ('Kleber & Dichtstoffe', 4), ('Salz & Streumittel', 5), ('Ersatzteile', 6), ('Sonstiges', 99)`);
+    }
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS artikel_kategorie_id INTEGER REFERENCES bestelllisten_artikel_kategorien(id) ON DELETE SET NULL;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS preis_netto NUMERIC(10,2);`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS preis_brutto NUMERIC(10,2);`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS scancode TEXT;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS sparte_winterdienst BOOLEAN DEFAULT false;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS sparte_gebaeudereinigung BOOLEAN DEFAULT false;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS sparte_gruenpflege BOOLEAN DEFAULT false;`);
+    await pool.query(`ALTER TABLE bestelllisten_stammdaten ADD COLUMN IF NOT EXISTS sparte_projekte BOOLEAN DEFAULT false;`);
     console.log('Sequences korrigiert ✓');
-  } catch(e) { console.warn('Sequence-Fix Fehler:', e.message); }
+  } catch (e) { console.warn('Sequence-Fix Fehler:', e.message); }
+  // Server-Start ins System-Log schreiben
+  try {
+    const { logEvent } = require('./utils/logger');
+    const pkg = require('./package.json');
+    await logEvent({ level: 'info', aktion: 'server-start', ausgeloest_von: 'system', details: { port: PORT, version: pkg.version || '–' } });
+  } catch (e) { console.warn('Log-Fehler:', e.message); }
 });

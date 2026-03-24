@@ -160,9 +160,30 @@ router.put('/privat/:id', authMiddleware, async (req, res) => {
       [req.params.id, req.user.id]
     );
     if (!check.rows.length) return res.status(403).json({ error: 'Kein Zugriff' });
+    const neu = !check.rows[0].erledigt;
     const result = await pool.query(
-      'UPDATE todos_privat SET erledigt=$1 WHERE id=$2 AND mitarbeiter_id=$3 RETURNING *',
-      [!check.rows[0].erledigt, req.params.id, req.user.id]
+      'UPDATE todos_privat SET erledigt=$1, erledigt_am=$2 WHERE id=$3 AND mitarbeiter_id=$4 RETURNING *',
+      [neu, neu ? new Date() : null, req.params.id, req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Privates Todo Text ändern
+router.put('/privat/:id/text', authMiddleware, async (req, res) => {
+  const { beschreibung } = req.body;
+  if (!beschreibung) return res.status(400).json({ error: 'Beschreibung erforderlich' });
+  try {
+    const check = await pool.query(
+      'SELECT id FROM todos_privat WHERE id=$1 AND mitarbeiter_id=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!check.rows.length) return res.status(403).json({ error: 'Kein Zugriff' });
+    const result = await pool.query(
+      'UPDATE todos_privat SET beschreibung=$1 WHERE id=$2 AND mitarbeiter_id=$3 RETURNING *',
+      [beschreibung, req.params.id, req.user.id]
     );
     res.json(result.rows[0]);
   } catch (err) {

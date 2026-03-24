@@ -53,6 +53,7 @@ router.put('/:id', managerMiddleware, async (req, res) => {
 // Aufgabe löschen (Admin only)
 router.delete('/:id', managerMiddleware, async (req, res) => {
   try {
+    await pool.query('DELETE FROM erledigte_aufgaben WHERE aufgabe_id=$1', [req.params.id]);
     await pool.query('DELETE FROM aufgaben WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {

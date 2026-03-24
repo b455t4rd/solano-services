@@ -1,4 +1,8 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// DATE (OID 1082) als reinen String zurückgeben – verhindert UTC-Verschiebung
+// durch toISOString() bei europäischen Zeitzonen (z.B. Vienna UTC+1)
+types.setTypeParser(1082, val => val);
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
