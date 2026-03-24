@@ -1,4 +1,13 @@
 node_modules/
 .env
+.env 2
 *.DS_Store
 uploads/
+backups/
+*\ 2.*
+*\ 2/
+*.sql
+winterdienst/
+frontend_b64*.txt
+setup\ 2.sh
+frontend/index.html*.backup*

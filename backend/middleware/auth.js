@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'solano-winterdienst-geheim';
 
 function authMiddleware(req, res, next) {
-  const auth = req.headers.authorization;
+  const auth = req.headers.authorization || (req.query.token ? 'Bearer ' + req.query.token : null);
   if (!auth || !auth.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Nicht angemeldet' });
   }
